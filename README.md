@@ -22,6 +22,9 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Simples, múltipla e combinada:** a combinada na mesma luta é precificada pela chance de tudo acontecer junto, não pela multiplicação das odds. Combinações impossíveis ou redundantes são recusadas.
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
 - **Cashout:** devolve o valor integral da aposta enquanto nenhuma luta dela começou. Com luta em andamento, cashout e apostas ficam congelados.
+- **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
+- **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). O cupom aceita valor em unidades e a Carteira mostra o resultado em unidades.
+- **Valores e moeda:** campos com máscara de milhares; simulação em real, dólar ou euro (muda o símbolo, sem conversão).
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
 
 ## Como funciona

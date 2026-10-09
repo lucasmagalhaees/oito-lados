@@ -19,6 +19,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 11. Acesso de escrita do Claude ao repositório liberado; primeiro branch enviado.
 12. PR #1 (o app) aprovado e mesclado pelo Lucas. Primeiro deploy na Vercel falhou por detecção de Python (ver D12); correção enviada no PR seguinte, junto com a documentação e o harness.
 13. PRs #2 e #3 mesclados; produção no ar em https://oito-lados.vercel.app. Pedido de cashout (D21).
+14. Pedidos em sequência: repetir aposta (D22), máscara de milhares e moeda (D23), unidade (D24), pesquisa sobre pontuação por round (D25) e copiar aposta por imagem ou texto (em aberto).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -165,12 +166,53 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Descartado:** cashout a valor de mercado (stake × odd × chance atual, com margem), que chegou a ser desenhado. Exigiria odds ao vivo, que a ESPN não publica, e o pedido foi por devolução integral.
 - **Consequência:** antes da luta o cashout funciona como cancelar a aposta sem custo. Dá para apostar, ver a odd piorar e desistir de graça; é aceitável porque o dinheiro é fictício. Aposta com cashout entra no histórico com resultado zero e fica fora da taxa de acerto.
 
+## D22. Repetir aposta enche o cupom, não aposta sozinha
+
+- **Contexto:** pedido de repetir uma aposta com um toque.
+- **Decisão:** o toque enche o cupom (mesmas seleções, mesmo tipo, mesmo valor) e abre. A confirmação continua no botão de apostar.
+- **Descartado:** gravar a aposta direto no toque. Toda aposta passa pela conferência de odd e de início da luta, e a odd pode ter mudado desde a original.
+- **Consequência:** só dá para repetir enquanto as lutas não começaram. Serve bem para refazer uma aposta depois de um cashout.
+
+## D23. Máscara de milhares e moeda da simulação
+
+- **Contexto:** pedido de máscara nos campos de valor, para operar acima de mil, e de opção para dólar e euro.
+- **Decisão:** máscara no padrão brasileiro em todos os campos de valor. Moeda escolhida na Carteira entre real, dólar e euro.
+- **Interpretação que precisou ser feita (confirmar com o Lucas):** trocar a moeda muda só o símbolo. Não há conversão nem câmbio, e não existem carteiras separadas por moeda. O formato numérico continua brasileiro nas três.
+- **Consequência:** corrigiu de passagem um erro antigo: "1.000" digitado era lido como 1.
+
+## D24. Unidade como porcentagem da banca
+
+- **Contexto:** pedido de gestão de unidade. Nas palavras do Lucas: "uma unidade geralmente é 10% da banca, mas a porcentagem pode ser parametrizada".
+- **Decisão:** unidade igual a uma porcentagem da banca, 10% por padrão, ajustável na Carteira. Atalhos em unidades no cupom e resultado em unidades na Carteira.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Banca é o saldo mais o que está em jogo, não só o saldo.
+  - A unidade acompanha a banca o tempo todo (não é fixada por período).
+  - No histórico, cada aposta é medida pela unidade do momento em que foi feita.
+- **Descartado:** unidade fixa em valor, digitada à mão.
+
+## D25. Cashout por round: não agora
+
+- **Contexto:** ideia de um cashout dinâmico conforme quem vence cada round, e pedido de procurar uma API ou um serviço de torcedores que pontue os rounds.
+- **O que foi encontrado em 09/10/2026 (fatos de terceiros; reconferir antes de depender):**
+  - Não existe pontuação oficial por round durante a luta: as notas dos juízes só são divulgadas no fim.
+  - **Verdict MMA:** aplicativo em que torcedores pontuam cada round em tempo real, com um placar médio ("Global Scorecard"). A página deles não menciona API pública; os dados aparecem em transmissões da PFL por parceria.
+  - **Sportradar MMA:** API paga com estatísticas por round e resumo ao vivo. A página consultada não fala em pontuação por round.
+  - **SportsAPI Pro:** a documentação lista notas por round (pelo exemplo, disponíveis depois da decisão) e um endpoint de odds ao vivo durante a luta. Preço, cobertura do UFC e forma de acesso não estavam na página.
+- **Decisão:** não fazer agora. O cashout segue a D21. Se um dia houver odd ao vivo confiável, o caminho é cashout a valor de mercado, não pontuação de round.
+- **Próximo passo combinado:** observar num card ao vivo o que a ESPN entrega durante a luta.
+
+## Pedido em aberto: copiar aposta a partir de imagem ou texto
+
+Em 09/10/2026 o Lucas pediu para enviar o print de uma aposta (imagem ou texto) e o app copiar a operação, aplicando o valor em unidades. Ainda **não foi decidido** como ler a imagem (no aparelho, por um serviço de IA, ou só texto) nem de onde vêm os prints. Não implementar antes dessa definição e de ter prints de exemplo.
+
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Confirmar a regra do cashout em múltipla (D21) | Lucas |
+| Confirmar as interpretações de moeda (D23) e de unidade (D24) | Lucas |
+| Definir como ler a imagem e mandar prints de exemplo para o recurso de copiar aposta | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

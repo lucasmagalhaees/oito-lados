@@ -152,6 +152,28 @@ JS = r"""
   eq('parlay cashout gone after its first fight ended', Core.cashout(multi, [ft('post'), ft('post'), ft('pre')]), { ok: false, why: 'started' });
   eq('a live fight wins over a finished one in the reason shown', Core.cashout(multi, [ft('post'), ft('post'), ft('in')]), { ok: false, why: 'live' });
   eq('cashout value never depends on the odds', Core.cashout({ status: 'open', stake: 123.45, legs: [leg('f1', 51)] }, [ft('pre')]).value, 123.45);
+
+  /* ---- money fields: thousands mask and parsing (dot groups thousands, comma starts the cents) ---- */
+  for (const [raw, want] of [['', ''], ['5', '5'], ['150', '150'], ['1500', '1.500'], ['15000', '15.000'], ['1234567', '1.234.567'], ['1.500', '1.500'], ['15.00', '1.500'],
+      ['1500,', '1.500,'], ['1500,5', '1.500,5'], ['1500,50', '1.500,50'], ['1500,509', '1.500,50'], ['1.5,0,0', '15,00'], [',5', '0,5'], ['0015', '15'], ['0', '0'], ['0,05', '0,05'],
+      ['R$ 2.000,00', '2.000,00'], ['abc', ''], ['12a3', '123']])
+    eq(`mask "${raw}"`, Core.maskMoney(raw), want);
+  for (const [text, want] of [['', 0], ['abc', 0], ['0', 0], ['5', 5], ['1.500', 1500], ['1.500,50', 1500.5], ['1.234.567,89', 1234567.89], ['0,5', 0.5], ['1500', 1500], ['2.000,00', 2000], ['10,999', 11]])
+    eq(`parse "${text}"`, Core.parseMoney(text), want);
+  for (const v of [1, 10.5, 999.99, 1000, 1234.5, 1000000, 40])
+    eq(`number -> field -> number ${v}`, Core.parseMoney(Core.moneyText(v)), v);
+  eq('field text of 1234.5', Core.moneyText(1234.5), '1.234,5');
+  eq('field text of 730', Core.moneyText(730), '730');
+
+  /* ---- unit: a percentage of the bankroll, 10% by default ---- */
+  eq('unit default is 10% of the bankroll', Core.unitValue(1000, undefined), 100);
+  eq('unit at 2%', Core.unitValue(1000, 2), 20);
+  eq('unit at 2,5% typed with a comma', Core.unitValue(1000, '2,5'), 25);
+  eq('unit rounds to cents', Core.unitValue(333.33, 10), 33.33);
+  eq('unit of an empty bankroll', Core.unitValue(0, 10), 0);
+  eq('unit never negative', Core.unitValue(-50, 10), 0);
+  for (const [raw, want] of [[10, 10], ['5', 5], ['2,5', 2.5], [0, 10], [-3, 10], ['abc', 10], [null, 10], [250, 100], [0.01, 0.1], [33.333, 33.33]])
+    eq(`unit percentage ${JSON.stringify(raw)}`, Core.unitPct(raw), want);
   return { n, fails };
 }
 """

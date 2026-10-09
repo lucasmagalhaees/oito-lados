@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
 ### Adicionado
 - Cashout: devolve o valor integral da aposta enquanto nenhuma luta dela começou; congela com luta em andamento.
+- Repetir aposta com um toque.
+- Máscara de milhares nos campos de valor.
+- Moeda da simulação: real, dólar ou euro.
+- Gestão de unidade: porcentagem da banca, atalhos em unidades no cupom e resultado em unidades.
+
+### Corrigido
+- "1.000" digitado num campo de valor era lido como 1.
 
 ### Alterado
 - Taxa de acerto conta só apostas ganhas e perdidas; anuladas e encerradas por cashout ficam de fora.

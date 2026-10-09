@@ -35,7 +35,25 @@ with sync_playwright() as p:
         print('==', fid, json.dumps(mk[fid]['odds']['dist']), mk[fid]['P'])
         for g in mk[fid]['groups']: print('  ', g[0], ' '.join(g[1]))
     # deposit
-    pg.click('[data-act=tab][data-tab=carteira]'); pg.fill('#dep', '1.000,00'); pg.click('[data-act=deposit]')
+    # money fields: thousands mask while typing, and the display currency
+    pg.click('[data-act=tab][data-tab=carteira]')
+    pg.click('#dep'); pg.keyboard.type('1234567,891')
+    assert pg.input_value('#dep') == '1.234.567,89', pg.input_value('#dep')
+    for _ in range(5): pg.keyboard.press("Backspace")
+    assert pg.input_value('#dep') == '12.345', pg.input_value('#dep')
+    pg.keyboard.press('Home'); pg.keyboard.type('9')                   # editing at the start keeps the caret there
+    assert pg.input_value('#dep') == '912.345', pg.input_value('#dep')
+    pg.keyboard.type('8'); assert pg.input_value('#dep') == '9.812.345', pg.input_value('#dep')
+    pg.fill('#dep', ''); pg.click('[data-act=depq][data-v="1000"]'); pg.click('[data-act=depq][data-v="500"]')
+    assert pg.input_value('#dep') == '1.500', pg.input_value('#dep')
+    pg.fill('#dep', '')
+    assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
+    pg.click('[data-act=cur][data-c=USD]'); assert bal().replace('\xa0', ' ') == 'US$ 0,00', bal()
+    assert pg.inner_text('.field span') == 'US$', pg.inner_text('.field span')
+    pg.click('[data-act=cur][data-c=EUR]'); assert bal().replace('\xa0', ' ') == '€ 0,00', bal()
+    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 0,00', 'the chosen currency must survive a reload: ' + bal()
+    pg.click('[data-act=tab][data-tab=carteira]'); pg.click('[data-act=cur][data-c=BRL]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
+    pg.fill('#dep', '1.000,00'); pg.click('[data-act=deposit]')
     assert bal().replace('\xa0',' ') == 'R$ 1.000,00', bal()
     pg.click('.tabbar [data-tab=lutas]')
     shot('s1-lutas.png')
@@ -56,7 +74,16 @@ with sync_playwright() as p:
       const all = Object.keys(p.map); const tot1 = J.prob(['ml:a']) + J.prob(['ml:b']);
       return [t(['fm:ko','tot:o:1.5']), t(['ml:a','fm:sub']), t(['ml:a','mov:a:sub']), t(['dist:yes','tot:u:1.5']), t(['mov:b:ko','rnd:1']), t(['ml:a','td:o:1.5']), t(['fm:sub','tda:a:yes']), t(['td:u:0.5','tda:a:yes']), t(['ml:b','dist:yes','td:u:1.5']), t(['wr:a:2','tot:o:1.5']), t(['rnd:2','tot:u:1.5']), t(['ml:a','fm:ko']), t(['ml:b','rnd:3']), t(['fm:ko','fm:sub']), 'sum ml ' + tot1.toFixed(6), 'td over1.5 single ' + p.map['td:o:1.5'].odd + ' p=' + J.prob(['td:o:1.5']).toFixed(4)]; }""")
     for c in combos: print('  combo', c)
-    bet([('f1','ml:a')], '100')                                   # wins @1.67 -> 167
+    # unit: 10% of the bankroll by default, adjustable; the slip can stake in units
+    pg.click('.tabbar [data-tab=carteira]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
+    pg.fill('#unitpct', '2,5'); pg.click('[data-act=unit]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 25,00', pg.inner_text('#unitnow')
+    pg.fill('#unitpct', '10'); pg.keyboard.press('Enter'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
+    pg.click('.tabbar [data-tab=lutas]'); pick('f1', 'ml:a'); pg.click('#slipbtn')
+    pg.click('[data-act=stu][data-u="2"]'); assert pg.input_value('#stake') == '200', pg.input_value('#stake')
+    pg.click('[data-act=stu][data-u="1"]'); assert pg.input_value('#stake') == '100', pg.input_value('#stake')
+    assert '1u' in pg.inner_text('#slipsum'), pg.inner_text('#slipsum')
+    pg.click('[data-act=place]'); pg.wait_for_selector('.bet'); assert pg.inner_text('.bet .un') == '1u', pg.inner_text('.bet .un')   # wins @1.67 -> 167
+    pg.click('.tabbar [data-tab=lutas]')
     bet([('f1','ml:a'),('f2','dist:yes'),('f3','tot:o:3.5')], '50', 'multi')   # 1.67*1.44*1.83
     bet([('f1','td:o:2.5')], '20')                                # 3 TDs -> wins
     bet([('f3','mov:a:sub')], '10')                               # wins @4.00
@@ -79,6 +106,22 @@ with sync_playwright() as p:
     cashed = pg.evaluate(f'(() => {{ const b = window.__OL.S.bets.find(b => b.id === "{cid}"); return [b.status, b.payout, b.stake]; }})()')
     assert cashed == ['cashed', 40, 40], cashed
     print('cashout', cashed, '| saldo', before, '->', bal())
+    # repeat: the cashed-out bet goes back into the slip with the same selection and stake, and is placed by the usual button
+    pg.click('[data-act=filter][data-f=done]'); pg.click(f'[data-act=again][data-id="{cid}"]'); pg.wait_for_selector('#stake')
+    assert pg.input_value('#stake') == '40' and pg.locator('#panel .sel').count() == 1, (pg.input_value('#stake'), pg.locator('#panel .sel').count())
+    shot('s11-repetir.png'); n0 = pg.evaluate('window.__OL.S.bets.length')
+    pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length === {n0 + 1}')
+    again = pg.evaluate('(() => { const b = window.__OL.S.bets[window.__OL.S.bets.length - 1]; return [b.id, b.type, b.stake, b.status, b.legs.map(l => l.key).join("+")]; })()')
+    assert again[1:] == ['single', 40, 'open', 'ml:b'], again
+    pg.click(f'[data-act=cash][data-id="{again[0]}"]'); pg.click(f'[data-act=docash][data-id="{again[0]}"]')
+    pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{again[0]}").status === "cashed"')
+    print('repetir', again[1:], '-> cashout de novo | saldo', bal())
+    assert bal() == before.replace('690', '730'), (before, bal())
+    multi_again = pg.locator('.bet', has_text='Múltipla').first.locator('[data-act=again]')
+    multi_again.click(); pg.wait_for_selector('#stake')
+    kind = pg.evaluate('[window.__OL.slip.mode, window.__OL.slip.sels.length, window.__OL.slip.stake]')
+    assert kind[0] == 'multi' and kind[1] >= 2, kind
+    for _ in range(kind[1]): pg.click('#panel [data-act=unpick]')     # leave the slip empty again
     assert pg.locator('[data-act=cash]').count() == 12, 'every other open bet should still offer cashout before the card starts'
     pg.click('.tabbar [data-tab=lutas]')
     print('balance after bets', bal(), '| open', pg.evaluate('window.__OL.S.bets.length'))
@@ -100,10 +143,13 @@ with sync_playwright() as p:
     assert bal().replace('\xa0', ' ') == 'R$ 1.604,40', bal()
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_timeout(200); shot('s6-carteira.png')
+    units = pg.inner_text('#pnlu'); print('em unidades:', units)
+    assert units.startswith('+6,04u'), units                  # R$ 604,40 of profit with every bet placed at a R$ 100,00 unit
+    pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     b.close()
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs
-print('e2e ok: 13 apostas encerradas (1 por cashout), saldo final R$ 1.604,40, sem estouro de largura e sem erro de script')
+print('e2e ok: 14 apostas encerradas (2 por cashout, 1 delas repetida), saldo final R$ 1.604,40, sem estouro de largura e sem erro de script')
