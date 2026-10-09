@@ -139,6 +139,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .ph{display:flex;align-items:center;justify-content:space-between}
 .ph h3{font:800 26px/1 var(--font-display);text-transform:uppercase}
 .x{width:40px;height:40px;display:grid;place-items:center;border-radius:8px;font-size:22px;color:var(--muted)}
+.segm.cur{grid-template-columns:repeat(3,1fr)}
 .segm{display:grid;grid-template-columns:1fr 1fr;background:var(--surface2);border-radius:8px;padding:3px}
 .segm button{min-height:38px;border-radius:6px;font-weight:600;text-align:center;color:var(--muted)}
 .segm button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.18)}
@@ -223,7 +224,7 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 <header class="top"><div class="wrap">
   <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.3 2.5h7.4l5.8 5.8v7.4l-5.8 5.8H8.3l-5.8-5.8V8.3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M10 7h4l3 3v4l-3 3h-4l-3-3v-4z" fill="currentColor"/></svg>Oito Lados</div>
   <span class="fake">dinheiro fictício</span>
-  <button class="bal" data-act="tab" data-tab="carteira" aria-label="Abrir carteira"><small>Saldo fictício</small><b id="bal">R$ 0,00</b></button>
+  <button class="bal" data-act="tab" data-tab="carteira" aria-label="Abrir carteira"><small>Saldo fictício</small><b id="bal"></b></button>
 </div></header>
 
 <main><div class="wrap" id="view"></div></main>
@@ -583,6 +584,21 @@ const Core = (() => {
     if (!won) return { status: 'void', payout: bet.stake };
     return { status: 'won', payout: r2(bet.stake * r2(odd)) };
   }
+  /* ---------- money fields ----------
+     maskMoney formats what is being typed: "1500" -> "1.500", "12345,6" -> "12.345,6". Dots are always thousands
+     separators and are rebuilt on every keystroke; the first comma starts the cents (two digits at most). */
+  function maskMoney(raw) {
+    const s = String(raw == null ? '' : raw).replace(/[^\d,]/g, ''), i = s.indexOf(',');
+    const int = (i >= 0 ? s.slice(0, i) : s).replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return i < 0 ? int : (int || '0') + ',' + s.slice(i + 1).replace(/,/g, '').slice(0, 2);
+  }
+  function parseMoney(text) {
+    const s = String(text == null ? '' : text).replace(/[^\d,]/g, '').replace(',', '.').replace(/,/g, '');
+    const n = parseFloat(s);
+    return isFinite(n) && n > 0 ? r2(n) : 0;
+  }
+  const moneyText = n => maskMoney(String(r2(n)).replace('.', ','));      // a number as it should appear in a field
+
   /* ---------- cashout ----------
      The whole stake comes back, and only while none of the bet's fights has started. Once any of them is live the
      cashout is frozen; once any has started or finished it is gone, and normal settlement decides the bet.
@@ -594,22 +610,25 @@ const Core = (() => {
     if (fights.some(f => f.state !== 'pre' || f.canceled)) return { ok: false, why: 'started' };
     return { ok: true, value: bet.stake };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, maskMoney, parseMoney, moneyText, ML };
 })();
 
 /* ================= formatting ================= */
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const money = v => brl.format(v);
-const signed = v => (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + brl.format(Math.abs(v));
+const CUR = { BRL: 'Real', USD: 'Dólar', EUR: 'Euro' };
+let fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const symbolOf = code => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code }).formatToParts(0).find(x => x.type === 'currency').value;
+const sym = () => fmt.formatToParts(0).find(x => x.type === 'currency').value;
+const money = v => fmt.format(v);
+const signed = v => (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + fmt.format(Math.abs(v));
 const fo = o => Number(o).toFixed(2);
 const nodot = f => ({ format: t => f.format(t).replace('.', '') });
 const dWhen = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 const dDay = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
 const dTime = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const WEIGHT = { 'Strawweight': 'Peso-palha', 'Flyweight': 'Peso-mosca', 'Bantamweight': 'Peso-galo', 'Featherweight': 'Peso-pena', 'Lightweight': 'Peso-leve', 'Welterweight': 'Meio-médio', 'Middleweight': 'Peso-médio', 'Light Heavyweight': 'Meio-pesado', 'Heavyweight': 'Peso-pesado', 'W Strawweight': 'Palha feminino', 'W Flyweight': 'Mosca feminino', 'W Bantamweight': 'Galo feminino', 'W Featherweight': 'Pena feminino', 'Catchweight': 'Peso casado' };
-const parseMoney = s => { s = String(s || '').trim().replace(/[^\d.,]/g, ''); if (!s) return 0; if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const n = parseFloat(s); return isFinite(n) && n > 0 ? Core.r2(n) : 0; };
+const parseMoney = Core.parseMoney;
 const H = 3600e3, DAY = 24 * H;
 
 /* ================= persistent state ================= */
@@ -621,6 +640,8 @@ const validState = s => s && typeof s === 'object' && Array.isArray(s.deposits) 
 let S = LS.get('oitolados.v1');
 if (!validState(S)) S = { v: 1, deposits: [], bets: [] };
 const saveS = () => LS.set('oitolados.v1', S);
+function setCurrency(code) { S.cur = CUR[code] ? code : 'BRL'; fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: S.cur }); }
+setCurrency(S.cur);
 
 const D = { events: [], fights: new Map(), odds: {}, results: {}, td: {}, astats: {}, finalSeen: {}, oddsAt: {}, lastSync: 0, from: 0, err: null };
 (() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events, odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0 }); index(); } })();
@@ -761,7 +782,7 @@ function repeatBet(id) {
   if (!b || !repeatable(b)) { render(); return; }
   slip.sels = b.legs.map(l => ({ fid: l.fid, key: l.key }));
   slip.mode = b.type === 'multi' ? 'multi' : 'single';
-  slip.stake = String(b.stake).replace('.', ',');
+  slip.stake = Core.moneyText(b.stake);
   ui.msg = ''; ui.cash = null; ui.sheet = true;
   renderSheet(); render();
 }
@@ -1036,8 +1057,8 @@ function tblHtml(title, rows) {
 function vCarteira(w) {
   let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div><p>${w.open.length ? `${money(w.atRisk)} em jogo em ${w.open.length} ${w.open.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ` : ''}${money(w.dep)} depositados no total</p></section>`;
   h += `<section class="card"><span class="label">Depositar dinheiro de mentira</span>
-    <div class="field"><span>R$</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
-    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${brl.format(v).replace(',00', '')}</button>`).join('')}</div>
+    <div class="field"><span>${esc(sym())}</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
+    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${fmt.format(v).replace(',00', '')}</button>`).join('')}</div>
     <button class="btn block" data-act="deposit">Depositar</button></section>`;
   const roi = w.staked ? w.pnl / w.staked * 100 : null;
   h += `<section class="card"><span class="label">Ganhos e perdas · apostas encerradas</span>
@@ -1050,6 +1071,7 @@ function vCarteira(w) {
   } else h += '<p class="hint">O gráfico e a quebra por mercado aparecem quando a primeira aposta for encerrada.</p>';
   h += '</section>';
   if (S.deposits.length) h += `<section class="card"><span class="label">Depósitos</span><div>${S.deposits.slice().reverse().slice(0, 8).map(d => `<div class="dep"><span>${esc(dWhen.format(d.t))}</span><b>${money(d.v)}</b></div>`).join('')}</div></section>`;
+  h += `<section class="card"><span class="label">Moeda da simulação</span><div class="segm cur">${Object.keys(CUR).map(c => `<button class="${S.cur === c ? 'on' : ''}" data-act="cur" data-c="${c}" aria-pressed="${S.cur === c}">${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div><p class="hint">Muda só o símbolo. Os valores continuam os mesmos, sem conversão.</p></section>`;
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
@@ -1078,7 +1100,7 @@ function renderSheet() {
   h += '</div>';
   if (slip.mode === 'multi' && c.groups.some(g => g.combo)) h += '<p class="hint">Na mesma luta as odds não se multiplicam: o preço vem da chance de tudo acontecer junto.</p>';
   h += `<label class="label" for="stake">${slip.mode === 'multi' ? 'Valor da ' + mname.toLowerCase() : c.n > 1 ? 'Valor de cada aposta' : 'Valor da aposta'}</label>
-    <div class="field"><span>R$</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
+    <div class="field"><span>${esc(sym())}</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
     <div class="quick">${[10, 50, 100].map(v => `<button data-act="stq" data-v="${v}">+${v}</button>`).join('')}<button data-act="stq" data-v="max">Tudo</button></div>
     <div id="slipsum"></div>`;
   $('#panel').innerHTML = h;
@@ -1088,7 +1110,7 @@ function slipSummary() {
   const c = slipCalc(), el = $('#slipsum'); if (!el) return;
   let why = '';
   if (!c.ok) why = 'Tem seleção com mercado fechado.';
-  else if (c.stake < 1) why = 'Aposta mínima de R$ 1,00.';
+  else if (c.stake < 1) why = `Aposta mínima de ${money(1)}.`;
   else if (c.total > c.balance + 0.004) why = 'Saldo insuficiente.';
   el.innerHTML = `<dl class="sum">${slip.mode === 'multi' ? `<dt>Odd da ${c.sameFight ? 'combinada' : 'múltipla'}</dt><dd>${c.ok ? fo(c.odd) : '—'}</dd>` : ''}<dt>Total apostado</dt><dd>${money(c.total)}</dd><dt>Retorno possível</dt><dd class="big">${money(c.ret)}</dd><dt>Saldo disponível</dt><dd>${money(c.balance)}</dd></dl>
     ${ui.msg ? `<p class="msg" style="margin-top:10px">${esc(ui.msg)}</p>` : ''}
@@ -1150,17 +1172,18 @@ document.addEventListener('click', e => {
   else if (a === 'unpick') { slip.sels = slip.sels.filter(s => !(s.fid === b.dataset.fid && s.key === b.dataset.key)); ui.msg = ''; if (!slip.sels.length) ui.sheet = false; renderSheet(); render(); }
   else if (a === 'sheet') { ui.sheet = !ui.sheet; ui.msg = ''; renderSheet(); }
   else if (a === 'mode') { slip.mode = b.dataset.m; renderSheet(); }
-  else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = b.dataset.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(b.dataset.v); slip.stake = v ? String(v).replace('.', ',') : ''; const el = $('#stake'); if (el) el.value = slip.stake; slipSummary(); }
+  else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = b.dataset.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(b.dataset.v); slip.stake = v ? Core.moneyText(v) : ''; const el = $('#stake'); if (el) el.value = slip.stake; slipSummary(); }
   else if (a === 'place') place();
   else if (a === 'filter') { ui.filter = b.dataset.f; ui.cash = null; render(); }
   else if (a === 'cash') { ui.cash = b.dataset.id || null; ui.cashMsg = ''; render(); }
   else if (a === 'docash') doCashout(b.dataset.id);
   else if (a === 'again') repeatBet(b.dataset.id);
-  else if (a === 'depq') { ui.dep = String(parseMoney(ui.dep) + Number(b.dataset.v)).replace('.', ','); const el = $('#dep'); if (el) el.value = ui.dep; }
+  else if (a === 'depq') { ui.dep = Core.moneyText(parseMoney(ui.dep) + Number(b.dataset.v)); const el = $('#dep'); if (el) el.value = ui.dep; }
+  else if (a === 'cur') { setCurrency(b.dataset.c); saveS(); renderSheet(); render(); toast(`Moeda da simulação: ${CUR[S.cur]}. Os valores não foram convertidos.`); }
   else if (a === 'deposit') {
     const v = parseMoney(($('#dep') || {}).value || ui.dep);
     if (!v) { toast('Digita um valor pra depositar.'); return; }
-    if (v > 1e9) { toast('Calma, bilionário. Máximo de R$ 1 bilhão por depósito.'); return; }
+    if (v > 1e9) { toast(`Calma, bilionário. Máximo de ${money(1e9)} por depósito.`); return; }
     S.deposits.push({ t: Date.now(), v }); saveS(); ui.dep = ''; if (document.activeElement) document.activeElement.blur(); render(); toast(`${money(v)} fictícios na conta.`);
   }
   else if (a === 'backup') {
@@ -1173,14 +1196,25 @@ document.addEventListener('click', e => {
     let s = null; try { s = JSON.parse(($('#rs') || {}).value || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
     S = { v: 1, deposits: s.deposits.filter(d => d && d.v > 0 && d.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) };
-    saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
+    setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [] }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
+function applyMask(el, typed) {
+  let v = el.value, pos = el.selectionStart == null ? v.length : el.selectionStart;
+  if (typed === '.' && !v.includes(',') && pos > 0) v = v.slice(0, pos - 1) + ',' + v.slice(pos);   // keypads without a comma key
+  const before = v.slice(0, pos).replace(/[^\d,]/g, '').length;        // digits and comma to the left of the caret
+  const m = Core.maskMoney(v);
+  el.value = m;
+  let k = 0, seen = 0;
+  while (k < m.length && seen < before) { if (/[\d,]/.test(m[k])) seen++; k++; }
+  try { el.setSelectionRange(k, k); } catch (err) { /* some input types have no caret API */ }
+  return m;
+}
 document.addEventListener('input', e => {
-  if (e.target.id === 'stake') { slip.stake = e.target.value; ui.msg = ''; slipSummary(); }
-  else if (e.target.id === 'dep') ui.dep = e.target.value;
+  if (e.target.id === 'stake') { slip.stake = applyMask(e.target, e.data); ui.msg = ''; slipSummary(); }
+  else if (e.target.id === 'dep') ui.dep = applyMask(e.target, e.data);
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && ui.sheet) { ui.sheet = false; renderSheet(); }
