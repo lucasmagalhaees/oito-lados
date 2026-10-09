@@ -132,6 +132,31 @@ with sync_playwright() as p:
     shot('s12-copiar.png'); pg.click('[data-act=impgo]'); pg.wait_for_selector('#stake')
     assert pg.input_value('#stake') == '250' and pg.evaluate('window.__OL.slip.sels.length') == 1, pg.input_value('#stake')
     pg.click('#panel [data-act=unpick]')
+    # the setting for a print that brings money: same amount (above), turned into units, or a fixed number of units
+    MONEY_TIP = 'Almeida x Dunne\nDunne para vencer a luta\nR$ 250,00'
+    def copied(expect_how):
+        pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.fill('#imptext', MONEY_TIP); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+        value = txt('#impvalue'); panel = txt('#panel'); assert expect_how in panel, panel
+        pg.click('[data-act=impclose]'); return value
+    pg.click('.tabbar [data-tab=carteira]'); assert 'vira uma aposta de R$ 1.750,00.' in txt('#tiphow'), txt('#tiphow')
+    pg.click('[data-act=tipmode][data-m=units]'); assert 'Falta dizer quanto vale 1u' in txt('#tiphow'), txt('#tiphow')
+    assert copied('mesmo valor do print') == 'R$ 250,00 · 2,5u', 'without the unit of the source the amount is kept'
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipsave]'); assert pg.evaluate('window.__OL.S.tip.srcUnit') == 0, 'an empty field saves nothing'
+    pg.click('#tipsrc'); pg.keyboard.type('1000'); assert pg.input_value('#tipsrc') == '1.000', pg.input_value('#tipsrc')
+    pg.keyboard.press('Enter'); assert 'vira uma aposta de R$ 175,00 (1,75u)' in txt('#tiphow'), txt('#tiphow')
+    assert copied('R$ 250,00 do print ÷ R$ 1.000,00 por unidade = 0,25u') == 'R$ 25,00 · 0,25u'
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=fixed]'); assert 'vira uma aposta de R$ 100,00 (1u)' in txt('#tiphow'), txt('#tiphow')
+    pg.fill('#tipfix', ''); pg.click('[data-act=tipsave]'); assert pg.evaluate('window.__OL.S.tip.fixU') == 1
+    pg.fill('#tipfix', '1,5'); pg.click('[data-act=tipsave]'); assert 'vira uma aposta de R$ 150,00 (1,5u)' in txt('#tiphow'), txt('#tiphow')
+    shot('s14-print-config.png')
+    assert copied('valor fixo de 1,5u') == 'R$ 150,00 · 1,5u'
+    pg.click('[data-act=imp]'); pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert txt('#impvalue') == 'R$ 50,00 · 0,5u', 'a tip in units is not touched by the setting: ' + txt('#impvalue')
+    pg.click('[data-act=impclose]'); pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S')
+    assert pg.evaluate('JSON.stringify(window.__OL.S.tip)') == '{"mode":"fixed","srcUnit":1000,"fixU":1.5}', 'the setting survives a reload'
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=same]'); assert 'vira uma aposta de R$ 1.750,00.' in txt('#tiphow')
+    pg.click('.tabbar [data-tab=lutas]'); pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
+    for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     pg.click('[data-act=imp]')
     for text, expect in [('Fulano x Beltrano\nFulano para vencer a luta', 'Não achei nenhuma luta'), ('', 'Cola um texto'), ('Almeida x Dunne', 'não entendi qual é a aposta'), ('Dunne e Teles', 'mais de uma luta possível')]:
         pg.fill('#imptext', text); pg.click('[data-act=impread]'); pg.wait_for_selector('#panel .msg')

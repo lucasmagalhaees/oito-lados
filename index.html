@@ -154,7 +154,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .combo b{white-space:nowrap}
 .combo.bad{color:var(--loss)}
 .field{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:0 12px;background:var(--bg)}
-.field span{color:var(--muted);font-weight:600}
+.field span{color:var(--muted);font-weight:600;white-space:nowrap}
 .field input{flex:1;min-width:0;border:0;background:none;height:48px;font-size:18px;font-weight:600;outline:none}
 .field:focus-within{border-color:var(--gold)}
 .quick{display:flex;gap:6px;flex-wrap:wrap}
@@ -605,6 +605,26 @@ const Core = (() => {
   const unitPct = v => { const n = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : Number(v); return isFinite(n) && n > 0 ? clamp(r2(n), 0.1, 100) : UNIT_PCT_DEFAULT; };
   const unitValue = (bankroll, pct) => r2(Math.max(0, Number(bankroll) || 0) * unitPct(pct) / 100);
 
+  /* ---------- the stake of a copied bet ----------
+     A tip that speaks in units always uses those units. What to do with one that brings an amount of money is a setting:
+       same  - stake the same amount (the default)
+       units - turn it into units by what one unit is worth to whoever made the print (srcUnit), and stake that many of mine
+       fixed - ignore the amount and stake a fixed number of my units (fixU) */
+  const TIP_MODES = ['same', 'units', 'fixed'];
+  function tipCfg(c) {
+    c = c && typeof c === 'object' ? c : {};
+    const src = Number(c.srcUnit), fix = Number(c.fixU);
+    return { mode: TIP_MODES.includes(c.mode) ? c.mode : 'same', srcUnit: isFinite(src) && src > 0 ? r2(src) : 0, fixU: isFinite(fix) && fix > 0 ? clamp(r2(fix), 0.01, 100) : 1 };
+  }
+  function tipStake(stake, cfg, unit) {
+    const c = tipCfg(cfg), u = Math.max(0, Number(unit) || 0);
+    if (stake.kind === 'units') return { how: 'units', units: stake.units, value: r2(stake.units * u) };
+    if (stake.kind !== 'money') return { how: 'default', units: 1, value: r2(u) };
+    if (c.mode === 'units' && c.srcUnit > 0) { const n = stake.money / c.srcUnit; return { how: 'conv', units: n, value: r2(n * u) }; }
+    if (c.mode === 'fixed') return { how: 'fixed', units: c.fixU, value: r2(c.fixU * u) };
+    return { how: 'same', units: null, value: stake.money };
+  }
+
   /* ---------- currency ----------
      The bankroll lives in one currency. Depositing in another one converts everything at the day's rate.
      normFx reads the Frankfurter answer for base=BRL into { date, rates: { BRL: 1, USD, EUR } }, or null if it is not that. */
@@ -757,7 +777,7 @@ const Core = (() => {
     if (value < 0.01) return { ok: false, why: 'noprice' };
     return { ok: true, kind: 'market', value, full, chance: prob };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipCfg, tipStake, TIP_MODES, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
 })();
 
 /* ================= formatting ================= */
@@ -1036,10 +1056,13 @@ function impResolve(res) {
     const f = D.fights.get(it.fid), p = f && canBet(f) ? priceOf(f) : null, x = p && p.map[it.key];
     if (x) ok.push({ it, f, x }); else notes.push(`${f ? f.a.last + ' x ' + f.b.last : 'Uma luta'}: essa aposta não tem odd agora.`);
   }
-  const st = res.stake;
-  const value = st.kind === 'money' ? st.money : Core.r2(st.units * w.unit);
-  return { ok, notes, value, unit: w.unit, st };
+  const st = res.stake, ts = Core.tipStake(st, S.tip, w.unit);
+  return { ok, notes, value: ts.value, how: ts.how, units: ts.units, unit: w.unit, st };
 }
+// the mode that is really in force: "units" only works once the value of the source's unit has been given
+const tipEffective = () => { const c = Core.tipCfg(S.tip); return c.mode === 'units' && !c.srcUnit ? 'same' : c.mode; };
+const TIP_HINT = { same: 'o valor é o mesmo do print.', units: 'o valor do print vira unidades e entra na sua unidade.', fixed: 'print com valor em dinheiro entra com o valor fixo que você configurou.' };
+const TIP_MODE = { same: 'Mesmo valor', units: 'Em unidades', fixed: 'Fixo' };
 async function runImport(text) {
   imp.text = text; imp.err = ''; imp.res = null;
   const pre = [...D.fights.values()].filter(f => f.state === 'pre' && !f.canceled);
@@ -1063,7 +1086,7 @@ async function importImage(file) {
 function renderImport() {
   $('#sheet').hidden = false; $('#slipbar').hidden = true;
   let h = `<div class="ph"><h3>Copiar aposta</h3><button class="x" data-act="impclose" aria-label="Fechar">×</button></div>
-    <p class="hint">Cola o texto de uma aposta ou escolhe o print. Vale pra luta que ainda não começou. A odd é a de agora; o valor é o mesmo do print.</p>
+    <p class="hint">Cola o texto de uma aposta ou escolhe o print. Vale pra luta que ainda não começou. A odd é a de agora; ${TIP_HINT[tipEffective()]}</p>
     <textarea id="imptext" placeholder="Ex.: Fulano vs. Beltrano · Fulano para vencer a luta · Stake 1 unidade" aria-label="Texto da aposta">${esc(imp.text)}</textarea>
     <div class="rowbtns"><button class="btn" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><label class="btn ghost" for="impfile">Escolher imagem</label><input type="file" id="impfile" accept="image/*" hidden ${imp.busy ? 'disabled' : ''}></div>
     <p class="hint" id="impstatus">${esc(impStatus())}</p>`;
@@ -1074,7 +1097,7 @@ function renderImport() {
       h += '<div id="impres">';
       for (const { it, f, x } of r.ok)
         h += `<div class="sel"><div class="t"><b>${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span></div></div>`;
-      const how = r.st.kind === 'units' ? `${fu(r.st.units)} do print` : r.st.kind === 'money' ? 'mesmo valor do print' : 'o print não diz o valor, considerei 1u';
+      const how = { units: `${fu(r.units)} do print`, same: 'mesmo valor do print', conv: `${money(r.st.money)} do print ÷ ${money(Core.tipCfg(S.tip).srcUnit)} por unidade = ${fu(r.units)}`, fixed: `valor fixo de ${fu(r.units)}, pela sua configuração`, default: 'o print não diz o valor, considerei 1u' }[r.how];
       h += `</div><dl class="sum" style="margin-top:10px"><dt>Valor</dt><dd id="impvalue">${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${how}</dd></dl>`;
       if (!(r.value > 0)) h += '<p class="msg">Sem banca não dá pra calcular a unidade. Deposita primeiro; as seleções vão pro cupom sem valor.</p>';
     }
@@ -1383,6 +1406,15 @@ function vCarteira(w) {
     <p class="hint">${pctText(w.unitPct)}% da banca de ${money(w.bank)} (saldo mais o que está em jogo). Muda sozinha quando a banca muda.</p>
     <div class="field"><input id="unitpct" inputmode="decimal" autocomplete="off" value="${esc(pctText(w.unitPct))}" aria-label="Porcentagem da banca que vale uma unidade"><span>% da banca</span></div>
     <button class="btn ghost block" data-act="unit">Aplicar</button></section>`;
+  const tc = Core.tipCfg(S.tip), ex = 1750;
+  h += `<section class="card" id="tipcard"><span class="label">Valor ao copiar um print</span>
+    <p class="hint">Vale pra print ou texto que traz o valor em dinheiro. Se ele já fala em unidades, valem as unidades dele.</p>
+    <div class="segm cur" role="group" aria-label="O que fazer com o valor do print">${Core.TIP_MODES.map(m => `<button class="${tc.mode === m ? 'on' : ''}" data-act="tipmode" data-m="${m}" aria-pressed="${tc.mode === m}">${TIP_MODE[m]}</button>`).join('')}</div>`;
+  if (tc.mode === 'units') h += `<div class="field"><span>1u do print =</span><input id="tipsrc" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(tc.srcUnit ? Core.moneyText(tc.srcUnit) : '')}" aria-label="Quanto vale uma unidade de quem fez o print"></div><button class="btn ghost block" data-act="tipsave">Aplicar</button>`;
+  if (tc.mode === 'fixed') h += `<div class="field"><input id="tipfix" inputmode="decimal" autocomplete="off" value="${esc(pctText(tc.fixU))}" aria-label="Quantas unidades apostar"><span>unidades</span></div><button class="btn ghost block" data-act="tipsave">Aplicar</button>`;
+  const exStake = Core.tipStake({ kind: 'money', money: ex }, tc, w.unit);
+  h += `<p class="hint" id="tiphow">${tc.mode === 'units' && !tc.srcUnit ? 'Falta dizer quanto vale 1u de quem fez o print. Até lá, a aposta copiada usa o mesmo valor do print.'
+    : `Exemplo: um print de ${money(ex)} vira uma aposta de ${money(exStake.value)}${exStake.units != null ? ` (${fu(exStake.units)})` : ''}.`}</p></section>`;
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
@@ -1505,6 +1537,14 @@ document.addEventListener('click', e => {
   else if (a === 'docash') doCashout(b.dataset.id);
   else if (a === 'again') repeatBet(b.dataset.id);
   else if (a === 'depq') { ui.dep = Core.moneyText(parseMoney(ui.dep) + Number(b.dataset.v)); const el = $('#dep'); if (el) el.value = ui.dep; }
+  else if (a === 'tipmode') { S.tip = Object.assign(Core.tipCfg(S.tip), { mode: Core.TIP_MODES.includes(b.dataset.m) ? b.dataset.m : 'same' }); saveS(); if (document.activeElement) document.activeElement.blur(); render(); }
+  else if (a === 'tipsave') {
+    const c = Core.tipCfg(S.tip), src = $('#tipsrc'), fix = $('#tipfix');
+    if (src) { const v = parseMoney(src.value); if (!v) { toast('Digita quanto vale 1u de quem fez o print.'); return; } c.srcUnit = v; }
+    if (fix) { const n = parseFloat(String(fix.value).replace(',', '.')); if (!(n > 0)) { toast('Digita quantas unidades apostar.'); return; } c.fixU = n; }
+    S.tip = Core.tipCfg(c); saveS(); if (document.activeElement) document.activeElement.blur(); render();
+    toast(S.tip.mode === 'units' ? `Print em dinheiro vira unidades: 1u do print = ${money(S.tip.srcUnit)}.` : `Print em dinheiro entra com ${fu(S.tip.fixU)}.`);
+  }
   else if (a === 'depcur') pickDepCur(b.dataset.c);
   else if (a === 'deposit') deposit();
   else if (a === 'backup') {
@@ -1517,10 +1557,10 @@ document.addEventListener('click', e => {
     let s = null; try { s = JSON.parse(($('#rs') || {}).value || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
     S = { v: 1, deposits: s.deposits.filter(d => d && d.v > 0 && d.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) };
-    S.unitPct = Core.unitPct(s.unitPct); if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && CUR[c.from] && CUR[c.to] && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
+    S.unitPct = Core.unitPct(s.unitPct); if (s.tip) S.tip = Core.tipCfg(s.tip); if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && CUR[c.from] && CUR[c.to] && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct, ...(S.tip ? { tip: S.tip } : {}) }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 // The currency is chosen where the money comes in. Picking another one only shows what the deposit will do;
 // nothing changes until the deposit is made.
@@ -1574,6 +1614,7 @@ function applyMask(el, typed) {
 document.addEventListener('input', e => {
   if (e.target.id === 'stake') { slip.stake = applyMask(e.target, e.data); ui.msg = ''; slipSummary(); }
   else if (e.target.id === 'dep') ui.dep = applyMask(e.target, e.data);
+  else if (e.target.id === 'tipsrc') applyMask(e.target, e.data);
   else if (e.target.id === 'imptext') imp.text = e.target.value;
 });
 document.addEventListener('change', e => { if (e.target.id === 'impfile') importImage(e.target.files && e.target.files[0]); });
@@ -1585,6 +1626,7 @@ document.addEventListener('paste', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); }
   if (e.key === 'Enter' && e.target.id === 'unitpct') { const b = document.querySelector('[data-act="unit"]'); if (b) b.click(); }
+  if (e.key === 'Enter' && (e.target.id === 'tipsrc' || e.target.id === 'tipfix')) { const b = document.querySelector('[data-act="tipsave"]'); if (b) b.click(); }
   if (e.key === 'Enter' && e.target.id === 'dep') { const b = document.querySelector('[data-act="deposit"]'); if (b) b.click(); }
 });
 

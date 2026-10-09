@@ -216,7 +216,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - Nada é apostado sozinho: o resultado vai para o cupom.
 - **Descartado:** ler a imagem com um serviço de IA de visão. Seria mais tolerante a formatos diferentes, mas exige servidor e chave paga, o que contraria a D11 (MVP sem backend), e mandaria a imagem para fora do aparelho.
 - **Consequência:** é a primeira dependência de terceiros em tempo de execução (uma biblioteca baixada de CDN, com versão fixa e hash de integridade no script principal). O leitor só conhece os formatos que foram testados; formato novo pode não ser entendido, e a tela diz o que não entendeu.
-- **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades.
+- **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades. **Resolvida pela D29:** virou configuração.
 
 ## D27. Cashout dinâmico em múltipla
 
@@ -245,6 +245,16 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Descartado:** carteiras por moeda; cotação digitada à mão; converter só o saldo e deixar o histórico na moeda antiga (o gráfico e as tabelas somariam moedas diferentes).
 - **Consequência:** segunda dependência de terceiros em tempo de execução, depois do leitor de imagem. Se o serviço sair do ar ou mudar o formato, só a troca de moeda para; o resto do app não depende dele.
 
+## D29. Valor de print em dinheiro é configurável
+
+- **Contexto:** perguntado se um print de R$ 1.750,00 deveria ser copiado como R$ 1.750,00 ou convertido em unidades, o Lucas respondeu: "quero ter uma opção, mas configuração que parametrize isso".
+- **Decisão:** um cartão na Carteira com três modos. **Mesmo valor** (padrão, o comportamento da D26); **Em unidades**, com o parâmetro "quanto vale 1u de quem fez o print"; **Fixo**, com o parâmetro "quantas unidades suas".
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - O terceiro modo (fixo) não foi pedido com essas palavras; entrou por ser o jeito de seguir um print sem conhecer a unidade de quem o fez.
+  - A configuração vale para todos os prints. Não há unidade de origem por canal ou por pessoa.
+  - Texto que já fala em unidades não é afetado.
+- **Limite conhecido:** o leitor não considera a moeda do print. Com a banca em dólar, um print de R$ 250,00 no modo "mesmo valor" vira US$ 250,00.
+
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
@@ -252,7 +262,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
-| Testar o copiar aposta no iPhone com prints reais, e confirmar a regra do valor em dinheiro (D26) | Lucas |
+| Testar o copiar aposta no iPhone com prints reais, e ver se os três modos do valor de print servem (D29) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

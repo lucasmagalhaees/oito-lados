@@ -54,7 +54,7 @@ O que cada peça do harness cobre:
 - `index.html`: o app inteiro. HTML + CSS + JS num arquivo só, sem build, sem dependências, sem backend. Ícone embutido em base64.
 - `scripts/verify.sh`: o comando único de verificação.
 - `tests/unit.py`: testes do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação).
-- `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/`.
+- `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
 - `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
@@ -82,7 +82,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 10. Campos de valor com máscara de milhares.
 11. Moeda da banca: real, dólar ou euro, escolhida na hora de depositar. Depositar em outra moeda converte a banca inteira pela cotação do dia.
 12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
-13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora e o mesmo valor do original.
+13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. O valor segue o original; o que fazer com um valor em dinheiro é configurável.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -146,6 +146,7 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 { v: 1,
   cur: 'BRL'|'USD'|'EUR',        // moeda da banca: todos os valores abaixo estão nela
   conv: [{ t, from, to, rate, date }],   // conversões já feitas (as 20 últimas)
+  tip: { mode: 'same'|'units'|'fixed', srcUnit, fixU },   // o que fazer com o valor em dinheiro de um print copiado
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
   bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
@@ -268,7 +269,7 @@ Regra do Lucas em 09/10/2026 (D28): **a moeda só se troca na hora de depositar,
 - **Cotação:** serviço Frankfurter, `https://api.frankfurter.dev/v1/latest?base=BRL&symbols=USD,EUR`, sem chave. `Core.normFx` só aceita resposta com `base` BRL, `date` no formato AAAA-MM-DD e `rates.USD` e `rates.EUR` numéricos e positivos. Par que não envolve o real é calculado passando pelo real (`Core.fxRate`).
 - **Cache:** a cotação fica em `oitolados.fx.v1` e só é pedida de novo depois de 12 h (`FX_TTL`). Sem resposta do serviço, vale a cotação guardada, com a data dela na tela; sem nenhuma guardada, a conversão não é feita.
 - Se a cotação mudou entre a tela e a confirmação, `deposit` mostra a nova e pede confirmação de novo, como `place()` faz com a odd.
-- O que o Frankfurter devolve e se ele aceita chamada do navegador são fatos de terceiro: ver a data da última conferência em `docs/verificacao.md`. `tests/contract_live.py` confere os dois toda semana.
+- O que o Frankfurter devolve e se ele aceita chamada do navegador são fatos de terceiro, conferidos em 09/10/2026 (ver `docs/verificacao.md`). `tests/contract_live.py` confere os dois toda semana, e a resposta real gravada está em `tests/fixtures/fx/`.
 
 ## Unidade
 
@@ -284,7 +285,15 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` do `index.html`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
 - **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems }`.
 - **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
-- **Valor:** se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual. Se traz um valor em dinheiro, usa o mesmo valor (o primeiro do texto, que no print é a aposta, não o retorno). Se não diz nada, considera 1u.
+- **Valor** (`Core.tipStake`): se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual, sempre. Se não diz nada, considera 1u. Se traz um valor em dinheiro (o primeiro do texto, que no print é a aposta, não o retorno), vale a configuração do cartão "Valor ao copiar um print", na Carteira (`S.tip`, limpo por `Core.tipCfg`):
+
+  | `mode` | O que faz com um print de R$ 1.750,00 |
+  |---|---|
+  | `same` (padrão) | aposta os mesmos R$ 1.750,00 |
+  | `units` | divide pelo valor de 1u de quem fez o print (`srcUnit`) e aposta essa quantidade da sua unidade. Sem `srcUnit` preenchido, age como `same` e a tela avisa |
+  | `fixed` | ignora o valor e aposta `fixU` unidades suas (1 por padrão, de 0,01 a 100) |
+
+  O leitor não olha o símbolo de moeda do print: o número é lido como está. `srcUnit` é um valor na moeda do print e não é convertido quando a banca muda de moeda.
 - **Odd:** a aposta é feita com a odd de agora. A odd do original aparece só para comparar.
 - **Fluxo:** a tela mostra o que foi entendido e o que não foi (`TIP_WHY`: `empty`, `nofight`, `ambiguous`, `nomarket`, e "não tem odd agora"). "Levar pro cupom" enche o cupom; a aposta é feita pelo botão de sempre. Mais de uma luta no mesmo texto vira múltipla.
 - **Limite conhecido:** o leitor de texto foi feito em cima de dois formatos reais (um print de casa de apostas e uma mensagem de canal). Formato novo que ele não entender: acrescentar o caso em `tests/unit.py` primeiro.
@@ -317,7 +326,7 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
 `unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro.
 
-`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
+`contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
 

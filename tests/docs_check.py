@@ -110,6 +110,14 @@ check('app carries an integrity hash for the OCR script', bool(sri))
 if lib.exists() and sri:
     real = 'sha384-' + base64.b64encode(hashlib.sha384(lib.read_bytes()).digest()).decode()
     check('integrity hash matches the pinned OCR file', real == sri.group(1), f'{real} vs {sri.group(1)}')
+# 5d. the setting for copied bets: the modes in the spec table are the modes in the code
+code_modes = re.search(r"const TIP_MODES = \[([^\]]+)\];", html)
+spec_modes = re.findall(r'^  \| `(\w+)`', spec[spec.index('## Copiar aposta'):spec.index('## Sincronização')], re.M)
+spec_modes = [m for m in spec_modes if m != 'mode']      # the table header
+check('copied-bet modes in the spec match the code', bool(code_modes) and [m.strip(" '") for m in code_modes.group(1).split(',')] == spec_modes, f'{code_modes and code_modes.group(1)} vs {spec_modes}')
+check('fixed mode limits are the documented ones', 'clamp(r2(fix), 0.01, 100) : 1' in html and 'de 0,01 a 100' in spec)
+fxs = sorted(p.name for p in (ROOT / 'tests' / 'fixtures' / 'fx').glob('*.json'))
+check('every recorded exchange-rate sample is listed in its README', bool(fxs) and all(f'`{n}`' in read('tests/fixtures/fx/README.md') for n in fxs), fxs)
 check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
 
 # 6. storage keys and API hosts

@@ -16,7 +16,7 @@
 - Odd estimada tem que aparecer como estimada (`≈`). Nunca apresentar preço de modelo como se fosse da casa.
 - O saldo é derivado do histórico. Não criar campo de saldo.
 - Mudou regra de preço ou de liquidação? Acrescente o caso em `tests/unit.py` e atualize `CLAUDE.md` e o saldo esperado em `tests/e2e.py`.
-- Vai ler um campo novo da ESPN? Grave antes uma resposta real em `tests/fixtures/espn/` e cubra em `tests/contract.py`.
+- Vai ler um campo novo da ESPN ou do serviço de câmbio? Grave antes uma resposta real em `tests/fixtures/espn/` (ou `tests/fixtures/fx/`) e cubra em `tests/contract.py`.
 - Decisão nova de produto ou de arquitetura entra em `docs/decisoes.md`. O que foi verificado (e o que não foi) entra em `docs/verificacao.md`.
 - Nada de dinheiro real, cadastro de pagamento ou imitação de casa de apostas existente.
 

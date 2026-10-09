@@ -1,4 +1,4 @@
-"""Contract test: real ESPN responses recorded in tests/fixtures/espn must normalise to known values.
+"""Contract test: real responses recorded in tests/fixtures (ESPN and the exchange-rate service) must normalise to known values.
 
 Usage: python3 tests/contract.py
 This is what keeps the parsers honest: they are checked against what the API really returned, not against what
@@ -11,11 +11,17 @@ import cov
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FX = {p.stem: json.loads(p.read_text()) for p in sorted((ROOT / 'tests' / 'fixtures' / 'espn').glob('*.json'))}
+FX['fx_latest_brl'] = json.loads((ROOT / 'tests' / 'fixtures' / 'fx' / 'latest_brl.json').read_text())
 
 JS = r"""
 (FX) => {
   const { Core } = window.__OL, fails = []; let n = 0;
   const eq = (name, got, want) => { n++; if (JSON.stringify(got) !== JSON.stringify(want)) fails.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`); };
+
+  // the recorded answer of the exchange-rate service
+  const rates = Core.normFx(FX.fx_latest_brl);
+  eq('exchange rates', rates, { date: '2026-10-09', rates: { BRL: 1, USD: 0.1998, EUR: 0.1783 } });
+  eq('one dollar in reais, from the recorded rates', Core.r2(Core.fxRate(rates, 'USD', 'BRL')), 5.01);
 
   const pre = Core.normEvent(FX.scoreboard_pre.events[0]), f = pre.fights[0];
   eq('pre event', [pre.id, pre.name, pre.completed, pre.fights.length], ['600061541', 'UFC Fight Night: Allen vs. Duncan', false, 1]);

@@ -231,6 +231,25 @@ JS = r"""
   for (const [raw, want] of [[10, 10], ['5', 5], ['2,5', 2.5], [0, 10], [-3, 10], ['abc', 10], [null, 10], [250, 100], [0.01, 0.1], [33.333, 33.33]])
     eq(`unit percentage ${JSON.stringify(raw)}`, Core.unitPct(raw), want);
 
+  /* ---- the stake of a copied bet: units stay units; what an amount of money becomes is a setting ---- */
+  eq('tip setting: default', Core.tipCfg(undefined), { mode: 'same', srcUnit: 0, fixU: 1 });
+  eq('tip setting: cleaned', Core.tipCfg({ mode: 'units', srcUnit: '1750.004', fixU: 500 }), { mode: 'units', srcUnit: 1750, fixU: 100 });
+  eq('tip setting: junk falls back', Core.tipCfg({ mode: 'whatever', srcUnit: -3, fixU: 'x' }), { mode: 'same', srcUnit: 0, fixU: 1 });
+  eq('tip setting: not an object', Core.tipCfg('units'), { mode: 'same', srcUnit: 0, fixU: 1 });
+  const MONEY = { kind: 'money', money: 1750 }, MYU = 100;
+  eq('copied stake: same amount by default', Core.tipStake(MONEY, undefined, MYU), { how: 'same', units: null, value: 1750 });
+  eq('copied stake: turned into units by the unit of the source', Core.tipStake(MONEY, { mode: 'units', srcUnit: 1750 }, MYU), { how: 'conv', units: 1, value: 100 });
+  eq('copied stake: half a unit of the source', Core.tipStake({ kind: 'money', money: 875 }, { mode: 'units', srcUnit: 1750 }, MYU), { how: 'conv', units: 0.5, value: 50 });
+  eq('copied stake: units mode without the source unit keeps the amount', Core.tipStake(MONEY, { mode: 'units' }, MYU), { how: 'same', units: null, value: 1750 });
+  eq('copied stake: fixed number of my units', Core.tipStake(MONEY, { mode: 'fixed', fixU: 2 }, MYU), { how: 'fixed', units: 2, value: 200 });
+  eq('copied stake: fixed defaults to one unit', Core.tipStake(MONEY, { mode: 'fixed' }, MYU), { how: 'fixed', units: 1, value: 100 });
+  for (const mode of Core.TIP_MODES) {
+    eq(`copied stake: a tip in units ignores the setting (${mode})`, Core.tipStake({ kind: 'units', units: 0.5 }, { mode, srcUnit: 1750, fixU: 3 }, MYU), { how: 'units', units: 0.5, value: 50 });
+    eq(`copied stake: no stake in the tip is one unit (${mode})`, Core.tipStake({ kind: 'default', units: 1 }, { mode, srcUnit: 1750, fixU: 3 }, MYU), { how: 'default', units: 1, value: 100 });
+  }
+  eq('copied stake: no bankroll, no unit', Core.tipStake(MONEY, { mode: 'fixed' }, 0).value, 0);
+  eq('the three modes', Core.TIP_MODES, ['same', 'units', 'fixed']);
+
   /* ---- copying a bet from a pasted tip or from the text read off a print ---- */
   const card = [
     { id: 'f1', rounds: 3, a: { name: 'Marina Teles', last: 'Teles' }, b: { name: 'Joana Prado Jr.', last: 'Prado Jr.' } },
