@@ -17,6 +17,9 @@ O que se sabe que funciona, como se sabe, e o que ainda é suposição. Regra: u
 | O script de checagem ao vivo funciona | `python3 tests/contract_live.py --mock` (14 checagens contra a ESPN simulada) | 09/10/2026 |
 | A documentação bate com o código | `python3 tests/docs_check.py` (124 checagens) | 09/10/2026 |
 | O harness pega erro de verdade | Quatro quebras propositais no `index.html` (margem trocada, regra de total de rounds invertida, campo da ESPN com nome errado, empate sem anular): `scripts/verify.sh --quick` falhou nas quatro, apontando a checagem certa | 09/10/2026 |
+| O CI roda no GitHub Actions | PR #1 e o push na `main` (commit 52e43f2): os dois com conclusão `success`. Ainda na versão antiga do workflow, só com o e2e | 09/10/2026 |
+| O CI pega o que a máquina local esconde | No PR #2 o job `checks` falhou: `docs_check.py` exigia a pasta `tests/shots/`, que só existe depois de rodar o e2e. Passava local e quebrava numa cópia limpa. Corrigido e reexecutado | 09/10/2026 |
+| O deploy de prévia na Vercel funciona com o `vercel.json` | Status `Vercel: success` no commit 789295e do PR #2, depois de o deploy da `main` sem `vercel.json` ter falhado | 09/10/2026 |
 | O script do hook de parada devolve os códigos certos | Rodado à mão com o app quebrado: saída 2 nas três primeiras tentativas e 1 na quarta; saída 0 com o app certo | 09/10/2026 |
 
 ## Não verificado
@@ -28,8 +31,7 @@ O que se sabe que funciona, como se sabe, e o que ainda é suposição. Regra: u
 | `status.type.completed` no nível do evento | Só o `name` foi visto nesse nível. O app aceita `completed`, `state` ou o nome | `tests/contract_live.py` |
 | Nomes de resultado além de `kotko` e `decision---unanimous` (finalização, empate, no contest, decisão dividida) | Não apareceram nas lutas consultadas. A classificação é por expressão regular | Acumular amostras em `tests/fixtures/espn/` |
 | `tests/contract_live.py` contra a API real | O ambiente onde o projeto foi criado não alcança a ESPN | Roda sozinho no GitHub Actions; ou `python3 tests/contract_live.py` local |
-| O CI no GitHub Actions | O repositório ainda não recebeu o primeiro push | Abrir o primeiro PR |
-| Deploy na Vercel e o efeito do `.vercelignore` | Ainda não configurado | Importar o repositório e olhar a prévia do PR |
+| Deploy de **produção** na Vercel (merge na `main`) e o conteúdo publicado (só o `index.html`, sem `tests/` nem `docs/`) | A prévia passou, mas a produção só roda no merge, e ninguém abriu a URL para conferir o que foi publicado | Mesclar o PR #2, abrir a URL de produção e tentar acessar `/tests/e2e.py` (tem que dar 404) |
 | Instalação na Tela de Início do iPhone: ícone, tela cheia, persistência do `localStorage` | Sem acesso ao aparelho | Instalar e usar por algumas semanas |
 | O hook de parada dentro do Claude Code | O script foi testado sozinho, não dentro do Claude Code | Abrir o repositório no CLI, quebrar um teste e tentar encerrar |
 | Plausibilidade das odds estimadas | Não foram comparadas com casas de verdade | Comparar algumas num card real |

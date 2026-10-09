@@ -37,8 +37,8 @@ for line in (block.group(1).splitlines() if block else []):
 
 # 3. files the spec names in backticks exist
 for rel in set(re.findall(r'`((?:tests|docs|scripts|\.github|\.claude)/[\w./-]+)`', spec + readme + read('CONTRIBUTING.md'))):
-    if rel.endswith('...'):
-        continue                      # branch-name patterns such as docs/...
+    if rel.endswith('...') or rel.startswith('tests/shots'):
+        continue                      # branch-name patterns such as docs/..., and output that only exists after a test run
     check('documented path exists', (ROOT / rel).exists(), rel)
 
 # 4. numbers quoted in the spec are the numbers in the code: (regex over index.html, text that must be in CLAUDE.md)
@@ -117,6 +117,9 @@ cmds = [h.get('command', '') for g in settings.get('hooks', {}).get('Stop', []) 
 check('Stop hook is configured', any('verify-on-stop.sh' in c for c in cmds), cmds)
 check('Stop hook script exists', (ROOT / '.claude/hooks/verify-on-stop.sh').exists())
 check('CI runs the quick verification', 'scripts/verify.sh --quick' in read('.github/workflows/ci.yml'))
+vercel = json.loads(read('vercel.json'))
+check('vercel.json pins a static deployment', vercel.get('framework', 0) is None and vercel.get('installCommand') == '', vercel)
+check('deployment ships no test code', 'tests' in read('.vercelignore').split())
 check('weekly live contract workflow exists', 'contract_live.py' in read('.github/workflows/espn-contract.yml'))
 
 for f in fails:
