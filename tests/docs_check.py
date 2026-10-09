@@ -37,8 +37,8 @@ for line in (block.group(1).splitlines() if block else []):
 
 # 3. files the spec names in backticks exist
 for rel in set(re.findall(r'`((?:tests|docs|scripts|\.github|\.claude)/[\w./-]+)`', spec + readme + read('CONTRIBUTING.md'))):
-    if rel.endswith('...'):
-        continue                      # branch-name patterns such as docs/...
+    if rel.endswith('...') or rel.startswith('tests/shots'):
+        continue                      # branch-name patterns such as docs/..., and output that only exists after a test run
     check('documented path exists', (ROOT / rel).exists(), rel)
 
 # 4. numbers quoted in the spec are the numbers in the code: (regex over index.html, text that must be in CLAUDE.md)
