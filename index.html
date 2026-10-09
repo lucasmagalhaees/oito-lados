@@ -294,7 +294,9 @@ const Core = (() => {
   }
   function normEvent(e) {
     const fights = (e.competitions || []).map((c, i) => normFight(c, e, i)).filter(Boolean);
-    return { id: String(e.id), name: e.name || '', date: Date.parse(e.date), completed: !!(e.status && e.status.type && e.status.type.completed), fights };
+    const t = (e.status && e.status.type) || {};
+    const completed = !!(t.completed || t.state === 'post' || /FINAL/i.test(t.name || ''));
+    return { id: String(e.id), name: e.name || '', date: Date.parse(e.date), completed, fights };
   }
   function normOdds(j, f) {
     const it = ((j && j.items) || []).find(x => x && x.homeAthleteOdds && x.awayAthleteOdds);
@@ -338,7 +340,10 @@ const Core = (() => {
     else if (/sub/.test(nm)) method = 'sub';
     else if (/dec/.test(nm)) method = 'dec';
     else if (/ko|dq|disq|stoppage|retire/.test(nm)) method = 'ko';
-    return { method, label: r.displayName || '', desc: r.displayDescription || r.description || '', round: s.period || 0, time: typeof s.clock === 'number' ? s.clock : null, clock: s.displayClock || '' };
+    // time elapsed in the final round: the displayed clock ("3:26") is what the result is published with; the numeric clock is the fallback
+    const mm = /^(\d+):(\d{2})$/.exec(String(s.displayClock || '').trim());
+    const time = mm ? (+mm[1]) * 60 + (+mm[2]) : (typeof s.clock === 'number' ? s.clock : null);
+    return { method, label: r.displayName || '', desc: r.displayDescription || r.description || '', round: s.period || 0, time, clock: s.displayClock || '' };
   }
   function statValue(j, name) {
     const cats = (j && j.splits && j.splits.categories) || [];

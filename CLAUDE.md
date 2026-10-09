@@ -4,18 +4,66 @@ Simulador de apostas de UFC com **dinheiro fictício** e **odds reais**. Uso pes
 
 Idioma da interface: português do Brasil, informal. Comentários no código: inglês.
 
+## Fluxo de trabalho (obrigatório)
+
+1. **Nunca commitar direto na `main`.** Toda mudança começa com um branch novo a partir da `main` atualizada: `git fetch origin && git switch -c tipo/descricao origin/main` (`feat/`, `fix/`, `docs/`, `chore/`, `ci/`).
+2. Rodar `scripts/verify.sh` antes de enviar e colar a saída no PR.
+3. Abrir PR para a `main` usando o template. O CI (docs, unit, contract e e2e claro e escuro) tem que passar.
+4. O merge na `main` dispara o deploy de produção. Não existe outro caminho para produção.
+5. Mensagens de commit no estilo Conventional Commits, em português.
+
+## Escopo: MVP
+
+Decisão do Lucas em 09/10/2026: **MVP para um usuário**, simples de propósito. Validar hipóteses usando de verdade e só depois escalar, se for preciso. Portanto:
+
+- Não adicionar backend, login, banco, framework ou etapa de build sem ele pedir.
+- Não quebrar o `index.html` em módulos por conta própria.
+- O plano de escala (hipóteses a validar, gatilhos, etapas, modelo de dados, fonte de dados, pontos jurídicos) está em [`docs/escala.md`](docs/escala.md). Consultar antes de propor qualquer mudança de arquitetura.
+
+## Regras contra alucinação (valem para qualquer IA trabalhando aqui)
+
+A ordem de confiança é: **código e testes rodando agora** > amostras reais gravadas > documentação > memória. Se dois deles discordam, o de cima ganha e o de baixo é corrigido.
+
+1. **Não diga que funciona sem rodar.** Antes de afirmar que algo está certo, rode `scripts/verify.sh` e mostre a saída. Sem saída, a frase certa é "não verifiquei".
+2. **Não invente campo da ESPN.** O app só pode ler campos que aparecem em `tests/fixtures/espn/`. Precisa de um campo novo? Capture a resposta real, grave a amostra, acrescente o caso em `tests/contract.py`, e só então escreva o código.
+3. **Separe sempre o verificado do suposto.** Em resposta, commit e PR, diga o que foi testado e o que não foi. O registro oficial é [`docs/verificacao.md`](docs/verificacao.md): um item só sobe para "Verificado" com comando e data.
+4. **Número mora no código.** Margens, limites, intervalos e prazos citados aqui são conferidos contra o `index.html` por `tests/docs_check.py`. Mudou um, mude o outro no mesmo commit.
+5. **Decisão de produto não se presume.** O que já foi decidido, e por quê, está em [`docs/decisoes.md`](docs/decisoes.md). O que não está lá, pergunte ao Lucas. Decisão nova entra lá com data.
+6. **Fato de terceiro tem data.** Limite de hospedagem, preço, comportamento de API: tudo isso envelhece. Cite a data em que foi conferido e reconfira antes de depender.
+7. **Resultado inventado só com nome inventado.** `tests/mock_espn.py` usa lutadores fictícios. Amostra real fica em `tests/fixtures/espn/` e não é editada à mão.
+8. **Não pule o harness.** O hook em `.claude/settings.json` roda `scripts/verify.sh --quick` quando a tarefa termina e segura o encerramento se falhar. Não desative, não contorne, e não edite um teste só para ele passar: se o teste está errado, explique por quê no PR.
+9. **Na dúvida, pare e diga.** Uma resposta incompleta e honesta vale mais que uma completa e inventada.
+
+O que cada peça do harness cobre:
+
+| Peça | Protege contra |
+|---|---|
+| `scripts/verify.sh` | Afirmar que está certo sem ter rodado nada |
+| `tests/unit.py` | Mexer em preço ou liquidação e quebrar uma regra sem notar |
+| `tests/contract.py` + `tests/fixtures/espn/` | Escrever leitor para um formato de API imaginado |
+| `tests/contract_live.py` (toda semana no GitHub Actions) | A API real mudar e a documentação continuar dizendo o contrário |
+| `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
+| `tests/e2e.py` | Tudo passar isolado e o fluxo real pela interface estar quebrado |
+| Hook de parada (`.claude/hooks/verify-on-stop.sh`) | Encerrar a tarefa com checagem falhando |
+| `docs/verificacao.md` | Tratar suposição como fato |
+| `docs/decisoes.md` | Depender da memória de uma conversa |
+
 ## Estado atual
 
 - `index.html`: o app inteiro. HTML + CSS + JS num arquivo só, sem build, sem dependências, sem backend. Ícone embutido em base64.
-- `tests/e2e.py`: teste ponta a ponta com Playwright e a API da ESPN simulada. Roda no CI (`.github/workflows/ci.yml`) em cada push e PR.
+- `scripts/verify.sh`: o comando único de verificação.
+- `tests/unit.py`: testes do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação).
+- `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/`.
+- `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
+- `tests/docs_check.py`: confere a documentação contra o código.
+- `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
+- CI em `.github/workflows/ci.yml`: roda tudo isso (menos o ao vivo) em cada PR e em cada push na `main`.
+- `.claude/settings.json` + `.claude/hooks/verify-on-stop.sh`: hook de parada do Claude Code.
+- `docs/decisoes.md`: tudo que foi decidido e por quê. `docs/verificacao.md`: o que foi verificado e o que não foi. `docs/escala.md`: caminho de escala.
 - `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE` (MIT, Lucas Magalhães).
-- Ainda não foi publicado. Plano: hospedagem estática (Vercel é a preferência; GitHub Pages também serve).
+- Ainda não foi publicado. Plano: Vercel ligada ao repositório, com deploy de produção a cada merge na `main`.
 
-Verificado até aqui:
-- Simulação completa com API simulada (pré-luta → ao vivo → resultado): preços, liquidação e saldo conferem.
-- Leitura de odds rodada contra a API real da ESPN no card de 10/10/2026 (11 de 12 lutas com linha).
-
-Ainda **não** verificado: um evento ao vivo de verdade e a instalação no iPhone.
+O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md`](docs/verificacao.md). Em resumo: lógica e fluxo cobertos por testes e a leitura da ESPN conferida contra respostas reais; **não** verificados ainda um evento ao vivo de verdade, a instalação no iPhone, o CI e o deploy.
 
 ## Requisitos do produto
 
@@ -27,7 +75,7 @@ Ainda **não** verificado: um evento ao vivo de verdade e a instalação no iPho
 6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado e por evento.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
 
-Pedido em aberto, ainda sem definição: "o app tem que escalar". Antes de construir, confirmar com o Lucas qual sentido: (a) multiusuário com login e ranking, (b) sincronizar entre aparelhos, (c) mais esportes e ligas, (d) virar projeto estruturado (TypeScript, build, testes). Os itens (a) e (b) exigem backend e mudam a arquitetura.
+Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
 ## Por que um arquivo estático chamando a ESPN direto
 
@@ -54,6 +102,8 @@ Detalhes que já morderam:
 - O placar lista as lutas da primeira preliminar até a luta principal (a principal é o último índice).
 - Lutador `a` é o de `order` 1, `b` o de `order` 2. Casa e visitante das odds são mapeados pelo id em `athlete.$ref`.
 - `state`: `pre`, `in`, `post`. O objeto `result` só existe no `status` do CORE, não no placar.
+- O tempo do fim da luta é lido de `displayClock` ("3:26"); o `clock` numérico é só reserva, porque só foi visto em decisão.
+- No nível do evento só o `status.type.name` foi visto. `normEvent` aceita `completed`, `state` ou o nome contendo FINAL.
 - Nomes de resultado vistos: `kotko`, `decision---unanimous`. Classificação por regex em `normResult` (ordem: no contest, draw, sub, dec, ko/dq).
 - "Fight To Go The Distance" vem como dois preços **sem rótulo de sim/não**. `attachDistance` decide qual é o "sim" comparando com a probabilidade de decisão implícita nas linhas de método.
 - A linha de total (`overUnder`) é em rounds.
@@ -171,9 +221,17 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 
 ```bash
 pip install -r tests/requirements.txt && playwright install chromium
-python3 tests/e2e.py dark    # ou light
+scripts/verify.sh            # tudo: docs, unit, contract, e2e claro e escuro
+scripts/verify.sh --quick    # sem o e2e (poucos segundos)
+python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
-Simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), imprime preços e liquidações e confere o saldo final esperado de R$ 1.584,30. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro.
+
+`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade, de dentro de uma página servida em `localhost` (assim o CORS entra na conferência); aviso é normal quando não há card ou odds publicadas, falha significa que a API mudou. `--mock` testa o próprio script.
+
+`docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
+
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), imprime preços e liquidações e confere o saldo final esperado de R$ 1.584,30. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 
@@ -181,10 +239,11 @@ Para testar contra a ESPN de verdade, servir a pasta (`python3 -m http.server`) 
 
 ## Publicação
 
-```bash
-npx vercel --prod      # dentro da pasta com o index.html
-```
-Depois, no iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Início.
+Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. Não há etapa de build: o `vercel.json` fixa o projeto como site estático (`"framework": null`, instalação vazia) e o `.vercelignore` deixa só o `index.html` no site. Sem o `vercel.json`, a Vercel escolheu sozinha o preset "FastHTML" (Python) na importação e o primeiro deploy falhou procurando um `main.py`.
+
+A Vercel publica o que chegar na `main` sem olhar o CI. Quem garante que só entra código testado é a proteção do branch `main` exigindo os checks `checks`, `e2e (dark)` e `e2e (light)`.
+
+No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Início.
 
 ## Ideias para depois
 

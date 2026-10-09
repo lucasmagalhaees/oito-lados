@@ -1,0 +1,7 @@
+# only index.html is the site; keep repo files out of the deployment
+.github
+docs
+tests
+*.md
+.editorconfig
+LICENSE

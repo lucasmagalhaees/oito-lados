@@ -13,3 +13,7 @@ node_modules/
 .DS_Store
 .idea/
 .vscode/
+
+# harness state
+.claude/.stop-blocks
+.claude/settings.local.json

@@ -1,0 +1,17 @@
+{
+  "splits": {
+    "categories": [
+      { "name": "general",
+        "stats": [
+          { "name": "takedownAccuracy", "value": 41.07 },
+          { "name": "strikeLPM", "value": 3.75 },
+          { "name": "strikeAccuracy", "value": 58.87 },
+          { "name": "takedownAvg", "value": 1.52 },
+          { "name": "submissionAvg", "value": 1.06 },
+          { "name": "koPercentage", "value": 5.88 },
+          { "name": "tkoPercentage", "value": 5.88 },
+          { "name": "decisionPercentage", "value": 17.65 }
+        ] }
+    ]
+  }
+}

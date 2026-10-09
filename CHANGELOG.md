@@ -12,4 +12,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 - Acompanhamento ao vivo e liquidação automática com o resultado oficial.
 - Painel de ganhos e perdas com gráfico e quebra por mercado e por evento.
 - Backup e restauração dos dados por texto.
-- Teste ponta a ponta com a ESPN simulada e CI no GitHub Actions.
+- Testes unitários do núcleo e teste ponta a ponta com a ESPN simulada, no GitHub Actions.
+- Teste de contrato contra respostas reais gravadas da ESPN e conferência semanal da API real.
+- Harness contra alucinação de IA: comando único de verificação, documentação conferida contra o código, hook de parada do Claude Code e registro de verificação.
+- Fluxo por branch e PR, com deploy no merge.
+- Registro de decisões e caminho de escala documentados.
+
+### Corrigido
+- Deploy na Vercel: o projeto é fixado como site estático, para não ser tratado como app Python.

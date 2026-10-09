@@ -1,0 +1,7 @@
+{
+  "displayClock": "3:26",
+  "period": 3,
+  "type": { "name": "STATUS_FINAL" },
+  "result": { "id": 356, "name": "kotko", "displayName": "KO/TKO", "description": "Punch", "displayDescription": "Punch", "shortDisplayName": "KO/TKO",
+    "target": { "id": 122, "name": "head", "description": "Head", "displayDescription": "Head" } }
+}

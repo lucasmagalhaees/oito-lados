@@ -1,0 +1,38 @@
+{
+  "count": 1,
+  "items": [
+    {
+      "provider": { "id": "100", "name": "DraftKings", "priority": 1 },
+      "details": "B. Allen -125",
+      "overUnder": 3.5,
+      "spread": -5.5,
+      "overOdds": -120,
+      "underOdds": -110,
+      "awayAthleteOdds": {
+        "favorite": false, "underdog": true, "moneyLine": 105, "spreadOdds": -160,
+        "current": {
+          "moneyLine": { "decimal": 2.05, "american": "+105" },
+          "victoryMethod": {
+            "koTkoDq": { "decimal": 3, "american": "+200" },
+            "submission": { "decimal": 23, "american": "+2200" },
+            "points": { "decimal": 5.5, "american": "+450" }
+          }
+        },
+        "athlete": { "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/4848674?lang=en&region=us" }
+      },
+      "homeAthleteOdds": {
+        "favorite": true, "underdog": false, "moneyLine": -125, "spreadOdds": 120,
+        "current": {
+          "moneyLine": { "decimal": 1.8, "american": "-125" },
+          "victoryMethod": {
+            "koTkoDq": { "decimal": 9, "american": "+800" },
+            "submission": { "decimal": 4, "american": "+300" },
+            "points": { "decimal": 3.5, "american": "+250" }
+          }
+        },
+        "athlete": { "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/4025699?lang=en&region=us" }
+      },
+      "propBets": { "$ref": "http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/600061541/competitions/401916276/odds/100/propBets?lang=en&region=us" }
+    }
+  ]
+}
