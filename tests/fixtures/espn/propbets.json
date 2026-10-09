@@ -1,0 +1,11 @@
+{
+  "count": 2,
+  "items": [
+    { "type": { "id": "63", "name": "Fight To Go The Distance" },
+      "odds": { "american": { "value": "+130", "open": "+120" }, "decimal": { "value": "2.30", "open": "2.20" }, "total": {} },
+      "lastUpdated": "2026-10-07T01:24Z" },
+    { "type": { "id": "63", "name": "Fight To Go The Distance" },
+      "odds": { "american": { "value": "-170", "open": "-160" }, "decimal": { "value": "1.58", "open": "1.62" }, "total": {} },
+      "lastUpdated": "2026-10-07T01:24Z" }
+  ]
+}

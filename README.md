@@ -49,30 +49,61 @@ python3 -m http.server 8000
 ```bash
 pip install -r tests/requirements.txt
 playwright install chromium
-python3 tests/e2e.py dark   # ou light
+scripts/verify.sh           # roda tudo
 ```
 
-O teste simula a API da ESPN, leva um card do pré-luta ao resultado, aposta pela interface e confere preços, liquidações e saldo final.
+| Teste | O que confere |
+|---|---|
+| `tests/unit.py` | Conversão de odds, modelo de preço, combinadas e cada regra de liquidação |
+| `tests/contract.py` | Os leitores da ESPN contra respostas reais gravadas em `tests/fixtures/espn/` |
+| `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
+| `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
+| `tests/contract_live.py` | A API real da ESPN. Roda toda semana no GitHub Actions e avisa se o formato mudar |
 
-## Publicação
+Tudo, menos o último, roda no GitHub Actions em cada PR e em cada push na `main`.
 
-Qualquer hospedagem estática serve. Com Vercel:
+## Desenvolvimento com IA
 
-```bash
-npx vercel --prod
-```
+O projeto é mantido com ajuda de IA e tem um harness para ela não afirmar o que não verificou: um comando único de verificação, contrato com respostas reais da API, documentação conferida contra o código, um hook que impede o Claude Code de encerrar a tarefa com checagem falhando, e um registro do que foi e do que não foi verificado. As regras estão em [`CLAUDE.md`](CLAUDE.md); as decisões, em [`docs/decisoes.md`](docs/decisoes.md); o registro, em [`docs/verificacao.md`](docs/verificacao.md).
 
-No iPhone: abra a URL no Safari, toque em Compartilhar e em Adicionar à Tela de Início.
+## Fluxo e publicação
+
+1. Branch novo a partir da `main`.
+2. PR para a `main`. O CI roda os testes e a Vercel publica uma prévia do PR.
+3. Merge na `main` publica em produção.
+
+Configuração, uma vez só:
+
+- **Vercel:** importar este repositório em um projeto novo, preset "Other", sem comando de build. A partir daí o deploy é automático.
+- **GitHub:** em Settings → Branches, proteger a `main` exigindo PR e os checks `checks`, `e2e (dark)` e `e2e (light)`. Assim só código testado chega à produção.
+
+No iPhone: abra a URL de produção no Safari, toque em Compartilhar e em Adicionar à Tela de Início.
 
 ## Estrutura
 
 ```
-index.html                 o app inteiro (HTML, CSS e JS)
-tests/e2e.py               teste ponta a ponta com a ESPN simulada
-docs/screenshots/          telas usadas neste README
-.github/workflows/ci.yml   roda o teste em cada push e PR
-CLAUDE.md                  especificação do projeto
+index.html                           o app inteiro (HTML, CSS e JS)
+scripts/verify.sh                    comando único de verificação
+tests/unit.py                        testes do núcleo (preço e liquidação)
+tests/contract.py                    leitores da ESPN contra respostas reais gravadas
+tests/contract_live.py               conferência da API real da ESPN
+tests/docs_check.py                  documentação conferida contra o código
+tests/e2e.py                         teste ponta a ponta
+tests/mock_espn.py                   ESPN simulada, com lutadores fictícios
+tests/fixtures/espn/                 respostas reais da ESPN, reduzidas
+docs/decisoes.md                     o que foi decidido e por quê
+docs/verificacao.md                  o que foi verificado e o que não foi
+docs/escala.md                       caminho de escala
+docs/screenshots/                    telas usadas neste README
+.github/workflows/ci.yml             testes em cada PR e push na main
+.github/workflows/espn-contract.yml  conferência semanal da API real
+.claude/settings.json                hook de parada do Claude Code
+CLAUDE.md                            especificação e regras do projeto
 ```
+
+## Escopo
+
+É um MVP para um usuário, simples de propósito. O que muda se precisar crescer está em [`docs/escala.md`](docs/escala.md).
 
 ## Limites conhecidos
 

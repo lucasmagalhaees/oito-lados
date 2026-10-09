@@ -1,0 +1,28 @@
+{
+  "events": [
+    {
+      "id": "600061182",
+      "name": "UFC 332: Silva vs. Wang",
+      "date": "2026-10-03T20:00Z",
+      "status": { "type": { "name": "STATUS_FINAL" } },
+      "competitions": [
+        {
+          "id": "401912278",
+          "date": "2026-10-04T00:00Z",
+          "type": { "id": "1007", "abbreviation": "W Flyweight" },
+          "competitors": [
+            { "id": "4054605", "type": "athlete", "order": 1, "winner": true,
+              "athlete": { "fullName": "Natalia Silva", "displayName": "Natalia Silva", "shortName": "N. Silva", "flag": { "alt": "Brazil" } },
+              "records": [ { "name": "overall", "abbreviation": "TOT", "type": "total", "summary": "21-5-1" } ] },
+            { "id": "4215200", "type": "athlete", "order": 2, "winner": false,
+              "athlete": { "fullName": "Wang Cong", "displayName": "Wang Cong", "shortName": "W. Cong", "flag": { "alt": "China" } },
+              "records": [ { "name": "overall", "abbreviation": "TOT", "type": "total", "summary": "10-2-0" } ] }
+          ],
+          "status": { "clock": 300, "displayClock": "5:00", "period": 5,
+            "type": { "id": "3", "name": "STATUS_FINAL", "state": "post", "completed": true, "description": "Final", "detail": "Final", "shortDetail": "Final" } },
+          "format": { "regulation": { "periods": 5 } }
+        }
+      ]
+    }
+  ]
+}
