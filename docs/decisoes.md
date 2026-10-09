@@ -139,6 +139,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   6. `verificacao.md`: o que foi verificado, como e quando, separado do que não foi.
   7. Regras em `CLAUDE.md`.
 - **Consequência:** afirmar "funciona" exige saída de comando. O que não tem como testar fica escrito como não verificado.
+- **Ajuste em 09/10/2026:** a primeira execução de `contract_live.py` no GitHub falhou porque a ESPN recusa navegador headless. Em vez de disfarçar o navegador, o script passou a chamar a API pelo Python, identificando-se, e a conferir o cabeçalho de CORS. Máquina que não alcança a ESPN dá resultado inconclusivo, não falha.
 
 ## D17. KO e TKO são um mercado; desclassificação conta junto
 
@@ -172,5 +173,4 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar a regra do cashout em múltipla (D21) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
-| Primeira execução de `tests/contract_live.py` contra a API real | automática, no GitHub Actions |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |
