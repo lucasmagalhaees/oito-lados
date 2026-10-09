@@ -29,6 +29,23 @@ jobs:
       - name: Docs, unit and contract checks
         run: scripts/verify.sh --quick
 
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright and the OCR files
+        run: |
+          pip install -r tests/requirements.txt
+          playwright install --with-deps chromium
+          npm ci --prefix tests
+      - name: Everything, with the coverage minimums
+        run: scripts/verify.sh
+
   e2e:
     name: e2e (${{ matrix.theme }})
     runs-on: ubuntu-latest
@@ -46,6 +63,8 @@ jobs:
         run: |
           pip install -r tests/requirements.txt
           playwright install --with-deps chromium
+      - name: Install the OCR files the image test uses
+        run: npm ci --prefix tests
       - name: End-to-end against a mocked ESPN API
         run: python tests/e2e.py ${{ matrix.theme }}
       - name: Upload screenshots

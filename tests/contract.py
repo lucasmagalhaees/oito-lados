@@ -6,6 +6,8 @@ someone remembers it returning. Offline; exits non-zero on any mismatch.
 """
 import json, pathlib, sys
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import cov
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FX = {p.stem: json.loads(p.read_text()) for p in sorted((ROOT / 'tests' / 'fixtures' / 'espn').glob('*.json'))}
@@ -65,9 +67,11 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page()
     page.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())
+    cov.start(page)
     page.goto((ROOT / 'index.html').as_uri())
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS, FX)
+    cov.stop(page, 'contract')
     browser.close()
 
 for f in res['fails']:

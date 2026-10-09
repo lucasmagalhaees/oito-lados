@@ -23,6 +23,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
 - **Cashout:** devolve o valor integral da aposta enquanto nenhuma luta dela começou. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
+- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora e o mesmo valor. A imagem é lida no próprio aparelho.
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). O cupom aceita valor em unidades e a Carteira mostra o resultado em unidades.
 - **Valores e moeda:** campos com máscara de milhares; simulação em real, dólar ou euro (muda o símbolo, sem conversão).
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
@@ -55,6 +56,7 @@ python3 -m http.server 8000
 ```bash
 pip install -r tests/requirements.txt
 playwright install chromium
+npm ci --prefix tests       # arquivos do leitor de imagem usados no teste
 scripts/verify.sh           # roda tudo
 ```
 
@@ -64,6 +66,7 @@ scripts/verify.sh           # roda tudo
 | `tests/contract.py` | Os leitores da ESPN contra respostas reais gravadas em `tests/fixtures/espn/` |
 | `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
+| `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
 | `tests/contract_live.py` | A API real da ESPN. Roda toda semana no GitHub Actions e avisa se o formato mudar |
 
 Tudo, menos o último, roda no GitHub Actions em cada PR e em cada push na `main`.
@@ -97,6 +100,8 @@ tests/contract_live.py               conferência da API real da ESPN
 tests/docs_check.py                  documentação conferida contra o código
 tests/e2e.py                         teste ponta a ponta
 tests/mock_espn.py                   ESPN simulada, com lutadores fictícios
+tests/cov.py                         cobertura de código medida pelo navegador
+tests/package.json                   cópias locais do leitor de imagem para o teste
 tests/fixtures/espn/                 respostas reais da ESPN, reduzidas
 docs/decisoes.md                     o que foi decidido e por quê
 docs/verificacao.md                  o que foi verificado e o que não foi

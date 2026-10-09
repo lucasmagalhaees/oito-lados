@@ -1,0 +1,10 @@
+{
+  "name": "oito-lados-tests",
+  "private": true,
+  "description": "Local copies of the OCR files the app loads from the CDN, so the image test runs offline. Versions must match the OCR constant in index.html (tests/docs_check.py enforces it).",
+  "dependencies": {
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "7.0.0",
+    "@tesseract.js-data/por": "1.0.0"
+  }
+}

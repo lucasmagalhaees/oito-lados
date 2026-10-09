@@ -44,6 +44,7 @@ O que cada peça do harness cobre:
 | `tests/contract_live.py` (toda semana no GitHub Actions) | A API real mudar e a documentação continuar dizendo o contrário |
 | `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
 | `tests/e2e.py` | Tudo passar isolado e o fluxo real pela interface estar quebrado |
+| `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
 | Hook de parada (`.claude/hooks/verify-on-stop.sh`) | Encerrar a tarefa com checagem falhando |
 | `docs/verificacao.md` | Tratar suposição como fato |
 | `docs/decisoes.md` | Depender da memória de uma conversa |
@@ -57,6 +58,8 @@ O que cada peça do harness cobre:
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
 - `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
+- `tests/cov.py`: cobertura de código do `index.html`, medida pelo próprio navegador durante os testes.
+- `tests/package.json`: cópias locais dos arquivos do leitor de imagem, para o teste de OCR rodar sem internet.
 - CI em `.github/workflows/ci.yml`: roda tudo isso (menos o ao vivo) em cada PR e em cada push na `main`.
 - `.claude/settings.json` + `.claude/hooks/verify-on-stop.sh`: hook de parada do Claude Code.
 - `docs/decisoes.md`: tudo que foi decidido e por quê. `docs/verificacao.md`: o que foi verificado e o que não foi. `docs/escala.md`: caminho de escala.
@@ -79,6 +82,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 10. Campos de valor com máscara de milhares.
 11. Moeda da simulação: real, dólar ou euro.
 12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
+13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora e o mesmo valor do original.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -131,7 +135,7 @@ Um IIFE com blocos nesta ordem:
 7. **Renderização**: `render` e as três telas (`vLutas`, `vApostas`, `vCarteira`), cupom (`renderSheet`, `slipSummary`), gráfico (`bindChart`).
 8. **Eventos**: um listener de clique delegado por `data-act`.
 
-`window.__OL` expõe `{Core, D, ui, slip, sync, settle, S}` para teste.
+`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S}` para teste.
 
 Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando.
 
@@ -246,6 +250,18 @@ O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas
 - No cupom há atalhos de 0,5u, 1u, 2u e 3u, que **definem** o valor da aposta (não somam), e o total aparece também em unidades.
 - Cada aposta guarda em `unit` o valor da unidade na hora em que foi feita. A Carteira mostra o resultado em unidades somando `(payout − stake) / unit` das apostas encerradas. Aposta antiga, sem `unit`, fica fora dessa conta.
 
+## Copiar aposta (print ou texto)
+
+Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colado, imagem escolhida e imagem colada da área de transferência.
+
+- **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` do `index.html`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
+- **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems }`.
+- **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
+- **Valor:** se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual. Se traz um valor em dinheiro, usa o mesmo valor (o primeiro do texto, que no print é a aposta, não o retorno). Se não diz nada, considera 1u.
+- **Odd:** a aposta é feita com a odd de agora. A odd do original aparece só para comparar.
+- **Fluxo:** a tela mostra o que foi entendido e o que não foi (`TIP_WHY`: `empty`, `nofight`, `ambiguous`, `nomarket`, e "não tem odd agora"). "Levar pro cupom" enche o cupom; a aposta é feita pelo botão de sempre. Mais de uma luta no mesmo texto vira múltipla.
+- **Limite conhecido:** o leitor de texto foi feito em cima de dois formatos reais (um print de casa de apostas e uma mensagem de canal). Formato novo que ele não entender: acrescentar o caso em `tests/unit.py` primeiro.
+
 ## Sincronização
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 16 dias à frente.
@@ -267,7 +283,8 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 
 ```bash
 pip install -r tests/requirements.txt && playwright install chromium
-scripts/verify.sh            # tudo: docs, unit, contract, e2e claro e escuro
+npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
+scripts/verify.sh            # tudo: docs, unit, contract, e2e claro e escuro e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
@@ -276,6 +293,8 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 `contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
+
+**Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do `index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa.
 
 `e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz um cashout e confere quando ele congela e quando acaba, imprime preços e liquidações e confere o saldo final esperado de R$ 1.604,40. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
