@@ -164,6 +164,16 @@ JS = r"""
     eq(`number -> field -> number ${v}`, Core.parseMoney(Core.moneyText(v)), v);
   eq('field text of 1234.5', Core.moneyText(1234.5), '1.234,5');
   eq('field text of 730', Core.moneyText(730), '730');
+
+  /* ---- unit: a percentage of the bankroll, 10% by default ---- */
+  eq('unit default is 10% of the bankroll', Core.unitValue(1000, undefined), 100);
+  eq('unit at 2%', Core.unitValue(1000, 2), 20);
+  eq('unit at 2,5% typed with a comma', Core.unitValue(1000, '2,5'), 25);
+  eq('unit rounds to cents', Core.unitValue(333.33, 10), 33.33);
+  eq('unit of an empty bankroll', Core.unitValue(0, 10), 0);
+  eq('unit never negative', Core.unitValue(-50, 10), 0);
+  for (const [raw, want] of [[10, 10], ['5', 5], ['2,5', 2.5], [0, 10], [-3, 10], ['abc', 10], [null, 10], [250, 100], [0.01, 0.1], [33.333, 33.33]])
+    eq(`unit percentage ${JSON.stringify(raw)}`, Core.unitPct(raw), want);
   return { n, fails };
 }
 """

@@ -75,6 +75,10 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado e por evento.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
 8. Cashout: devolve o valor integral da aposta, só enquanto nenhuma luta dela começou.
+9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
+10. Campos de valor com máscara de milhares.
+11. Moeda da simulação: real, dólar ou euro.
+12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -136,12 +140,16 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 `oitolados.v1`:
 ```js
 { v: 1,
+  cur: 'BRL'|'USD'|'EUR',        // moeda da simulação
+  unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
-  bets: [{ id, t, type: 'single'|'multi', stake, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt }] }
+  bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt }] }
 ```
 Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, fight, event, date, odd, src: 'real'|'est', out, res }`. Os textos são copiados na hora da aposta para o histórico continuar legível depois que a luta sai do placar.
 
 `sgp`: `{ [fid]: odd }` com o preço de cada combinada na mesma luta, fixado na hora da aposta.
+
+`unit`: quanto valia uma unidade quando a aposta foi feita. O resultado em unidades do histórico usa esse valor, não a unidade de hoje.
 
 O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma dos payouts`. Não criar campo de saldo.
 
@@ -220,6 +228,23 @@ Regra definida pelo Lucas em 09/10/2026 (D21 em `docs/decisoes.md`): **devolve o
 - O valor não depende das odds: é sempre a stake. Não há cashout parcial nem valor de mercado.
 - `doCashout` recarrega o placar antes de devolver (mesma regra de `place()`): sem conexão não faz; se a luta começou nesse meio tempo, recusa.
 - A aposta fica com `status: 'cashed'`, `payout` igual à stake e `settledAt`. No saldo ela soma zero. Nas estatísticas conta como apostado e retornado, e fica fora da taxa de acerto, igual a uma aposta anulada.
+
+## Repetir aposta
+
+O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas seleções ainda estejam todas abertas e com preço (`repeatable`). `repeatBet` só enche o cupom com as mesmas seleções, o mesmo tipo e o mesmo valor, e abre o cupom. A aposta continua sendo feita pelo botão de sempre, com a odd de agora e a conferência na ESPN. Depois que a luta começa, o botão some.
+
+## Campos de valor e moeda
+
+- **Máscara:** os campos de aposta e de depósito formatam enquanto se digita (`Core.maskMoney`): 1500 vira 1.500 e 12345,6 vira 12.345,6. Ponto é sempre separador de milhar; a primeira vírgula abre os centavos, com no máximo duas casas. `applyMask` mantém o cursor no lugar. Em teclado sem vírgula, um ponto digitado vira vírgula.
+- **Leitura:** `Core.parseMoney` ignora os pontos, então "1.000" é mil.
+- **Moeda:** `S.cur` guarda BRL, USD ou EUR, escolhida na Carteira. Muda só o símbolo e o formato (sempre no padrão brasileiro: US$ 1.000,00). **Os valores não são convertidos** e não há câmbio.
+
+## Unidade
+
+- Uma unidade vale `unitPct`% da banca. O padrão é 10% da banca; o valor aceito vai de 0,1% a 100% (`Core.unitPct`, `Core.unitValue`).
+- **Banca** é o saldo disponível mais o que está em jogo nas apostas abertas. Assim a unidade não encolhe só porque há apostas abertas, e muda sozinha quando a banca muda.
+- No cupom há atalhos de 0,5u, 1u, 2u e 3u, que **definem** o valor da aposta (não somam), e o total aparece também em unidades.
+- Cada aposta guarda em `unit` o valor da unidade na hora em que foi feita. A Carteira mostra o resultado em unidades somando `(payout − stake) / unit` das apostas encerradas. Aposta antiga, sem `unit`, fica fora dessa conta.
 
 ## Sincronização
 

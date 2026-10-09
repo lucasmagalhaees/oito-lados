@@ -60,6 +60,11 @@ CONSTANTS = [
     (r'now - f\.date > 2 \* DAY && D\.results\[f\.id\]\) D\.results\[f\.id\]\.tdUnavailable = true', 'Sem estatística por 2 dias: anula'),
     (r'Date\.now\(\) > l\.date \+ 36 \* H', 'anula 36 h depois do horário'),
     (r'res\.time === 150\) return \'void\'', 'exatamente 2:30 anula'),
+    (r'const UNIT_PCT_DEFAULT = 10;', 'O padrão é 10% da banca'),
+    (r'clamp\(r2\(n\), 0\.1, 100\)', 'de 0,1% a 100%'),
+    (r'\[0\.5, 1, 2, 3\]\.map\(u =>', 'atalhos de 0,5u, 1u, 2u e 3u'),
+    (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
+    (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
 ]
 for pattern, text in CONSTANTS:
     check('code still has the documented constant', re.search(pattern, html), pattern)

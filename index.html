@@ -174,6 +174,9 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .bet .bh b{font:800 20px/1 var(--font-display);text-transform:uppercase;letter-spacing:.01em}
 .pill{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:20px;padding:4px 9px;border:1px solid currentColor;white-space:nowrap}
 .co{margin-top:10px}
+.un{display:block;font-size:12px;color:var(--muted)}
+.unit{font:800 30px/1 var(--font-display);overflow-wrap:anywhere}
+.quick.units button{border-style:dashed}
 .pill.cashed{color:var(--gold)}
 .pill.open{color:var(--muted)}.pill.won{color:var(--win)}.pill.lost{color:var(--loss)}.pill.void{color:var(--muted)}.pill.live{color:var(--live)}
 .leg{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
@@ -599,6 +602,12 @@ const Core = (() => {
   }
   const moneyText = n => maskMoney(String(r2(n)).replace('.', ','));      // a number as it should appear in a field
 
+  /* ---------- unit ----------
+     One unit is a percentage of the bankroll (10% unless the person sets another). pct is cleaned to 0.1..100. */
+  const UNIT_PCT_DEFAULT = 10;
+  const unitPct = v => { const n = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : Number(v); return isFinite(n) && n > 0 ? clamp(r2(n), 0.1, 100) : UNIT_PCT_DEFAULT; };
+  const unitValue = (bankroll, pct) => r2(Math.max(0, Number(bankroll) || 0) * unitPct(pct) / 100);
+
   /* ---------- cashout ----------
      The whole stake comes back, and only while none of the bet's fights has started. Once any of them is live the
      cashout is frozen; once any has started or finished it is gone, and normal settlement decides the bet.
@@ -610,7 +619,7 @@ const Core = (() => {
     if (fights.some(f => f.state !== 'pre' || f.canceled)) return { ok: false, why: 'started' };
     return { ok: true, value: bet.stake };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, maskMoney, parseMoney, moneyText, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, maskMoney, parseMoney, moneyText, unitPct, unitValue, ML };
 })();
 
 /* ================= formatting ================= */
@@ -623,6 +632,9 @@ const sym = () => fmt.formatToParts(0).find(x => x.type === 'currency').value;
 const money = v => fmt.format(v);
 const signed = v => (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + fmt.format(Math.abs(v));
 const fo = o => Number(o).toFixed(2);
+const fu = x => (Math.round(x * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'u';
+const signedU = x => (x > 0.004 ? '+' : x < -0.004 ? '−' : '') + fu(Math.abs(x));
+const pctText = v => String(v).replace('.', ',');
 const nodot = f => ({ format: t => f.format(t).replace('.', '') });
 const dWhen = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 const dDay = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
@@ -841,8 +853,10 @@ function wallet() {
   const dep = sum(S.deposits, d => d.v), open = openBets(), done = S.bets.filter(b => b.status !== 'open');
   const staked = sum(done, b => b.stake), ret = sum(done, b => b.payout);
   const decided = done.filter(b => b.status === 'won' || b.status === 'lost'), won = decided.filter(b => b.status === 'won').length;   // voided and cashed-out bets are not hits or misses
-  return { dep, open, done, atRisk: sum(open, b => b.stake), staked, ret, pnl: Core.r2(ret - staked), decided: decided.length, won,
-    balance: Core.r2(dep - sum(S.bets, b => b.stake) + ret) };
+  const atRisk = sum(open, b => b.stake), balance = Core.r2(dep - sum(S.bets, b => b.stake) + ret), bank = Core.r2(balance + atRisk);
+  const inUnits = done.filter(b => b.unit > 0);            // result in units, each bet measured by the unit it was placed with
+  return { dep, open, done, atRisk, staked, ret, pnl: Core.r2(ret - staked), decided: decided.length, won, balance, bank,
+    unitPct: Core.unitPct(S.unitPct), unit: Core.unitValue(bank, S.unitPct), units: sum(inUnits, b => (b.payout - b.stake) / b.unit), unitBets: inUnits.length };
 }
 const statsFor = f => ({ a: D.astats[f.a.id], b: D.astats[f.b.id] });
 const canBet = f => f.state === 'pre' && !f.canceled && !!D.odds[f.id] && Date.now() < f.date + 8 * H;
@@ -877,7 +891,8 @@ function slipCalc() {
   const odd = multiOk ? Core.r2(groups.reduce((p, g) => p * g.odd, 1)) : (ok && n === 1 ? rs[0].x.odd : 0);
   const total = slip.mode === 'multi' ? stake : Core.r2(stake * n);
   const ret = !ok ? 0 : slip.mode === 'multi' ? Core.r2(stake * odd) : Core.r2(sum(rs, r => stake * r.x.odd));
-  return { rs, ok, groups, multiOk, sameFight: groups.length === 1 && n > 1, stake, n, odd, total, ret, balance: wallet().balance };
+  const w = wallet();
+  return { rs, ok, groups, multiOk, sameFight: groups.length === 1 && n > 1, stake, n, odd, total, ret, balance: w.balance, unit: w.unit, unitPct: w.unitPct };
 }
 
 /* ================= rendering ================= */
@@ -994,7 +1009,7 @@ function vApostas() {
       h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
     }
     const profit = b.payout - b.stake;
-    h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b></div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
+    h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b>${b.unit > 0 ? `<span class="un">${fu(b.stake / b.unit)}</span>` : ''}</div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
       (isOpen ? `<div><small>Retorno</small><b>${money(Core.r2(b.stake * odd))}</b></div>`
         : `<div><small>Resultado</small><b class="${profit > 0 ? 'pos' : profit < 0 ? 'neg' : ''}">${signed(profit)}</b></div>`) + '</div>';
     const again = repeatable(b) ? `<button class="btn ghost" data-act="again" data-id="${esc(b.id)}">Repetir aposta</button>` : '';
@@ -1063,6 +1078,7 @@ function vCarteira(w) {
   const roi = w.staked ? w.pnl / w.staked * 100 : null;
   h += `<section class="card"><span class="label">Ganhos e perdas · apostas encerradas</span>
     <div class="pnl ${w.pnl > 0 ? 'pos' : w.pnl < 0 ? 'neg' : ''}">${signed(w.pnl)}</div>
+    ${w.unitBets ? `<p class="hint" id="pnlu">${signedU(w.units)} em unidades, cada aposta medida pela unidade do dia em que foi feita.</p>` : ''}
     <div class="kpis"><div><small>Apostado</small><b>${money(w.staked)}</b></div><div><small>Retornado</small><b>${money(w.ret)}</b></div><div><small>ROI</small><b>${roi == null ? '—' : (roi > 0 ? '+' : '') + roi.toFixed(1).replace('.', ',') + '%'}</b></div><div><small>Acerto</small><b>${w.decided ? `${w.won}/${w.decided} · ${Math.round(w.won / w.decided * 100)}%` : '—'}</b></div></div>`;
   if (w.done.length) {
     h += `<span class="label">Resultado acumulado, aposta a aposta</span><div class="chart" id="chart"></div>`;
@@ -1071,6 +1087,11 @@ function vCarteira(w) {
   } else h += '<p class="hint">O gráfico e a quebra por mercado aparecem quando a primeira aposta for encerrada.</p>';
   h += '</section>';
   if (S.deposits.length) h += `<section class="card"><span class="label">Depósitos</span><div>${S.deposits.slice().reverse().slice(0, 8).map(d => `<div class="dep"><span>${esc(dWhen.format(d.t))}</span><b>${money(d.v)}</b></div>`).join('')}</div></section>`;
+  h += `<section class="card"><span class="label">Unidade</span>
+    <div class="unit" id="unitnow">1u = ${money(w.unit)}</div>
+    <p class="hint">${pctText(w.unitPct)}% da banca de ${money(w.bank)} (saldo mais o que está em jogo). Muda sozinha quando a banca muda.</p>
+    <div class="field"><input id="unitpct" inputmode="decimal" autocomplete="off" value="${esc(pctText(w.unitPct))}" aria-label="Porcentagem da banca que vale uma unidade"><span>% da banca</span></div>
+    <button class="btn ghost block" data-act="unit">Aplicar</button></section>`;
   h += `<section class="card"><span class="label">Moeda da simulação</span><div class="segm cur">${Object.keys(CUR).map(c => `<button class="${S.cur === c ? 'on' : ''}" data-act="cur" data-c="${c}" aria-pressed="${S.cur === c}">${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div><p class="hint">Muda só o símbolo. Os valores continuam os mesmos, sem conversão.</p></section>`;
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
@@ -1102,6 +1123,8 @@ function renderSheet() {
   h += `<label class="label" for="stake">${slip.mode === 'multi' ? 'Valor da ' + mname.toLowerCase() : c.n > 1 ? 'Valor de cada aposta' : 'Valor da aposta'}</label>
     <div class="field"><span>${esc(sym())}</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
     <div class="quick">${[10, 50, 100].map(v => `<button data-act="stq" data-v="${v}">+${v}</button>`).join('')}<button data-act="stq" data-v="max">Tudo</button></div>
+    <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}</div>
+    <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'}</p>
     <div id="slipsum"></div>`;
   $('#panel').innerHTML = h;
   slipSummary();
@@ -1112,7 +1135,7 @@ function slipSummary() {
   if (!c.ok) why = 'Tem seleção com mercado fechado.';
   else if (c.stake < 1) why = `Aposta mínima de ${money(1)}.`;
   else if (c.total > c.balance + 0.004) why = 'Saldo insuficiente.';
-  el.innerHTML = `<dl class="sum">${slip.mode === 'multi' ? `<dt>Odd da ${c.sameFight ? 'combinada' : 'múltipla'}</dt><dd>${c.ok ? fo(c.odd) : '—'}</dd>` : ''}<dt>Total apostado</dt><dd>${money(c.total)}</dd><dt>Retorno possível</dt><dd class="big">${money(c.ret)}</dd><dt>Saldo disponível</dt><dd>${money(c.balance)}</dd></dl>
+  el.innerHTML = `<dl class="sum">${slip.mode === 'multi' ? `<dt>Odd da ${c.sameFight ? 'combinada' : 'múltipla'}</dt><dd>${c.ok ? fo(c.odd) : '—'}</dd>` : ''}<dt>Total apostado</dt><dd>${money(c.total)}${c.unit > 0 && c.total > 0 ? ' · ' + fu(c.total / c.unit) : ''}</dd><dt>Retorno possível</dt><dd class="big">${money(c.ret)}</dd><dt>Saldo disponível</dt><dd>${money(c.balance)}</dd></dl>
     ${ui.msg ? `<p class="msg" style="margin-top:10px">${esc(ui.msg)}</p>` : ''}
     ${why === 'Saldo insuficiente.' ? `<p class="msg" style="margin-top:10px">Saldo insuficiente. <button data-act="tab" data-tab="carteira" style="text-decoration:underline">Depositar</button></p>` : ''}
     <button class="btn block" style="margin-top:12px" data-act="place" ${why || ui.placing ? 'disabled' : ''}>${ui.placing ? 'Confirmando odds na ESPN…' : why && why !== 'Saldo insuficiente.' ? esc(why) : 'Apostar ' + money(c.total)}</button>`;
@@ -1142,7 +1165,8 @@ async function place() {
   if (c.total > c.balance + 0.004) { renderSheet(); return; }
   const now = Date.now();
   const leg = r => ({ fid: r.f.id, eid: r.f.eventId, key: r.s.key, market: r.x.market, sel: r.x.sel, cat: r.x.cat, fight: `${r.f.a.last} x ${r.f.b.last}`, event: r.f.eventName, date: r.f.date, odd: r.x.odd, src: r.x.src, out: null });
-  const mk = (type, legs, i, odd, sgp) => ({ id: 'b' + now.toString(36) + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, odd, sgp, legs, status: 'open', payout: 0, settledAt: null });
+  const unit = c.unit;                              // the unit in force when the bet is placed; the history is measured with it
+  const mk = (type, legs, i, odd, sgp) => ({ id: 'b' + now.toString(36) + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, unit, odd, sgp, legs, status: 'open', payout: 0, settledAt: null });
   if (slip.mode === 'multi') {
     const sgp = {}; for (const g of c.groups) if (g.combo) sgp[g.fid] = g.odd;      // price of each same-fight combo, fixed at placement
     S.bets.push(mk('multi', c.rs.map(leg), 0, c.odd, sgp));
@@ -1173,6 +1197,13 @@ document.addEventListener('click', e => {
   else if (a === 'sheet') { ui.sheet = !ui.sheet; ui.msg = ''; renderSheet(); }
   else if (a === 'mode') { slip.mode = b.dataset.m; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = b.dataset.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(b.dataset.v); slip.stake = v ? Core.moneyText(v) : ''; const el = $('#stake'); if (el) el.value = slip.stake; slipSummary(); }
+  else if (a === 'stu') { const w = wallet(); if (w.unit > 0) { slip.stake = Core.moneyText(Core.r2(w.unit * Number(b.dataset.u))); const el = $('#stake'); if (el) el.value = slip.stake; ui.msg = ''; slipSummary(); } }
+  else if (a === 'unit') {
+    const el = $('#unitpct'), raw = el ? el.value : '', n = parseFloat(String(raw).replace(',', '.'));
+    if (!(n > 0)) { toast('Digita a porcentagem da banca que vale uma unidade.'); return; }
+    S.unitPct = Core.unitPct(raw); saveS(); if (document.activeElement) document.activeElement.blur(); render();
+    toast(`Unidade: ${pctText(S.unitPct)}% da banca.`);
+  }
   else if (a === 'place') place();
   else if (a === 'filter') { ui.filter = b.dataset.f; ui.cash = null; render(); }
   else if (a === 'cash') { ui.cash = b.dataset.id || null; ui.cashMsg = ''; render(); }
@@ -1196,10 +1227,10 @@ document.addEventListener('click', e => {
     let s = null; try { s = JSON.parse(($('#rs') || {}).value || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
     S = { v: 1, deposits: s.deposits.filter(d => d && d.v > 0 && d.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) };
-    setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
+    S.unitPct = Core.unitPct(s.unitPct); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 function applyMask(el, typed) {
   let v = el.value, pos = el.selectionStart == null ? v.length : el.selectionStart;
@@ -1218,6 +1249,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && ui.sheet) { ui.sheet = false; renderSheet(); }
+  if (e.key === 'Enter' && e.target.id === 'unitpct') { const b = document.querySelector('[data-act="unit"]'); if (b) b.click(); }
   if (e.key === 'Enter' && e.target.id === 'dep') { const b = document.querySelector('[data-act="deposit"]'); if (b) b.click(); }
 });
 

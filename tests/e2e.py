@@ -74,7 +74,16 @@ with sync_playwright() as p:
       const all = Object.keys(p.map); const tot1 = J.prob(['ml:a']) + J.prob(['ml:b']);
       return [t(['fm:ko','tot:o:1.5']), t(['ml:a','fm:sub']), t(['ml:a','mov:a:sub']), t(['dist:yes','tot:u:1.5']), t(['mov:b:ko','rnd:1']), t(['ml:a','td:o:1.5']), t(['fm:sub','tda:a:yes']), t(['td:u:0.5','tda:a:yes']), t(['ml:b','dist:yes','td:u:1.5']), t(['wr:a:2','tot:o:1.5']), t(['rnd:2','tot:u:1.5']), t(['ml:a','fm:ko']), t(['ml:b','rnd:3']), t(['fm:ko','fm:sub']), 'sum ml ' + tot1.toFixed(6), 'td over1.5 single ' + p.map['td:o:1.5'].odd + ' p=' + J.prob(['td:o:1.5']).toFixed(4)]; }""")
     for c in combos: print('  combo', c)
-    bet([('f1','ml:a')], '100')                                   # wins @1.67 -> 167
+    # unit: 10% of the bankroll by default, adjustable; the slip can stake in units
+    pg.click('.tabbar [data-tab=carteira]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
+    pg.fill('#unitpct', '2,5'); pg.click('[data-act=unit]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 25,00', pg.inner_text('#unitnow')
+    pg.fill('#unitpct', '10'); pg.keyboard.press('Enter'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
+    pg.click('.tabbar [data-tab=lutas]'); pick('f1', 'ml:a'); pg.click('#slipbtn')
+    pg.click('[data-act=stu][data-u="2"]'); assert pg.input_value('#stake') == '200', pg.input_value('#stake')
+    pg.click('[data-act=stu][data-u="1"]'); assert pg.input_value('#stake') == '100', pg.input_value('#stake')
+    assert '1u' in pg.inner_text('#slipsum'), pg.inner_text('#slipsum')
+    pg.click('[data-act=place]'); pg.wait_for_selector('.bet'); assert pg.inner_text('.bet .un') == '1u', pg.inner_text('.bet .un')   # wins @1.67 -> 167
+    pg.click('.tabbar [data-tab=lutas]')
     bet([('f1','ml:a'),('f2','dist:yes'),('f3','tot:o:3.5')], '50', 'multi')   # 1.67*1.44*1.83
     bet([('f1','td:o:2.5')], '20')                                # 3 TDs -> wins
     bet([('f3','mov:a:sub')], '10')                               # wins @4.00
@@ -134,6 +143,8 @@ with sync_playwright() as p:
     assert bal().replace('\xa0', ' ') == 'R$ 1.604,40', bal()
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_timeout(200); shot('s6-carteira.png')
+    units = pg.inner_text('#pnlu'); print('em unidades:', units)
+    assert units.startswith('+6,04u'), units                  # R$ 604,40 of profit with every bet placed at a R$ 100,00 unit
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
