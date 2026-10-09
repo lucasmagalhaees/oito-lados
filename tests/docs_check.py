@@ -117,6 +117,9 @@ cmds = [h.get('command', '') for g in settings.get('hooks', {}).get('Stop', []) 
 check('Stop hook is configured', any('verify-on-stop.sh' in c for c in cmds), cmds)
 check('Stop hook script exists', (ROOT / '.claude/hooks/verify-on-stop.sh').exists())
 check('CI runs the quick verification', 'scripts/verify.sh --quick' in read('.github/workflows/ci.yml'))
+vercel = json.loads(read('vercel.json'))
+check('vercel.json pins a static deployment', vercel.get('framework', 0) is None and vercel.get('installCommand') == '', vercel)
+check('deployment ships no test code', 'tests' in read('.vercelignore').split())
 check('weekly live contract workflow exists', 'contract_live.py' in read('.github/workflows/espn-contract.yml'))
 
 for f in fails:

@@ -17,3 +17,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 - Harness contra alucinação de IA: comando único de verificação, documentação conferida contra o código, hook de parada do Claude Code e registro de verificação.
 - Fluxo por branch e PR, com deploy no merge.
 - Registro de decisões e caminho de escala documentados.
+
+### Corrigido
+- Deploy na Vercel: o projeto é fixado como site estático, para não ser tratado como app Python.

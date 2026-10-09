@@ -74,7 +74,7 @@ O projeto é mantido com ajuda de IA e tem um harness para ela não afirmar o qu
 
 Configuração, uma vez só:
 
-- **Vercel:** importar este repositório em um projeto novo, preset "Other", sem comando de build. A partir daí o deploy é automático.
+- **Vercel:** importar este repositório em um projeto novo. O `vercel.json` já diz que é um site estático, sem framework, sem instalação e sem build. A partir daí o deploy é automático.
 - **GitHub:** em Settings → Branches, proteger a `main` exigindo PR e os checks `checks`, `e2e (dark)` e `e2e (light)`. Assim só código testado chega à produção.
 
 No iPhone: abra a URL de produção no Safari, toque em Compartilhar e em Adicionar à Tela de Início.
@@ -83,6 +83,7 @@ No iPhone: abra a URL de produção no Safari, toque em Compartilhar e em Adicio
 
 ```
 index.html                           o app inteiro (HTML, CSS e JS)
+vercel.json                          publicação como site estático
 scripts/verify.sh                    comando único de verificação
 tests/unit.py                        testes do núcleo (preço e liquidação)
 tests/contract.py                    leitores da ESPN contra respostas reais gravadas

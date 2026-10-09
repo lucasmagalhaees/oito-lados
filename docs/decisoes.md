@@ -17,6 +17,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 9. Criação do repositório `lucasmagalhaees/oito-lados` (MIT), fluxo por branch e PR, deploy no merge, testes automatizados (D13).
 10. Pedido de documentar tudo no repositório e de um harness contra alucinação de IA (D16).
 11. Acesso de escrita do Claude ao repositório liberado; primeiro branch enviado.
+12. PR #1 (o app) aprovado e mesclado pelo Lucas. Primeiro deploy na Vercel falhou por detecção de Python (ver D12); correção enviada no PR seguinte, junto com a documentação e o harness.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -109,6 +110,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 - **Descartado:** Netlify (poucos deploys por mês enquanto o app muda muito).
 - **Consequência:** se o projeto virar comercial, o plano Hobby da Vercel deixa de servir.
+- **Ocorrido em 09/10/2026:** o primeiro deploy falhou com `Configured Python entrypoint "main.py" was not found`. Na importação, a Vercel escolheu sozinha o preset "FastHTML", um framework Python (os testes do repositório são em Python). Correção: `vercel.json` com `"framework": null` e `"installCommand": ""`, que pela documentação da Vercel selecionam o preset "Other" e pulam a instalação, mais o `.vercelignore` tirando `tests/` do deploy.
 
 ## D13. Fluxo: branch, PR, CI, deploy no merge
 
@@ -157,8 +159,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 | Pendência | Quem resolve |
 |---|---|
-| Revisar e aprovar o primeiro PR (`feat/app-inicial`) | Lucas |
-| Importar o repositório na Vercel | Lucas |
+| Confirmar que o deploy na Vercel passa depois da correção do `vercel.json` | Lucas, no merge do PR do harness |
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |

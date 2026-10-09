@@ -239,7 +239,7 @@ Para testar contra a ESPN de verdade, servir a pasta (`python3 -m http.server`) 
 
 ## Publicação
 
-Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. Não há etapa de build; o `.vercelignore` deixa só o `index.html` no site.
+Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. Não há etapa de build: o `vercel.json` fixa o projeto como site estático (`"framework": null`, instalação vazia) e o `.vercelignore` deixa só o `index.html` no site. Sem o `vercel.json`, a Vercel escolheu sozinha o preset "FastHTML" (Python) na importação e o primeiro deploy falhou procurando um `main.py`.
 
 A Vercel publica o que chegar na `main` sem olhar o CI. Quem garante que só entra código testado é a proteção do branch `main` exigindo os checks `checks`, `e2e (dark)` e `e2e (light)`.
 
