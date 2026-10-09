@@ -2,6 +2,17 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2026-10-09
+
+### Adicionado
+- Cashout dinâmico: com parte da múltipla já batida e o resto por começar, o app oferece um valor para encerrar, calculado pelas odds de agora.
+- Conversão de moeda: passar a banca para outra moeda converte tudo pela cotação do dia, guardada no aparelho por 12 h. Dá para converter junto com um depósito ou sem depositar.
+- Configuração do valor ao copiar um print que traz dinheiro: mesmo valor, convertido em unidades ou um número fixo de unidades.
+
+### Alterado
+- O cashout não acaba mais quando a primeira luta de uma múltipla termina. Sem nenhuma luta decidida, continua devolvendo o valor integral.
+- A moeda passou a ser escolhida no cartão de depósito. O cartão "Moeda da simulação", que trocava só o símbolo, saiu.
+
 ## [0.2.0] - 2026-10-09
 
 ### Adicionado

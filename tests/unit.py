@@ -71,6 +71,10 @@ JS = r"""
   near('joint: over + under takedowns', J.prob(['td:o:1.5']) + J.prob(['td:u:1.5']), 1, 2e-3);
   near('joint: decision matches the distance line', J.prob(['dist:yes']), (1 / 2.3) / (1 / 2.3 + 1 / 1.59), 1e-9);
   near('joint: under 3.5 matches the book total', J.prob(['tot:u:3.5']), (1 / 1.91) / (1 / 1.83 + 1 / 1.91), 1e-6);
+  near('chance: a lone winner pick is the moneyline without the margin', P.chance(['ml:b']), (1 / 2.05) / (1 / 1.8 + 1 / 2.05), 1e-9);
+  near('chance: the two winners sum to 1', P.chance(['ml:a']) + P.chance(['ml:b']), 1, 1e-9);
+  near('chance: anything else comes from the joint model', P.chance(['ml:b', 'tot:o:1.5']), J.prob(['ml:b', 'tot:o:1.5']), 1e-12);
+  near('chance: a single non-winner pick too', P.chance(['dist:yes']), J.prob(['dist:yes']), 1e-12);
   ok('longer fights have more takedowns', J.prob(['dist:yes', 'td:o:1.5']) / J.prob(['dist:yes']) > J.prob(['rnd:1', 'td:o:1.5']) / J.prob(['rnd:1']));
 
   const combo = ks => Core.combo(J, ks, ks.map(k => M[k].odd), M);
@@ -138,22 +142,38 @@ JS = r"""
   eq('combo alone with a void leg refunds', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'void']), { status: 'void', payout: 10 });
   eq('combo with a lost leg loses', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'lost']), { status: 'lost', payout: 0 });
 
-  /* ---- cashout: the whole stake, only before any of the bet's fights starts ---- */
-  const ft = (state, extra) => Object.assign({ state, canceled: false }, extra);
+  /* ---- cashout: the stake back before anything starts; a market offer once part of a parlay has won ---- */
+  const lg = (state, out, extra) => Object.assign({ state, canceled: false, out: out || null }, extra);
   const open = { status: 'open', stake: 40, legs: [leg('f1', 2)] };
-  eq('cashout before the fight returns the stake', Core.cashout(open, [ft('pre')]), { ok: true, value: 40 });
-  eq('cashout frozen while the fight is live', Core.cashout(open, [ft('in')]), { ok: false, why: 'live' });
-  eq('cashout gone once the fight is over', Core.cashout(open, [ft('post')]), { ok: false, why: 'started' });
-  eq('cashout not offered for a cancelled fight (it settles as void)', Core.cashout(open, [ft('post', { canceled: true })]), { ok: false, why: 'started' });
-  eq('cashout needs the fight on the board', Core.cashout(open, [null]), { ok: false, why: 'unknown' });
-  eq('cashout only for open bets', Core.cashout({ status: 'won', stake: 40, legs: [leg('f1', 2)] }, [ft('pre')]), { ok: false, why: 'closed' });
-  eq('cashout only once', Core.cashout({ status: 'cashed', stake: 40, legs: [leg('f1', 2)] }, [ft('pre')]), { ok: false, why: 'closed' });
-  const multi = { status: 'open', stake: 10, sgp: { f1: 4.5 }, legs: [leg('f1', 2.62), leg('f1', 1.27), leg('f2', 2)] };
-  eq('parlay cashout while every fight is still to start', Core.cashout(multi, [ft('pre'), ft('pre'), ft('pre')]), { ok: true, value: 10 });
-  eq('parlay cashout frozen when one fight is live', Core.cashout(multi, [ft('pre'), ft('pre'), ft('in')]), { ok: false, why: 'live' });
-  eq('parlay cashout gone after its first fight ended', Core.cashout(multi, [ft('post'), ft('post'), ft('pre')]), { ok: false, why: 'started' });
-  eq('a live fight wins over a finished one in the reason shown', Core.cashout(multi, [ft('post'), ft('post'), ft('in')]), { ok: false, why: 'live' });
-  eq('cashout value never depends on the odds', Core.cashout({ status: 'open', stake: 123.45, legs: [leg('f1', 51)] }, [ft('pre')]).value, 123.45);
+  const never = () => { throw new Error('a refund must not need a price'); };
+  eq('cashout before the fight returns the stake', Core.cashout(open, [lg('pre')], () => 0.5), { ok: true, kind: 'refund', value: 40 });
+  eq('refund works without any price available', Core.cashout(open, [lg('pre')], () => null), { ok: true, kind: 'refund', value: 40 });
+  eq('cashout frozen while the fight is live', Core.cashout(open, [lg('in')], never), { ok: false, why: 'live' });
+  eq('fight over, result still to come', Core.cashout(open, [lg('post')], () => null), { ok: false, why: 'settling' });
+  eq('cancelled fight is left to settlement', Core.cashout(open, [lg('post', 'void', { canceled: true })], () => null), { ok: false, why: 'settling' });
+  eq('cashout needs the fight on the board', Core.cashout(open, [null], never), { ok: false, why: 'unknown' });
+  eq('cashout only for open bets', Core.cashout({ status: 'won', stake: 40, legs: [leg('f1', 2)] }, [lg('pre')], never), { ok: false, why: 'closed' });
+  eq('cashout only once', Core.cashout({ status: 'cashed', stake: 40, legs: [leg('f1', 2)] }, [lg('pre')], never), { ok: false, why: 'closed' });
+  const two = { status: 'open', stake: 10, legs: [leg('f1', 2), leg('f2', 1.5)] };
+  eq('parlay before any fight: refund', Core.cashout(two, [lg('pre'), lg('pre')], () => 0.5), { ok: true, kind: 'refund', value: 10 });
+  eq('parlay frozen when one fight is live', Core.cashout(two, [lg('post', 'won'), lg('in')], never), { ok: false, why: 'live' });
+  eq('parlay with a lost leg has nothing to cash out', Core.cashout(two, [lg('post', 'lost'), lg('pre')], () => 0.5), { ok: false, why: 'lost' });
+  eq('parlay: one leg won, one to go -> market offer', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => 0.6), { ok: true, kind: 'market', value: 17.1, full: 30, chance: 0.6 });
+  const three = { status: 'open', stake: 10, legs: [leg('f1', 2), leg('f2', 1.5), leg('f3', 3)] };
+  eq('parlay: two legs won, one to go', Core.cashout(three, [lg('post', 'won'), lg('post', 'won'), lg('pre')], () => 0.3), { ok: true, kind: 'market', value: 25.65, full: 90, chance: 0.3 });
+  eq('parlay: one won, two to go multiplies the chances', Core.cashout(three, [lg('post', 'won'), lg('pre'), lg('pre')], fid => (fid === 'f2' ? 0.6 : 0.3)).value, Core.r2(90 * 0.18 * 0.95));
+  eq('parlay: a voided leg and nothing won yet is still a refund', Core.cashout(two, [lg('post', 'void', { canceled: true }), lg('pre')], () => 0.5), { ok: true, kind: 'refund', value: 10 });
+  eq('parlay: a voided leg drops out of the offer', Core.cashout(three, [lg('post', 'void'), lg('post', 'won'), lg('pre')], () => 0.5), { ok: true, kind: 'market', value: 21.38, full: 45, chance: 0.5 });
+  eq('parlay: the fight that is left has no price', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => null), { ok: false, why: 'noprice' });
+  eq('parlay: a finished fight waiting for its result holds the offer', Core.cashout(three, [lg('post', 'won'), lg('post'), lg('pre')], () => 0.5), { ok: false, why: 'settling' });
+  eq('parlay: everything already won is left to settlement', Core.cashout(two, [lg('post', 'won'), lg('post', 'won')], never), { ok: false, why: 'settling' });
+  eq('offer never exceeds what the bet would pay', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => 1).value, 28.5);
+  const combo2 = { status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f1', 2), Object.assign(leg('f2', 2.62), { key: 'fm:ko' }), Object.assign(leg('f2', 1.27), { key: 'tot:o:1.5' })] };
+  let asked = null;
+  eq('same-fight combo still to come is priced as one, at its own odd', Core.cashout(combo2, [lg('post', 'won'), lg('pre'), lg('pre')], (fid, keys) => { asked = [fid, keys]; return 0.2; }), { ok: true, kind: 'market', value: 17.1, full: 90, chance: 0.2 });
+  eq('the price is asked for the selections of that fight together', asked, ['f2', ['fm:ko', 'tot:o:1.5']]);
+  eq('same-fight combo alone, before the fight: refund', Core.cashout({ status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f2', 2.62), leg('f2', 1.27)] }, [lg('pre'), lg('pre')], () => 0.2), { ok: true, kind: 'refund', value: 10 });
+  eq('cashout margin', Core.CASHOUT_MARGIN, 0.05);
 
   /* ---- money fields: thousands mask and parsing (dot groups thousands, comma starts the cents) ---- */
   for (const [raw, want] of [['', ''], ['5', '5'], ['150', '150'], ['1500', '1.500'], ['15000', '15.000'], ['1234567', '1.234.567'], ['1.500', '1.500'], ['15.00', '1.500'],
@@ -167,6 +187,40 @@ JS = r"""
   eq('field text of 1234.5', Core.moneyText(1234.5), '1.234,5');
   eq('field text of 730', Core.moneyText(730), '730');
 
+  /* ---- currency: the rate answer, the cross rate and converting the whole state ---- */
+  const FXJ = { amount: 1.0, base: 'BRL', date: '2026-01-02', rates: { EUR: 0.16, USD: 0.2 } };
+  const fx = Core.normFx(FXJ);
+  eq('fx: answer read with the base at 1', fx, { date: '2026-01-02', rates: { BRL: 1, USD: 0.2, EUR: 0.16 } });
+  for (const [name, bad] of [['another base', { ...FXJ, base: 'USD' }], ['a rate missing', { ...FXJ, rates: { USD: 0.2 } }], ['a zero rate', { ...FXJ, rates: { USD: 0, EUR: 0.16 } }],
+    ['a rate as text', { ...FXJ, rates: { USD: '0.2', EUR: 0.16 } }], ['no date', { ...FXJ, date: undefined }], ['a date in another shape', { ...FXJ, date: '02/01/2026' }], ['no rates', { base: 'BRL', date: '2026-01-02' }], ['null', null], ['text', 'oops']])
+    eq('fx: rejects ' + name, Core.normFx(bad), null);
+  near('fx: real to dollar', Core.fxRate(fx, 'BRL', 'USD'), 0.2);
+  near('fx: dollar to real', Core.fxRate(fx, 'USD', 'BRL'), 5);
+  near('fx: dollar to euro goes through the real', Core.fxRate(fx, 'USD', 'EUR'), 0.8);
+  near('fx: same currency', Core.fxRate(fx, 'EUR', 'EUR'), 1);
+  eq('fx: unknown currency', Core.fxRate(fx, 'BRL', 'GBP'), null);
+  eq('fx: no rates yet', Core.fxRate(null, 'BRL', 'USD'), null);
+  const ST0 = { v: 1, cur: 'BRL', unitPct: 10, deposits: [{ t: 1, v: 1000 }, { t: 2, v: 50.03 }], bets: [
+    { id: 'a', stake: 100, unit: 100, payout: 167, status: 'won', legs: [] }, { id: 'b', stake: 50.03, unit: 105, payout: 0, status: 'open', legs: [] },
+    { id: 'c', stake: 10, payout: 15.19, status: 'cashed', cash: { kind: 'market', full: 34.2, chance: 0.4675 }, legs: [] }, { id: 'd', stake: 40, unit: 100, payout: 40, status: 'cashed', cash: { kind: 'refund', full: null, chance: null }, legs: [] }] };
+  const before = JSON.stringify(ST0), US = Core.convertState(ST0, 'USD', 0.2);
+  eq('convert: the state given is left alone', JSON.stringify(ST0), before);
+  eq('convert: currency', US.cur, 'USD');
+  eq('convert: stakes, payouts and units', US.bets.map(b => [b.stake, b.payout, b.unit]), [[20, 33.4, 20], [10.01, 0, 21], [2, 3.04, undefined], [8, 8, 20]]);
+  eq('convert: the possible return of a market cashout', [US.bets[2].cash, US.bets[3].cash], [{ kind: 'market', full: 6.84, chance: 0.4675 }, { kind: 'refund', full: null, chance: null }]);
+  eq('convert: everything else is kept', [US.v, US.unitPct, US.bets[0].id, US.bets[0].status, US.deposits[1].t], [1, 10, 'a', 'won', 2]);
+  eq('convert: balance before', Core.balanceOf(ST0), 1072.19);
+  eq('convert: balance is the old one at the rate, to the cent', Core.balanceOf(US), 214.44);
+  eq('convert: deposits', US.deposits.map(d => d.v), [200, 10.01]);
+  const tight = { deposits: [{ t: 1, v: 100.06 }], bets: [{ stake: 50.03, payout: 0, status: 'open' }, { stake: 50.03, payout: 0, status: 'open' }] };
+  const tightUS = Core.convertState(tight, 'USD', 0.2);
+  eq('convert: a spent balance never turns negative', Core.balanceOf(tightUS), 0);
+  eq('convert: the cent that rounding moved goes into the largest deposit', [tightUS.deposits[0].v, tightUS.bets.map(b => b.stake)], [20.02, [10.01, 10.01]]);
+  eq('convert: tiny amounts do not vanish', Core.convertState({ deposits: [{ t: 1, v: 0.02 }], bets: [{ stake: 0.02, payout: 0 }] }, 'USD', 0.2).bets[0].stake, 0.01);
+  eq('convert: empty state', Core.convertState({ v: 1, deposits: [], bets: [] }, 'EUR', 0.16), { v: 1, deposits: [], bets: [], cur: 'EUR' });
+  const back = Core.convertState(US, 'BRL', 5);
+  near('convert: there and back lands within cents', Core.balanceOf(back), 1072.19, 0.03);
+
   /* ---- unit: a percentage of the bankroll, 10% by default ---- */
   eq('unit default is 10% of the bankroll', Core.unitValue(1000, undefined), 100);
   eq('unit at 2%', Core.unitValue(1000, 2), 20);
@@ -176,6 +230,25 @@ JS = r"""
   eq('unit never negative', Core.unitValue(-50, 10), 0);
   for (const [raw, want] of [[10, 10], ['5', 5], ['2,5', 2.5], [0, 10], [-3, 10], ['abc', 10], [null, 10], [250, 100], [0.01, 0.1], [33.333, 33.33]])
     eq(`unit percentage ${JSON.stringify(raw)}`, Core.unitPct(raw), want);
+
+  /* ---- the stake of a copied bet: units stay units; what an amount of money becomes is a setting ---- */
+  eq('tip setting: default', Core.tipCfg(undefined), { mode: 'same', srcUnit: 0, fixU: 1 });
+  eq('tip setting: cleaned', Core.tipCfg({ mode: 'units', srcUnit: '1750.004', fixU: 500 }), { mode: 'units', srcUnit: 1750, fixU: 100 });
+  eq('tip setting: junk falls back', Core.tipCfg({ mode: 'whatever', srcUnit: -3, fixU: 'x' }), { mode: 'same', srcUnit: 0, fixU: 1 });
+  eq('tip setting: not an object', Core.tipCfg('units'), { mode: 'same', srcUnit: 0, fixU: 1 });
+  const MONEY = { kind: 'money', money: 1750 }, MYU = 100;
+  eq('copied stake: same amount by default', Core.tipStake(MONEY, undefined, MYU), { how: 'same', units: null, value: 1750 });
+  eq('copied stake: turned into units by the unit of the source', Core.tipStake(MONEY, { mode: 'units', srcUnit: 1750 }, MYU), { how: 'conv', units: 1, value: 100 });
+  eq('copied stake: half a unit of the source', Core.tipStake({ kind: 'money', money: 875 }, { mode: 'units', srcUnit: 1750 }, MYU), { how: 'conv', units: 0.5, value: 50 });
+  eq('copied stake: units mode without the source unit keeps the amount', Core.tipStake(MONEY, { mode: 'units' }, MYU), { how: 'same', units: null, value: 1750 });
+  eq('copied stake: fixed number of my units', Core.tipStake(MONEY, { mode: 'fixed', fixU: 2 }, MYU), { how: 'fixed', units: 2, value: 200 });
+  eq('copied stake: fixed defaults to one unit', Core.tipStake(MONEY, { mode: 'fixed' }, MYU), { how: 'fixed', units: 1, value: 100 });
+  for (const mode of Core.TIP_MODES) {
+    eq(`copied stake: a tip in units ignores the setting (${mode})`, Core.tipStake({ kind: 'units', units: 0.5 }, { mode, srcUnit: 1750, fixU: 3 }, MYU), { how: 'units', units: 0.5, value: 50 });
+    eq(`copied stake: no stake in the tip is one unit (${mode})`, Core.tipStake({ kind: 'default', units: 1 }, { mode, srcUnit: 1750, fixU: 3 }, MYU), { how: 'default', units: 1, value: 100 });
+  }
+  eq('copied stake: no bankroll, no unit', Core.tipStake(MONEY, { mode: 'fixed' }, 0).value, 0);
+  eq('the three modes', Core.TIP_MODES, ['same', 'units', 'fixed']);
 
   /* ---- copying a bet from a pasted tip or from the text read off a print ---- */
   const card = [

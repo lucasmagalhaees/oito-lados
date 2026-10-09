@@ -21,6 +21,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 13. PRs #2 e #3 mesclados; produção no ar em https://oito-lados.vercel.app. Pedido de cashout (D21).
 14. Pedidos em sequência: repetir aposta (D22), máscara de milhares e moeda (D23), unidade (D24), pesquisa sobre pontuação por round (D25) e copiar aposta por imagem ou texto (D26).
 15. Pedido de cobertura de testes: cobertura do `index.html` passa a ser medida e cobrada no `verify.sh`.
+16. Respostas do Lucas às interpretações pendentes: cashout dinâmico em múltipla (D27), moeda só no depósito e com conversão (D28), banca e unidade confirmadas (D24), valor do print configurável (D29).
+17. Pedido de um botão para converter a banca sem depositar (ajuste na D28). Dúvida do Lucas sobre o modo "fixo" do valor de print (D29), explicada; ele ainda não disse se fica.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -163,6 +165,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 ## D21. Cashout devolve o valor integral, só antes da luta
 
 - **Contexto:** pedido de opção de cashout nas apostas. Nas palavras do Lucas: "pode retornar o valor integral apenas se a luta não começou; se a luta está em andamento, congela cashout e apostas".
+- **Revista em parte pela D27** (mesmo dia): o cashout não acaba mais quando a primeira luta de uma múltipla termina. O resto continua valendo.
 - **Decisão:** o cashout devolve a stake inteira enquanto nenhuma luta da aposta começou. Luta em andamento congela. Luta começada ou terminada encerra o cashout, e a aposta segue para a liquidação normal.
 - **Interpretação que precisou ser feita (confirmar com o Lucas):** numa múltipla, basta uma luta ter começado para o cashout acabar, mesmo que as outras ainda não tenham começado. A alternativa seria liberar de novo entre uma luta e outra.
 - **Descartado:** cashout a valor de mercado (stake × odd × chance atual, com margem), que chegou a ser desenhado. Exigiria odds ao vivo, que a ESPN não publica, e o pedido foi por devolução integral.
@@ -179,6 +182,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 - **Contexto:** pedido de máscara nos campos de valor, para operar acima de mil, e de opção para dólar e euro.
 - **Decisão:** máscara no padrão brasileiro em todos os campos de valor. Moeda escolhida na Carteira entre real, dólar e euro.
+- **Revista pela D28** (mesmo dia): a moeda passou a ser escolhida no depósito e a troca converte os valores.
 - **Interpretação que precisou ser feita (confirmar com o Lucas):** trocar a moeda muda só o símbolo. Não há conversão nem câmbio, e não existem carteiras separadas por moeda. O formato numérico continua brasileiro nas três.
 - **Consequência:** corrigiu de passagem um erro antigo: "1.000" digitado era lido como 1.
 
@@ -186,10 +190,10 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 - **Contexto:** pedido de gestão de unidade. Nas palavras do Lucas: "uma unidade geralmente é 10% da banca, mas a porcentagem pode ser parametrizada".
 - **Decisão:** unidade igual a uma porcentagem da banca, 10% por padrão, ajustável na Carteira. Atalhos em unidades no cupom e resultado em unidades na Carteira.
-- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
-  - Banca é o saldo mais o que está em jogo, não só o saldo.
-  - A unidade acompanha a banca o tempo todo (não é fixada por período).
-  - No histórico, cada aposta é medida pela unidade do momento em que foi feita.
+- **Interpretações que precisaram ser feitas:**
+  - Banca é o saldo mais o que está em jogo, não só o saldo. **Confirmado pelo Lucas em 09/10/2026.**
+  - A unidade acompanha a banca o tempo todo (não é fixada por período). **Confirmado na mesma resposta.**
+  - No histórico, cada aposta é medida pela unidade do momento em que foi feita. (Esta não foi perguntada; segue como interpretação.)
 - **Descartado:** unidade fixa em valor, digitada à mão.
 
 ## D25. Cashout por round: não agora
@@ -200,7 +204,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - **Verdict MMA:** aplicativo em que torcedores pontuam cada round em tempo real, com um placar médio ("Global Scorecard"). A página deles não menciona API pública; os dados aparecem em transmissões da PFL por parceria.
   - **Sportradar MMA:** API paga com estatísticas por round e resumo ao vivo. A página consultada não fala em pontuação por round.
   - **SportsAPI Pro:** a documentação lista notas por round (pelo exemplo, disponíveis depois da decisão) e um endpoint de odds ao vivo durante a luta. Preço, cobertura do UFC e forma de acesso não estavam na página.
-- **Decisão:** não fazer agora. O cashout segue a D21. Se um dia houver odd ao vivo confiável, o caminho é cashout a valor de mercado, não pontuação de round.
+- **Decisão:** não fazer agora. O cashout segue a D21 (e, entre uma luta e outra, a D27). Se um dia houver odd ao vivo confiável, o caminho é cashout a valor de mercado, não pontuação de round.
 - **Próximo passo combinado:** observar num card ao vivo o que a ESPN entrega durante a luta.
 
 ## D26. Copiar aposta de print ou texto, com leitura de imagem no aparelho
@@ -213,16 +217,53 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - Nada é apostado sozinho: o resultado vai para o cupom.
 - **Descartado:** ler a imagem com um serviço de IA de visão. Seria mais tolerante a formatos diferentes, mas exige servidor e chave paga, o que contraria a D11 (MVP sem backend), e mandaria a imagem para fora do aparelho.
 - **Consequência:** é a primeira dependência de terceiros em tempo de execução (uma biblioteca baixada de CDN, com versão fixa e hash de integridade no script principal). O leitor só conhece os formatos que foram testados; formato novo pode não ser entendido, e a tela diz o que não entendeu.
-- **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades.
+- **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades. **Resolvida pela D29:** virou configuração.
+
+## D27. Cashout dinâmico em múltipla
+
+- **Contexto:** ao confirmar a D21, o Lucas pediu: "seria bacana ter um cashout dinâmico, tipo se 2 da múltipla bateram e falta 1 ele calcula e te oferece um valor para encerrar, igual ocorre numa bet real".
+- **Decisão:** quando parte da múltipla já bateu e o que resta ainda não começou, o app oferece um valor para encerrar: `retorno possível × chance de agora do que falta × (1 − 5%)`. Sem nenhuma luta decidida continua valendo a devolução integral da D21. Luta em andamento continua congelando.
+- **Por que dá para fazer sem odd ao vivo:** entre uma luta e outra a ESPN ainda publica a odd pré-luta das lutas que restam, e é ela que dá a chance de agora. O que a D21 descartou foi cashout **durante** a luta, que segue impossível pela mesma razão.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Margem de 5% sobre o valor justo. Casas reais cobram algo assim; o número é uma constante (`CASHOUT_MARGIN`).
+  - Se a perna que resta é de odd estimada, a oferta usa a estimativa do modelo.
+  - Com perna já perdida não há oferta: a aposta fecha como perdida.
+  - Vale para múltipla entre lutas. Combinada na mesma luta não tem oferta parcial, porque as pernas dela se decidem juntas.
+- **Descartado:** cashout parcial (encerrar só parte do valor) e oferta com a luta rolando.
+- **Consequência:** o cashout deixa de ser neutro no resultado: uma aposta encerrada assim entra no histórico com lucro ou prejuízo. A primeira versão da oferta lia a chance do vencedor no modelo conjunto, que não reproduz a moneyline exatamente quando há linhas de método; o teste ponta a ponta acusou a diferença (46,1% contra 46,8%) e a chance de um palpite de vencedor sozinho passou a vir da própria moneyline.
+
+## D28. Moeda escolhida no depósito, com conversão da banca
+
+- **Contexto:** ao revisar a D23, o Lucas pediu: "só deixa trocar moeda na hora de depositar; mudando na banca converte tudo, e cacheia o índice de conversão".
+- **Decisão:** o seletor de moeda saiu do cartão próprio e foi para o cartão de depósito. Passar para outra moeda, com ou sem depósito, troca a moeda da banca e converte depósitos e apostas pela cotação do dia. A cotação fica guardada no aparelho por 12 h.
+- **Fonte da cotação:** Frankfurter (`api.frankfurter.dev`), gratuito e sem chave. Escolhido por não exigir cadastro nem servidor, o que mantém a D11.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - A banca tem uma moeda só. Não existem carteiras separadas por moeda.
+  - ~~A troca só acontece junto com um depósito: não há botão de converter sem depositar.~~ **Corrigida pelo Lucas no mesmo dia:** ele pediu o botão de converter a banca sem depositar. O cartão de depósito passou a ter os dois: converter e depositar, ou só converter.
+  - Com a banca vazia não há o que converter, então a moeda muda sem consultar cotação.
+  - Sem internet, vale a última cotação guardada, com a data na tela. Sem nenhuma guardada, não converte.
+  - Os centavos de arredondamento vão para o maior depósito, para o saldo convertido bater exatamente.
+- **Descartado:** carteiras por moeda; cotação digitada à mão; converter só o saldo e deixar o histórico na moeda antiga (o gráfico e as tabelas somariam moedas diferentes).
+- **Consequência:** segunda dependência de terceiros em tempo de execução, depois do leitor de imagem. Se o serviço sair do ar ou mudar o formato, só a troca de moeda para; o resto do app não depende dele.
+
+## D29. Valor de print em dinheiro é configurável
+
+- **Contexto:** perguntado se um print de R$ 1.750,00 deveria ser copiado como R$ 1.750,00 ou convertido em unidades, o Lucas respondeu: "quero ter uma opção, mas configuração que parametrize isso".
+- **Decisão:** um cartão na Carteira com três modos. **Mesmo valor** (padrão, o comportamento da D26); **Em unidades**, com o parâmetro "quanto vale 1u de quem fez o print"; **Fixo**, com o parâmetro "quantas unidades suas".
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - O terceiro modo (fixo) não foi pedido com essas palavras; entrou por ser o jeito de seguir um print sem conhecer a unidade de quem o fez.
+  - A configuração vale para todos os prints. Não há unidade de origem por canal ou por pessoa.
+  - Texto que já fala em unidades não é afetado.
+- **Limite conhecido:** o leitor não considera a moeda do print. Com a banca em dólar, um print de R$ 250,00 no modo "mesmo valor" vira US$ 250,00.
 
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
-| Confirmar a regra do cashout em múltipla (D21) | Lucas |
-| Confirmar as interpretações de moeda (D23) e de unidade (D24) | Lucas |
-| Testar o copiar aposta no iPhone com prints reais, e confirmar a regra do valor em dinheiro (D26) | Lucas |
+| Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
+| Confirmar as interpretações da conversão de moeda (D28) | Lucas |
+| Testar o copiar aposta no iPhone com prints reais, e ver se os três modos do valor de print servem (D29) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

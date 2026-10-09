@@ -54,7 +54,7 @@ O que cada peça do harness cobre:
 - `index.html`: o app inteiro. HTML + CSS + JS num arquivo só, sem build, sem dependências, sem backend. Ícone embutido em base64.
 - `scripts/verify.sh`: o comando único de verificação.
 - `tests/unit.py`: testes do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação).
-- `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/`.
+- `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
 - `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
@@ -77,12 +77,12 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 5. Apostas acompanham a luta ao vivo e fecham sozinhas com o resultado oficial.
 6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado e por evento.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
-8. Cashout: devolve o valor integral da aposta, só enquanto nenhuma luta dela começou.
+8. Cashout: devolve o valor integral enquanto nenhuma luta da aposta foi decidida; com parte da múltipla já batida, oferece um valor de mercado para encerrar. Congela com luta em andamento.
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
 10. Campos de valor com máscara de milhares.
-11. Moeda da simulação: real, dólar ou euro.
+11. Moeda da banca: real, dólar ou euro, escolhida no cartão de depósito. Passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
-13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora e o mesmo valor do original.
+13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. O valor segue o original; o que fazer com um valor em dinheiro é configurável.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -127,15 +127,15 @@ Detalhes que já morderam:
 Um IIFE com blocos nesta ordem:
 
 1. **`Core`**: funções puras, sem DOM. Conversão de odds, normalização da ESPN, modelo de preço, liquidação. É o que testar e o que reaproveitar se o projeto ganhar backend.
-2. **Formatação**: moeda BRL, datas pt-BR, tradução de categorias de peso.
-3. **Estado persistente**: `S` (carteira e apostas) e `D` (cache de dados da ESPN).
+2. **Formatação**: moeda da banca, datas pt-BR, tradução de categorias de peso.
+3. **Estado persistente**: `S` (carteira e apostas), `D` (cache de dados da ESPN) e `FX` (cotação guardada, com `loadFx`).
 4. **API**: `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`.
 5. **Liquidação**: `legOut`, `settle`, `resultText`.
 6. **Laço de sincronização**: `sync`, `schedule`.
 7. **Renderização**: `render` e as três telas (`vLutas`, `vApostas`, `vCarteira`), cupom (`renderSheet`, `slipSummary`), gráfico (`bindChart`).
 8. **Eventos**: um listener de clique delegado por `data-act`.
 
-`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S}` para teste.
+`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S, FX}` para teste.
 
 Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando.
 
@@ -144,20 +144,26 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 `oitolados.v1`:
 ```js
 { v: 1,
-  cur: 'BRL'|'USD'|'EUR',        // moeda da simulação
+  cur: 'BRL'|'USD'|'EUR',        // moeda da banca: todos os valores abaixo estão nela
+  conv: [{ t, from, to, rate, date }],   // conversões já feitas (as 20 últimas)
+  tip: { mode: 'same'|'units'|'fixed', srcUnit, fixU },   // o que fazer com o valor em dinheiro de um print copiado
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
-  bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt }] }
+  bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
 ```
 Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, fight, event, date, odd, src: 'real'|'est', out, res }`. Os textos são copiados na hora da aposta para o histórico continuar legível depois que a luta sai do placar.
 
 `sgp`: `{ [fid]: odd }` com o preço de cada combinada na mesma luta, fixado na hora da aposta.
+
+`cash`: só em aposta encerrada por cashout: `{ kind: 'refund'|'market', full, chance }`, o retorno possível e a chance usados na oferta.
 
 `unit`: quanto valia uma unidade quando a aposta foi feita. O resultado em unidades do histórico usa esse valor, não a unidade de hoje.
 
 O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma dos payouts`. Não criar campo de saldo.
 
 `oitolados.cache.v1`: último placar, odds, resultados, quedas e estatísticas, para abrir instantâneo e offline.
+
+`oitolados.fx.v1`: última cotação lida, `{ date, rates: { BRL: 1, USD, EUR }, ts }`.
 
 ### Chaves de seleção
 
@@ -217,21 +223,30 @@ Regras:
 
 ## Cashout
 
-Regra definida pelo Lucas em 09/10/2026 (D21 em `docs/decisoes.md`): **devolve o valor integral apostado, e só se a luta não começou**. Com luta em andamento, cashout e apostas ficam congelados.
+Regra do Lucas em 09/10/2026 (D21, revista pela D27 em `docs/decisoes.md`). São dois regimes, e o que separa um do outro é se alguma luta da aposta já bateu:
 
-`Core.cashout(bet, fights)` recebe a luta de cada perna e devolve `{ ok: true, value: stake }` ou `{ ok: false, why }`:
+1. **Nenhuma luta da aposta foi decidida:** devolve o valor integral apostado (`kind: 'refund'`). Funciona como cancelar a aposta.
+2. **Parte de uma múltipla já bateu e o resto ainda não começou:** oferece um valor de mercado para encerrar (`kind: 'market'`), como numa casa de verdade. Conta: `retorno possível × chance de agora do que falta × (1 − margem)`, com margem de 5% (`CASHOUT_MARGIN`), nunca acima do retorno possível.
+
+Com luta em andamento, cashout e apostas ficam congelados nos dois regimes: a ESPN não publica odd durante a luta, então não existe valor de mercado para calcular.
+
+`Core.cashout(bet, legs, probOf)` é puro. `legs` traz, por perna, `{ state, canceled, out }` da luta (ou `null` se a luta não está no placar) e `probOf(fid, keys)` devolve a chance de agora das seleções daquela luta. Devolve `{ ok: true, kind, value, full, chance }` ou `{ ok: false, why }`:
 
 | `why` | Quando | O que a tela mostra |
 |---|---|---|
 | `live` | alguma luta da aposta está em andamento | "Cashout congelado" |
-| `started` | alguma luta da aposta já começou ou terminou (inclui cancelada, que é anulada pela liquidação) | "Cashout encerrado" |
+| `settling` | uma luta acabou e o resultado dela ainda não foi lido, ou não resta nenhuma luta por começar | "Cashout volta quando sair o resultado" |
+| `noprice` | falta a odd de agora de uma luta que resta | "Cashout indisponível agora" |
 | `unknown` | alguma luta não está no placar carregado | "Cashout indisponível" |
+| `lost` | alguma perna já perdeu (a liquidação fecha a aposta como perdida) | nada |
 | `closed` | a aposta não está mais aberta | nada |
 
-- Vale para simples, múltipla e combinada. Numa múltipla, basta **uma** luta ter começado para o cashout acabar.
-- O valor não depende das odds: é sempre a stake. Não há cashout parcial nem valor de mercado.
-- `doCashout` recarrega o placar antes de devolver (mesma regra de `place()`): sem conexão não faz; se a luta começou nesse meio tempo, recusa.
-- A aposta fica com `status: 'cashed'`, `payout` igual à stake e `settledAt`. No saldo ela soma zero. Nas estatísticas conta como apostado e retornado, e fica fora da taxa de acerto, igual a uma aposta anulada.
+- **Retorno possível** (`full`): stake × odd da aposta, tirando as lutas anuladas, com as odds fixadas na hora da aposta (inclusive o preço da combinada em `sgp`).
+- **Chance de agora** (`chance`): produto, entre as lutas que restam, da chance das seleções de cada uma. Vem de `price(...).chance(keys)`: para um palpite de vencedor sozinho é a moneyline de agora sem a margem da casa; para qualquer outra seleção ou combinada é o `jointModel`, o mesmo que dá preço às combinadas. Seleção estimada usa a estimativa: a oferta não é mais precisa que a odd `≈` que a originou.
+- A oferta muda quando a odd da luta que resta muda. `sync()` recarrega as odds dos eventos que têm luta restante de aposta com luta já encerrada.
+- `doCashout` recarrega placar, odds das lutas restantes e resultados antes de pagar (mesma regra de `place()`): sem conexão não faz; se uma luta começou nesse meio tempo, recusa; se o valor mudou, mostra o novo e pede confirmação de novo.
+- A aposta fica com `status: 'cashed'`, `payout` igual ao valor pago, `settledAt` e `cash: { kind, full, chance }`. Nas estatísticas o lucro ou prejuízo do cashout entra no resultado, e a aposta fica fora da taxa de acerto, igual a uma anulada.
+- Não há cashout parcial (encerrar só uma parte do valor).
 
 ## Repetir aposta
 
@@ -241,7 +256,20 @@ O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas
 
 - **Máscara:** os campos de aposta e de depósito formatam enquanto se digita (`Core.maskMoney`): 1500 vira 1.500 e 12345,6 vira 12.345,6. Ponto é sempre separador de milhar; a primeira vírgula abre os centavos, com no máximo duas casas. `applyMask` mantém o cursor no lugar. Em teclado sem vírgula, um ponto digitado vira vírgula.
 - **Leitura:** `Core.parseMoney` ignora os pontos, então "1.000" é mil.
-- **Moeda:** `S.cur` guarda BRL, USD ou EUR, escolhida na Carteira. Muda só o símbolo e o formato (sempre no padrão brasileiro: US$ 1.000,00). **Os valores não são convertidos** e não há câmbio.
+- **Moeda:** `S.cur` guarda a moeda da banca (BRL, USD ou EUR). O formato numérico é sempre o brasileiro (US$ 1.000,00).
+
+## Moeda e câmbio
+
+Regra do Lucas em 09/10/2026 (D28): **a moeda se troca no cartão de depósito, e trocar converte tudo**.
+
+- O cartão de depósito tem o seletor de moeda. Escolher outra moeda não muda nada sozinho: mostra a cotação e quanto o saldo vira. A troca acontece por um de dois botões: "Converter a banca e depositar" (`deposit`) ou "Só converter a banca, sem depositar" (`convertOnly`). Os dois passam por `switchCurrency`.
+- **Banca vazia** (sem depósito e sem aposta): a moeda escolhida vira a da banca, sem consultar cotação.
+- **Banca com movimento:** `Core.convertState(S, to, rate)` converte depósitos, stake, payout e `unit` de cada aposta e o `cash.full`. Cada valor é arredondado a centavos, e os centavos que o arredondamento deslocar vão para o maior depósito, de modo que o saldo depois é exatamente o saldo antigo pela cotação. `unit` guarda 4 casas para o resultado em unidades não mudar. Ida e volta entre duas moedas pode diferir em centavos.
+- A conversão fica registrada em `S.conv` e a última aparece no cartão de Depósitos.
+- **Cotação:** serviço Frankfurter, `https://api.frankfurter.dev/v1/latest?base=BRL&symbols=USD,EUR`, sem chave. `Core.normFx` só aceita resposta com `base` BRL, `date` no formato AAAA-MM-DD e `rates.USD` e `rates.EUR` numéricos e positivos. Par que não envolve o real é calculado passando pelo real (`Core.fxRate`).
+- **Cache:** a cotação fica em `oitolados.fx.v1` e só é pedida de novo depois de 12 h (`FX_TTL`). Sem resposta do serviço, vale a cotação guardada, com a data dela na tela; sem nenhuma guardada, a conversão não é feita.
+- Se a cotação mudou entre a tela e a confirmação, `switchCurrency` mostra a nova e pede confirmação de novo, como `place()` faz com a odd.
+- O que o Frankfurter devolve e se ele aceita chamada do navegador são fatos de terceiro, conferidos em 09/10/2026 (ver `docs/verificacao.md`). `tests/contract_live.py` confere os dois toda semana, e a resposta real gravada está em `tests/fixtures/fx/`.
 
 ## Unidade
 
@@ -257,7 +285,15 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` do `index.html`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
 - **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems }`.
 - **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
-- **Valor:** se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual. Se traz um valor em dinheiro, usa o mesmo valor (o primeiro do texto, que no print é a aposta, não o retorno). Se não diz nada, considera 1u.
+- **Valor** (`Core.tipStake`): se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual, sempre. Se não diz nada, considera 1u. Se traz um valor em dinheiro (o primeiro do texto, que no print é a aposta, não o retorno), vale a configuração do cartão "Valor ao copiar um print", na Carteira (`S.tip`, limpo por `Core.tipCfg`):
+
+  | `mode` | O que faz com um print de R$ 1.750,00 |
+  |---|---|
+  | `same` (padrão) | aposta os mesmos R$ 1.750,00 |
+  | `units` | divide pelo valor de 1u de quem fez o print (`srcUnit`) e aposta essa quantidade da sua unidade. Sem `srcUnit` preenchido, age como `same` e a tela avisa |
+  | `fixed` | ignora o valor e aposta `fixU` unidades suas (1 por padrão, de 0,01 a 100) |
+
+  O leitor não olha o símbolo de moeda do print: o número é lido como está. `srcUnit` é um valor na moeda do print e não é convertido quando a banca muda de moeda.
 - **Odd:** a aposta é feita com a odd de agora. A odd do original aparece só para comparar.
 - **Fluxo:** a tela mostra o que foi entendido e o que não foi (`TIP_WHY`: `empty`, `nofight`, `ambiguous`, `nomarket`, e "não tem odd agora"). "Levar pro cupom" enche o cupom; a aposta é feita pelo botão de sempre. Mais de uma luta no mesmo texto vira múltipla.
 - **Limite conhecido:** o leitor de texto foi feito em cima de dois formatos reais (um print de casa de apostas e uma mensagem de canal). Formato novo que ele não entender: acrescentar o caso em `tests/unit.py` primeiro.
@@ -268,7 +304,7 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - `loadOdds`: por evento, só lutas `pre`, no máximo a cada 5 min; forçado no botão Atualizar e antes de aceitar aposta.
 - Intervalo do laço: 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta.
 - Antes de gravar uma aposta, `place()` recarrega placar e odds das lutas envolvidas. Se a luta começou, recusa; se a odd mudou, mostra a nova e pede confirmação.
-- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout segue a mesma trava.
+- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout congela enquanto houver luta da aposta em andamento.
 - Só atualiza com o app aberto; ao reabrir, busca os resultados e liquida o que ficou pendente.
 
 ## Interface
@@ -290,13 +326,13 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
 `unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro.
 
-`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
+`contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do `index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz um cashout e confere quando ele congela e quando acaba, imprime preços e liquidações e confere o saldo final esperado de R$ 1.604,40. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 

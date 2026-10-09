@@ -21,11 +21,11 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Mercados:** vencedor, método (KO/TKO, finalização, decisão), vai até a decisão, total de rounds, round em que acaba, vencedor e round, quedas na luta e por lutador.
 - **Simples, múltipla e combinada:** a combinada na mesma luta é precificada pela chance de tudo acontecer junto, não pela multiplicação das odds. Combinações impossíveis ou redundantes são recusadas.
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
-- **Cashout:** devolve o valor integral da aposta enquanto nenhuma luta dela começou. Com luta em andamento, cashout e apostas ficam congelados.
+- **Cashout:** devolve o valor integral enquanto nenhuma luta da aposta foi decidida. Se parte da múltipla já bateu e o resto ainda não começou, oferece um valor para encerrar, calculado pelas odds de agora. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
-- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora e o mesmo valor. A imagem é lida no próprio aparelho.
+- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. O que fazer com um print que traz o valor em dinheiro é configurável: mesmo valor, convertido em unidades ou um número fixo de unidades. A imagem é lida no próprio aparelho.
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). O cupom aceita valor em unidades e a Carteira mostra o resultado em unidades.
-- **Valores e moeda:** campos com máscara de milhares; simulação em real, dólar ou euro (muda o símbolo, sem conversão).
+- **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
 
 ## Como funciona
@@ -37,6 +37,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 | Vencedor, método por lutador, vai até a decisão, linha principal de rounds | Odds publicadas pela casa (hoje DraftKings), via ESPN |
 | Quedas, round exato, linhas alternativas de rounds, combinadas | Estimadas por um modelo próprio a partir das odds reais e do histórico dos lutadores. Aparecem com `≈` |
 | Liquidação | Sempre o resultado oficial: vencedor, método, round, tempo e quedas |
+| Cotação para trocar a moeda da banca | Frankfurter (`api.frankfurter.dev`), consultado só quando um depósito muda a moeda |
 
 Saldo e apostas ficam no `localStorage` do aparelho. A Carteira tem backup e restauração por texto.
 
@@ -63,11 +64,11 @@ scripts/verify.sh           # roda tudo
 | Teste | O que confere |
 |---|---|
 | `tests/unit.py` | Conversão de odds, modelo de preço, combinadas e cada regra de liquidação |
-| `tests/contract.py` | Os leitores da ESPN contra respostas reais gravadas em `tests/fixtures/espn/` |
+| `tests/contract.py` | Os leitores da ESPN e do serviço de câmbio contra respostas reais gravadas em `tests/fixtures/` |
 | `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
 | `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
-| `tests/contract_live.py` | A API real da ESPN. Roda toda semana no GitHub Actions e avisa se o formato mudar |
+| `tests/contract_live.py` | A API real da ESPN e o serviço de câmbio. Roda toda semana no GitHub Actions e avisa se o formato mudar |
 
 Tudo, menos o último, roda no GitHub Actions em cada PR e em cada push na `main`.
 
@@ -103,6 +104,7 @@ tests/mock_espn.py                   ESPN simulada, com lutadores fictícios
 tests/cov.py                         cobertura de código medida pelo navegador
 tests/package.json                   cópias locais do leitor de imagem para o teste
 tests/fixtures/espn/                 respostas reais da ESPN, reduzidas
+tests/fixtures/fx/                   resposta real do serviço de câmbio
 docs/decisoes.md                     o que foi decidido e por quê
 docs/verificacao.md                  o que foi verificado e o que não foi
 docs/escala.md                       caminho de escala

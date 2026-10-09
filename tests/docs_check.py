@@ -65,6 +65,9 @@ CONSTANTS = [
     (r'\[0\.5, 1, 2, 3\]\.map\(u =>', 'atalhos de 0,5u, 1u, 2u e 3u'),
     (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
     (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
+    (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
+    (r'FX_TTL = 12 \* 3600e3;', 'depois de 12 h'),
+    (r"\.slice\(-20\);\n    slip\.stake = ''", 'as 20 últimas'),
 ]
 for pattern, text in CONSTANTS:
     check('code still has the documented constant', re.search(pattern, html), pattern)
@@ -83,13 +86,15 @@ check('every priced market can be settled', priced == settle, f'{sorted(priced)}
 spec_status = set(re.search(r"status: ((?:'\w+'\|?)+), payout", spec).group(1).replace("'", '').split('|'))
 code_status = set(re.findall(r"status(?: ===|:) '(\w+)'", html)) | {'open'}
 check('bet statuses in the spec match the code', spec_status == code_status, f'{sorted(spec_status)} vs {sorted(code_status)}')
-cash_fn = html[html.index('function cashout(bet, fights)'):html.index('return { r2, am2dec')]
+cash_fn = html[html.index('function cashout(bet, legs, probOf)'):html.index('return { r2, am2dec')]
 code_why = set(re.findall(r"why: '(\w+)'", cash_fn))
 spec_why = set(re.findall(r'^\| `(\w+)` \| ', spec[spec.index('## Cashout'):spec.index('## Sincronização')], re.M))
 spec_why.discard('why')                       # the table header
 check('cashout reasons in the spec match the code', code_why == spec_why, f'{sorted(code_why)} vs {sorted(spec_why)}')
 check('every cashout reason the user can hit has a message', all(f'{w}:' in html[html.index('const CASH_WHY'):html.index('const cashoutOf')] for w in code_why - {'closed'}))
-check('cashout returns the stake and nothing else', 'return { ok: true, value: bet.stake };' in cash_fn)
+check('with nothing decided the cashout is the stake', "if (!won) return { ok: true, kind: 'refund', value: bet.stake };" in cash_fn)
+check('a market cashout never pays more than the bet could', 'Math.min(full, r2(full * prob * (1 - CASHOUT_MARGIN)))' in cash_fn)
+check('spec documents both cashout kinds', "`kind: 'refund'`" in spec and "`kind: 'market'`" in spec)
 
 # 5c. the image reader: versions pinned in the app match the local copies the tests use, and the integrity hash is the real one
 import base64, hashlib
@@ -105,14 +110,24 @@ check('app carries an integrity hash for the OCR script', bool(sri))
 if lib.exists() and sri:
     real = 'sha384-' + base64.b64encode(hashlib.sha384(lib.read_bytes()).digest()).decode()
     check('integrity hash matches the pinned OCR file', real == sri.group(1), f'{real} vs {sri.group(1)}')
+# 5d. the setting for copied bets: the modes in the spec table are the modes in the code
+code_modes = re.search(r"const TIP_MODES = \[([^\]]+)\];", html)
+spec_modes = re.findall(r'^  \| `(\w+)`', spec[spec.index('## Copiar aposta'):spec.index('## Sincronização')], re.M)
+spec_modes = [m for m in spec_modes if m != 'mode']      # the table header
+check('copied-bet modes in the spec match the code', bool(code_modes) and [m.strip(" '") for m in code_modes.group(1).split(',')] == spec_modes, f'{code_modes and code_modes.group(1)} vs {spec_modes}')
+check('fixed mode limits are the documented ones', 'clamp(r2(fix), 0.01, 100) : 1' in html and 'de 0,01 a 100' in spec)
+fxs = sorted(p.name for p in (ROOT / 'tests' / 'fixtures' / 'fx').glob('*.json'))
+check('every recorded exchange-rate sample is listed in its README', bool(fxs) and all(f'`{n}`' in read('tests/fixtures/fx/README.md') for n in fxs), fxs)
 check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
 
 # 6. storage keys and API hosts
-for key in ('oitolados.v1', 'oitolados.cache.v1'):
+for key in ('oitolados.v1', 'oitolados.cache.v1', 'oitolados.fx.v1'):
     check('storage key in code and spec', f"'{key}'" in html and f'`{key}`' in spec, key)
 for base in re.findall(r'`(?:SITE|CORE) = (https://[^`]+)`', spec):
     check('API base in code', base in html, base)
 check('spec documents both API bases', len(re.findall(r'`(?:SITE|CORE) = https://', spec)) == 2)
+fx_url = re.search(r"const FX_URL = '(https://[^']+)'", html)
+check('exchange-rate address is the same in the app, the spec and the live check', bool(fx_url) and f'`{fx_url.group(1)}`' in spec and fx_url.group(1) in read('tests/contract_live.py'), fx_url and fx_url.group(1))
 
 # 7. the expected end-to-end balance is the same everywhere it is quoted
 balances = {rel: set(re.findall(r'R\$ 1\.\d{3},\d{2}', read(rel))) for rel in ('CLAUDE.md', 'tests/e2e.py', 'docs/verificacao.md')}

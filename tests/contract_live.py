@@ -1,4 +1,4 @@
-"""Live contract check: does the real ESPN API still return what the app reads?
+"""Live contract check: do the real ESPN API and the exchange-rate service still return what the app reads?
 
 Usage: python3 tests/contract_live.py          (hits the real API; needs internet)
        python3 tests/contract_live.py --mock   (self-test of this script against tests/mock_espn.py)
@@ -40,8 +40,15 @@ async () => {
   if (sb.__error) return { checks, warns, unreachable: sb.__error };
   ok('scoreboard is readable', true);
   ok('scoreboard has events[]', Array.isArray(sb.events));
+
+  // the exchange-rate service used when a deposit changes the currency of the bankroll
+  const fxj = await tryGet('https://api.frankfurter.dev/v1/latest?base=BRL&symbols=USD,EUR'), fx = fxj.__error ? null : Core.normFx(fxj);
+  const fxRaw = JSON.stringify(fxj);
+  ok('exchange-rate service is readable', !fxj.__error, fxj.__error);
+  ok('exchange-rate answer has base BRL, a date and a positive USD and EUR rate', !!fx, fxRaw);
+  ok('rates are in a believable range (1 real buys between 0.05 and 1 dollar or euro)', fx && [fx.rates.USD, fx.rates.EUR].every(v => v > 0.05 && v < 1), fxRaw);
   const events = (sb.events || []).map(Core.normEvent), fights = events.flatMap(e => e.fights);
-  if (!fights.length) { warns.push('no UFC fights within 21 days either way: nothing else could be checked'); return { checks, warns }; }
+  if (!fights.length) { warns.push('no UFC fights within 21 days either way: nothing else could be checked'); return { checks, warns, fxRaw }; }
   const bad = fights.find(f => !(f.id && f.a.id && f.b.id && f.a.last && f.b.last && isFinite(f.date) && Number.isInteger(f.rounds) && f.rounds >= 1 && f.rounds <= 5 && f.weight));
   ok(`all ${fights.length} fights have ids, names, date, weight class and a round count from 1 to 5`, !bad, bad && JSON.stringify(bad));
   // UFC bouts are 3 or 5 rounds; anything else is reported, not failed: the app uses the number as ESPN gives it
@@ -94,7 +101,7 @@ async () => {
     else ok('athlete statistics expose takedownAvg', typeof Core.statValue(as, 'takedownAvg') === 'number');
   }
   if (window.pyGet) { const bad = cors.filter(c => !(c.acao === '*' || c.acao === window.ORIGIN)); ok(`all ${cors.length} answers carry the CORS header a browser on ${window.ORIGIN} needs`, !bad.length, bad.slice(0, 3).map(c => c.acao + ' ' + c.u).join(' | ')); }
-  return { checks, warns, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}` };
+  return { checks, warns, fxRaw, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}` };
 }
 """
 
@@ -142,6 +149,9 @@ for c in res['checks']:
 for w in res['warns']:
     print('warn ' + w)
     annotate('warning', w)
+if res.get('fxRaw'):
+    print('fx   ' + res['fxRaw'])
+    annotate('notice', 'exchange-rate answer: ' + res['fxRaw'])
 print(f"{'mock' if MOCK else 'live'}: {len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
 if res.get('unreachable'):
     msg = f"inconclusive: this machine could not read the ESPN scoreboard ({res['unreachable']}). Nothing was checked. Run python3 tests/contract_live.py from a home connection."
