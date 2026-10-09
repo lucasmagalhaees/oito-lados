@@ -1,0 +1,14 @@
+{
+  "splits": {
+    "categories": [
+      { "name": "general",
+        "stats": [
+          { "name": "knockDowns", "value": 1 },
+          { "name": "takedownsAttempted", "displayName": "Takedowns Attempted", "abbreviation": "TDA", "value": 5, "displayValue": "5" },
+          { "name": "takedownsLanded", "displayName": "Takedowns Landed", "abbreviation": "TDL", "value": 3, "displayValue": "3" },
+          { "name": "takedownsSlams", "displayName": "Takedowns Slams", "abbreviation": "TDS", "value": 0, "displayValue": "0" },
+          { "name": "takedownAccuracy", "displayName": "Takedown Accuracy", "abbreviation": "TK ACC", "value": 0.6, "displayValue": "0.60" }
+        ] }
+    ]
+  }
+}

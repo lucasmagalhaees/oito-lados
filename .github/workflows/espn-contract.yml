@@ -1,0 +1,30 @@
+name: ESPN contract
+
+# Checks the real ESPN API against what the app reads. A red run means the API changed (or stopped answering):
+# look at the failed check, record a fresh sample in tests/fixtures/espn/ and fix the normalisers.
+on:
+  schedule:
+    - cron: "17 12 * * 5"   # Fridays 09:17 in São Paulo, ahead of the weekend card
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: live API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright
+        run: |
+          pip install -r tests/requirements.txt
+          playwright install --with-deps chromium
+      - name: Self-test of the checker
+        run: python tests/contract_live.py --mock
+      - name: Check the real API
+        run: python tests/contract_live.py

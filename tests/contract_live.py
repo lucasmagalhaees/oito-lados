@@ -1,0 +1,112 @@
+"""Live contract check: does the real ESPN API still return what the app reads?
+
+Usage: python3 tests/contract_live.py          (hits the real API; needs internet)
+       python3 tests/contract_live.py --mock   (self-test of this script against tests/mock_espn.py)
+
+Serves the repo on localhost, opens index.html in headless Chromium and, from inside the page (so CORS is part of the
+check), fetches a scoreboard, one finished fight and one upcoming fight with odds, and runs the app's own parsers on them.
+A failed check means the API changed or stopped answering browsers. A warning means there was nothing to check
+(no card this week, odds not published yet), which is normal.
+"""
+import functools, http.server, pathlib, sys, threading
+from playwright.sync_api import sync_playwright
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+MOCK = '--mock' in sys.argv
+
+JS = r"""
+async () => {
+  const { Core } = window.__OL, checks = [], warns = [];
+  const ok = (name, cond, detail) => checks.push({ name, ok: !!cond, detail: detail == null ? '' : String(detail).slice(0, 300) });
+  const get = async u => { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + u); return r.json(); };
+  const tryGet = async u => { try { return await get(u); } catch (e) { return { __error: String(e) }; } };
+  const SITE = 'https://site.api.espn.com/apis/site/v2/sports/mma/ufc', CORE = 'https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc';
+  const DAY = 864e5, now = Date.now();
+  const ymd = t => { const d = new Date(t); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
+
+  const sb = await tryGet(`${SITE}/scoreboard?dates=${ymd(now - 21 * DAY)}-${ymd(now + 21 * DAY)}&limit=100`);
+  ok('scoreboard answers a browser on another origin', !sb.__error, sb.__error);
+  if (sb.__error) return { checks, warns };
+  ok('scoreboard has events[]', Array.isArray(sb.events));
+  const events = (sb.events || []).map(Core.normEvent), fights = events.flatMap(e => e.fights);
+  if (!fights.length) { warns.push('no UFC fights within 21 days either way: nothing else could be checked'); return { checks, warns }; }
+  const bad = fights.find(f => !(f.id && f.a.id && f.b.id && f.a.last && f.b.last && isFinite(f.date) && [3, 5].includes(f.rounds) && f.weight));
+  ok(`all ${fights.length} fights have ids, names, date, weight class and 3 or 5 rounds`, !bad, bad && JSON.stringify(bad));
+  const odd = fights.find(f => !['pre', 'in', 'post'].includes(f.state));
+  ok('every fight state is pre, in or post', !odd, odd && odd.state);
+  const allPost = events.filter(e => e.fights.length && e.fights.every(f => f.state === 'post'));
+  ok('events whose fights are all over read as completed', allPost.every(e => e.completed), allPost.filter(e => !e.completed).map(e => e.name));
+
+  const done = fights.filter(f => f.state === 'post' && !f.canceled).sort((a, b) => b.date - a.date)[0];
+  if (!done) warns.push('no finished fight in the window: result and takedown stats not checked');
+  else {
+    const st = await tryGet(`${CORE}/events/${done.eventId}/competitions/${done.id}/status`);
+    ok('status of a finished fight is readable', !st.__error, st.__error);
+    const r = st.__error ? null : Core.normResult(st);
+    ok('finished fight carries a result object', !!r, JSON.stringify(st.result || null));
+    ok('result method is recognised', r && r.method !== 'unknown', r && (r.label || 'empty label'));
+    ok('result has a round and an elapsed time', r && r.round >= 1 && r.time != null && r.time <= 300, r && `${r.round} / ${r.clock}`);
+    const tds = [];
+    for (const x of [done.a, done.b]) { const j = await tryGet(`${CORE}/events/${done.eventId}/competitions/${done.id}/competitors/${x.id}/statistics`); tds.push(j.__error ? null : Core.statValue(j, 'takedownsLanded')); }
+    ok('takedownsLanded is published for both fighters of a finished fight', tds.every(v => typeof v === 'number'), JSON.stringify(tds));
+  }
+
+  const pre = fights.filter(f => f.state === 'pre' && !f.canceled).sort((a, b) => a.date - b.date);
+  if (!pre.length) warns.push('no upcoming fight in the window: odds not checked');
+  let priced = null, tried = 0;
+  for (const f of pre.slice(0, 40)) {
+    tried++;
+    const j = await tryGet(`${CORE}/events/${f.eventId}/competitions/${f.id}/odds`);
+    if (j.__error) { ok('odds endpoint is readable', false, j.__error); break; }
+    if (!(j.items || []).length) continue;
+    const o = Core.normOdds(j, f);
+    ok('an odds response with items normalises', !!o, JSON.stringify(j.items[0]).slice(0, 300));
+    if (o) priced = { f, o };
+    break;
+  }
+  if (pre.length && !priced && !checks.some(c => !c.ok)) warns.push(`none of the ${tried} upcoming fights checked has odds published yet`);
+  if (priced) {
+    const { f, o } = priced;
+    ok('moneyline is a sane decimal price on both sides', [o.ml.a, o.ml.b].every(v => v > 1 && v < 60), JSON.stringify(o.ml));
+    if (!o.method) warns.push('first priced fight has no method-of-victory lines (the model fills in)');
+    if (!o.total) warns.push('first priced fight has no total-rounds line (the model fills in)');
+    if (o.props) { const pj = await tryGet(o.props + (o.props.includes('?') ? '&' : '?') + 'limit=100'); if (!pj.__error) Core.attachDistance(o, f, pj); if (!o.dist) warns.push('first priced fight has no usable "goes the distance" prop'); }
+    else warns.push('odds response has no propBets link');
+    const P = Core.price(f, o, {});
+    ok('the full market list builds from live odds', P.groups.length >= 8 && P.groups[0].id === 'ml', P.groups.map(g => g.id).join(','));
+    const as = await tryGet(`https://sports.core.api.espn.com/v2/sports/mma/athletes/${f.a.id}/statistics`);
+    if (as.__error) warns.push('athlete statistics not available for the first priced fighter (normal for a debut)');
+    else ok('athlete statistics expose takedownAvg', typeof Core.statValue(as, 'takedownAvg') === 'number');
+  }
+  return { checks, warns, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}` };
+}
+"""
+
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=str(ROOT)))
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+url = f'http://127.0.0.1:{srv.server_address[1]}/index.html'
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page()
+    if MOCK:
+        sys.path.insert(0, str(ROOT / 'tests'))
+        from mock_espn import PHASE, handle
+        PHASE['n'] = 2
+        page.route('**/*', lambda r: handle(r) if not r.request.url.startswith('http://127.0.0.1') else r.continue_())
+    page.goto(url)
+    page.wait_for_function('window.__OL && window.__OL.Core')
+    res = page.evaluate(JS)
+    browser.close()
+srv.shutdown()
+
+failed = [c for c in res['checks'] if not c['ok']]
+for c in res['checks']:
+    print(('ok   ' if c['ok'] else 'FAIL ') + c['name'] + (f"  -> {c['detail']}" if c['detail'] and not c['ok'] else ''))
+for w in res['warns']:
+    print('warn ' + w)
+print(f"{'mock' if MOCK else 'live'}: {len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
+sys.exit(1 if failed else 0)

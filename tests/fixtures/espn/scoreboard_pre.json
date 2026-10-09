@@ -1,0 +1,28 @@
+{
+  "events": [
+    {
+      "id": "600061541",
+      "name": "UFC Fight Night: Allen vs. Duncan",
+      "date": "2026-10-10T21:00Z",
+      "status": { "type": { "name": "STATUS_SCHEDULED" } },
+      "competitions": [
+        {
+          "id": "401916276",
+          "date": "2026-10-11T00:00Z",
+          "type": { "id": "972", "abbreviation": "Middleweight" },
+          "competitors": [
+            { "id": "4025699", "type": "athlete", "order": 1, "winner": false,
+              "athlete": { "fullName": "Brendan Allen", "displayName": "Brendan Allen", "shortName": "B. Allen", "flag": { "alt": "Brazil" } },
+              "records": [ { "name": "overall", "abbreviation": "TOT", "type": "total", "summary": "27-7-0" } ] },
+            { "id": "4848674", "type": "athlete", "order": 2, "winner": false,
+              "athlete": { "fullName": "Christian Leroy Duncan", "displayName": "Christian Leroy Duncan", "shortName": "C. Duncan", "flag": { "alt": "England" } },
+              "records": [ { "name": "overall", "abbreviation": "TOT", "type": "total", "summary": "15-2-0" } ] }
+          ],
+          "status": { "clock": 0, "displayClock": "-", "period": 0,
+            "type": { "id": "1", "name": "STATUS_SCHEDULED", "state": "pre", "completed": false, "description": "Scheduled" } },
+          "format": { "regulation": { "periods": 5 } }
+        }
+      ]
+    }
+  ]
+}
