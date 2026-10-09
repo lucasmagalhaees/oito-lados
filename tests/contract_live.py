@@ -8,7 +8,7 @@ check), fetches a scoreboard, one finished fight and one upcoming fight with odd
 A failed check means the API changed or stopped answering browsers. A warning means there was nothing to check
 (no card this week, odds not published yet), which is normal.
 """
-import functools, http.server, os, pathlib, sys, threading
+import functools, http.server, os, pathlib, sys, threading, urllib.error, urllib.request
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -97,11 +97,26 @@ with sync_playwright() as p:
         from mock_espn import PHASE, handle
         PHASE['n'] = 2
         page.route('**/*', lambda r: handle(r) if not r.request.url.startswith('http://127.0.0.1') else r.continue_())
+    seen = []                                   # what the browser saw on the ESPN hosts, to explain a failure
+    page.on('response', lambda r: seen.append(f'HTTP {r.status} {r.url[:90]}') if 'espn.com' in r.url and len(seen) < 6 else None)
+    page.on('requestfailed', lambda r: seen.append(f'{r.failure} {r.url[:90]}') if 'espn.com' in r.url and len(seen) < 6 else None)
     page.goto(url)
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS)
+    agent = page.evaluate('navigator.userAgent')
     browser.close()
 srv.shutdown()
+
+def probe(origin):
+    # the same scoreboard call made from Python, outside the browser: tells "this machine cannot reach ESPN" apart from "ESPN refused the browser"
+    req = urllib.request.Request('https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard', headers={'Origin': origin, 'User-Agent': agent})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return f"HTTP {r.status}, access-control-allow-origin: {r.headers.get('access-control-allow-origin')}"
+    except urllib.error.HTTPError as e:
+        return f"HTTP {e.code}, access-control-allow-origin: {e.headers.get('access-control-allow-origin')}"
+    except Exception as e:
+        return f'no answer ({e})'
 
 failed = [c for c in res['checks'] if not c['ok']]
 
@@ -118,5 +133,10 @@ for w in res['warns']:
     print('warn ' + w)
     annotate('warning', w)
 print(f"{'mock' if MOCK else 'live'}: {len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
+if not MOCK and failed and failed[0]['name'].startswith('scoreboard answers'):
+    origin = url.rsplit('/', 1)[0]
+    for line in [f'outside the browser, same call with Origin {origin}: {probe(origin)}', f'outside the browser, with Origin https://oito-lados.vercel.app: {probe("https://oito-lados.vercel.app")}', 'in the browser: ' + (' | '.join(seen) or 'no ESPN request was observed'), 'browser user agent: ' + agent]:
+        print('diag ' + line)
+        annotate('warning', 'diagnosis: ' + line)
 annotate('notice', f"{len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
 sys.exit(1 if failed else 0)
