@@ -5,6 +5,8 @@
 [![CI](https://github.com/lucasmagalhaees/oito-lados/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasmagalhaees/oito-lados/actions/workflows/ci.yml)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-informational)](LICENSE)
 
+No ar em **https://oito-lados.vercel.app**.
+
 Simulador de apostas de UFC com **dinheiro fictício** e **odds reais**. Você deposita quanto quiser de mentira, aposta no card da semana e o app acompanha as lutas ao vivo e fecha as apostas com o resultado oficial. Nenhum centavo de verdade entra ou sai.
 
 | Lutas | Cupom | Ao vivo | Carteira |
@@ -19,6 +21,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Mercados:** vencedor, método (KO/TKO, finalização, decisão), vai até a decisão, total de rounds, round em que acaba, vencedor e round, quedas na luta e por lutador.
 - **Simples, múltipla e combinada:** a combinada na mesma luta é precificada pela chance de tudo acontecer junto, não pela multiplicação das odds. Combinações impossíveis ou redundantes são recusadas.
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
+- **Cashout:** devolve o valor integral da aposta enquanto nenhuma luta dela começou. Com luta em andamento, cashout e apostas ficam congelados.
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
 
 ## Como funciona

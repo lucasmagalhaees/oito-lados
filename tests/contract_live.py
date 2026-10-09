@@ -8,7 +8,7 @@ check), fetches a scoreboard, one finished fight and one upcoming fight with odd
 A failed check means the API changed or stopped answering browsers. A warning means there was nothing to check
 (no card this week, odds not published yet), which is normal.
 """
-import functools, http.server, pathlib, sys, threading
+import functools, http.server, os, pathlib, sys, threading
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -104,9 +104,19 @@ with sync_playwright() as p:
 srv.shutdown()
 
 failed = [c for c in res['checks'] if not c['ok']]
+
+def annotate(level, text):
+    # on GitHub Actions each failed check and warning becomes an annotation on the run, readable without opening the log
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and not MOCK:
+        print(f'::{level} title=ESPN contract::' + ' '.join(str(text).split()))
+
 for c in res['checks']:
     print(('ok   ' if c['ok'] else 'FAIL ') + c['name'] + (f"  -> {c['detail']}" if c['detail'] and not c['ok'] else ''))
+    if not c['ok']:
+        annotate('error', c['name'] + (' -> ' + c['detail'] if c['detail'] else ''))
 for w in res['warns']:
     print('warn ' + w)
+    annotate('warning', w)
 print(f"{'mock' if MOCK else 'live'}: {len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
+annotate('notice', f"{len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
 sys.exit(1 if failed else 0)

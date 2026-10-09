@@ -74,6 +74,18 @@ check('spec key table matches settlement', doc_keys == settle, f'{sorted(doc_key
 check('settlement matches combo predicates', settle == preds, f'{sorted(settle)} vs {sorted(preds)}')
 check('every priced market can be settled', priced == settle, f'{sorted(priced)} vs {sorted(settle)}')
 
+# 5b. bet statuses and cashout reasons: spec and code name the same ones
+spec_status = set(re.search(r"status: ((?:'\w+'\|?)+), payout", spec).group(1).replace("'", '').split('|'))
+code_status = set(re.findall(r"status(?: ===|:) '(\w+)'", html)) | {'open'}
+check('bet statuses in the spec match the code', spec_status == code_status, f'{sorted(spec_status)} vs {sorted(code_status)}')
+cash_fn = html[html.index('function cashout(bet, fights)'):html.index('return { r2, am2dec')]
+code_why = set(re.findall(r"why: '(\w+)'", cash_fn))
+spec_why = set(re.findall(r'^\| `(\w+)` \| ', spec[spec.index('## Cashout'):spec.index('## Sincronização')], re.M))
+spec_why.discard('why')                       # the table header
+check('cashout reasons in the spec match the code', code_why == spec_why, f'{sorted(code_why)} vs {sorted(spec_why)}')
+check('every cashout reason the user can hit has a message', all(f'{w}:' in html[html.index('const CASH_WHY'):html.index('const cashoutOf')] for w in code_why - {'closed'}))
+check('cashout returns the stake and nothing else', 'return { ok: true, value: bet.stake };' in cash_fn)
+
 # 6. storage keys and API hosts
 for key in ('oitolados.v1', 'oitolados.cache.v1'):
     check('storage key in code and spec', f"'{key}'" in html and f'`{key}`' in spec, key)

@@ -18,6 +18,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 10. Pedido de documentar tudo no repositório e de um harness contra alucinação de IA (D16).
 11. Acesso de escrita do Claude ao repositório liberado; primeiro branch enviado.
 12. PR #1 (o app) aprovado e mesclado pelo Lucas. Primeiro deploy na Vercel falhou por detecção de Python (ver D12); correção enviada no PR seguinte, junto com a documentação e o harness.
+13. PRs #2 e #3 mesclados; produção no ar em https://oito-lados.vercel.app. Pedido de cashout (D21).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -155,12 +156,20 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 - **Decisão:** página web adicionada à Tela de Início. PWA completo e app nativo ficam para depois.
 
+## D21. Cashout devolve o valor integral, só antes da luta
+
+- **Contexto:** pedido de opção de cashout nas apostas. Nas palavras do Lucas: "pode retornar o valor integral apenas se a luta não começou; se a luta está em andamento, congela cashout e apostas".
+- **Decisão:** o cashout devolve a stake inteira enquanto nenhuma luta da aposta começou. Luta em andamento congela. Luta começada ou terminada encerra o cashout, e a aposta segue para a liquidação normal.
+- **Interpretação que precisou ser feita (confirmar com o Lucas):** numa múltipla, basta uma luta ter começado para o cashout acabar, mesmo que as outras ainda não tenham começado. A alternativa seria liberar de novo entre uma luta e outra.
+- **Descartado:** cashout a valor de mercado (stake × odd × chance atual, com margem), que chegou a ser desenhado. Exigiria odds ao vivo, que a ESPN não publica, e o pedido foi por devolução integral.
+- **Consequência:** antes da luta o cashout funciona como cancelar a aposta sem custo. Dá para apostar, ver a odd piorar e desistir de graça; é aceitável porque o dinheiro é fictício. Aposta com cashout entra no histórico com resultado zero e fica fora da taxa de acerto.
+
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
-| Confirmar que o deploy na Vercel passa depois da correção do `vercel.json` | Lucas, no merge do PR do harness |
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
+| Confirmar a regra do cashout em múltipla (D21) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Primeira execução de `tests/contract_live.py` contra a API real | automática, no GitHub Actions |
