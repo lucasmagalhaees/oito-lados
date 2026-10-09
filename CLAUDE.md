@@ -80,7 +80,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 8. Cashout: devolve o valor integral enquanto nenhuma luta da aposta foi decidida; com parte da múltipla já batida, oferece um valor de mercado para encerrar. Congela com luta em andamento.
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
 10. Campos de valor com máscara de milhares.
-11. Moeda da simulação: real, dólar ou euro.
+11. Moeda da banca: real, dólar ou euro, escolhida na hora de depositar. Depositar em outra moeda converte a banca inteira pela cotação do dia.
 12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
 13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora e o mesmo valor do original.
 
@@ -127,15 +127,15 @@ Detalhes que já morderam:
 Um IIFE com blocos nesta ordem:
 
 1. **`Core`**: funções puras, sem DOM. Conversão de odds, normalização da ESPN, modelo de preço, liquidação. É o que testar e o que reaproveitar se o projeto ganhar backend.
-2. **Formatação**: moeda BRL, datas pt-BR, tradução de categorias de peso.
-3. **Estado persistente**: `S` (carteira e apostas) e `D` (cache de dados da ESPN).
+2. **Formatação**: moeda da banca, datas pt-BR, tradução de categorias de peso.
+3. **Estado persistente**: `S` (carteira e apostas), `D` (cache de dados da ESPN) e `FX` (cotação guardada, com `loadFx`).
 4. **API**: `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`.
 5. **Liquidação**: `legOut`, `settle`, `resultText`.
 6. **Laço de sincronização**: `sync`, `schedule`.
 7. **Renderização**: `render` e as três telas (`vLutas`, `vApostas`, `vCarteira`), cupom (`renderSheet`, `slipSummary`), gráfico (`bindChart`).
 8. **Eventos**: um listener de clique delegado por `data-act`.
 
-`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S}` para teste.
+`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S, FX}` para teste.
 
 Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando.
 
@@ -144,7 +144,8 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 `oitolados.v1`:
 ```js
 { v: 1,
-  cur: 'BRL'|'USD'|'EUR',        // moeda da simulação
+  cur: 'BRL'|'USD'|'EUR',        // moeda da banca: todos os valores abaixo estão nela
+  conv: [{ t, from, to, rate, date }],   // conversões já feitas (as 20 últimas)
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
   bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
@@ -160,6 +161,8 @@ Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, fight, event, date, odd, s
 O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma dos payouts`. Não criar campo de saldo.
 
 `oitolados.cache.v1`: último placar, odds, resultados, quedas e estatísticas, para abrir instantâneo e offline.
+
+`oitolados.fx.v1`: última cotação lida, `{ date, rates: { BRL: 1, USD, EUR }, ts }`.
 
 ### Chaves de seleção
 
@@ -252,7 +255,20 @@ O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas
 
 - **Máscara:** os campos de aposta e de depósito formatam enquanto se digita (`Core.maskMoney`): 1500 vira 1.500 e 12345,6 vira 12.345,6. Ponto é sempre separador de milhar; a primeira vírgula abre os centavos, com no máximo duas casas. `applyMask` mantém o cursor no lugar. Em teclado sem vírgula, um ponto digitado vira vírgula.
 - **Leitura:** `Core.parseMoney` ignora os pontos, então "1.000" é mil.
-- **Moeda:** `S.cur` guarda BRL, USD ou EUR, escolhida na Carteira. Muda só o símbolo e o formato (sempre no padrão brasileiro: US$ 1.000,00). **Os valores não são convertidos** e não há câmbio.
+- **Moeda:** `S.cur` guarda a moeda da banca (BRL, USD ou EUR). O formato numérico é sempre o brasileiro (US$ 1.000,00).
+
+## Moeda e câmbio
+
+Regra do Lucas em 09/10/2026 (D28): **a moeda só se troca na hora de depositar, e trocar converte tudo**.
+
+- O cartão de depósito tem o seletor de moeda. Escolher outra moeda não muda nada sozinho: mostra a cotação e quanto o saldo vira. A troca acontece no depósito (`deposit`).
+- **Banca vazia** (sem depósito e sem aposta): a moeda escolhida vira a da banca, sem consultar cotação.
+- **Banca com movimento:** `Core.convertState(S, to, rate)` converte depósitos, stake, payout e `unit` de cada aposta e o `cash.full`. Cada valor é arredondado a centavos, e os centavos que o arredondamento deslocar vão para o maior depósito, de modo que o saldo depois é exatamente o saldo antigo pela cotação. `unit` guarda 4 casas para o resultado em unidades não mudar. Ida e volta entre duas moedas pode diferir em centavos.
+- A conversão fica registrada em `S.conv` e a última aparece no cartão de Depósitos.
+- **Cotação:** serviço Frankfurter, `https://api.frankfurter.dev/v1/latest?base=BRL&symbols=USD,EUR`, sem chave. `Core.normFx` só aceita resposta com `base` BRL, `date` no formato AAAA-MM-DD e `rates.USD` e `rates.EUR` numéricos e positivos. Par que não envolve o real é calculado passando pelo real (`Core.fxRate`).
+- **Cache:** a cotação fica em `oitolados.fx.v1` e só é pedida de novo depois de 12 h (`FX_TTL`). Sem resposta do serviço, vale a cotação guardada, com a data dela na tela; sem nenhuma guardada, a conversão não é feita.
+- Se a cotação mudou entre a tela e a confirmação, `deposit` mostra a nova e pede confirmação de novo, como `place()` faz com a odd.
+- O que o Frankfurter devolve e se ele aceita chamada do navegador são fatos de terceiro: ver a data da última conferência em `docs/verificacao.md`. `tests/contract_live.py` confere os dois toda semana.
 
 ## Unidade
 
@@ -301,13 +317,13 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
 `unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro.
 
-`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
+`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do `index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, deposita em outra moeda e confere a conversão da banca (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 

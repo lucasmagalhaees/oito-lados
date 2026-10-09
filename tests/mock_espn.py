@@ -53,10 +53,15 @@ def props(fid):
     else: return dict(count=0, items=[])
     return dict(count=2, items=[dict(type=dict(id='63', name='Fight To Go The Distance'), odds=dict(american=dict(value=x))) for x in v])
 calls = []
+# exchange rates: obviously invented round numbers (1 real = 0.20 dollar = 0.16 euro), so nobody takes them for a real quote
+FX = {'down': False, 'calls': 0, 'body': dict(amount=1.0, base='BRL', date='2026-01-02', rates=dict(EUR=0.16, USD=0.2))}
 def handle(route):
     u = route.request.url; calls.append(u)
     def ok(o): route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps(o))
     if 'fonts.g' in u: return route.abort()
+    if 'api.frankfurter.dev' in u:
+        FX['calls'] += 1
+        return route.abort() if FX['down'] else ok(FX['body'])
     if '/scoreboard' in u: return ok(scoreboard())
     m = re.search(r'/competitions/(\w+)/odds/100/propBets', u)
     if m: return ok(props(m.group(1)))

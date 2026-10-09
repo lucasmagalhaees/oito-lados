@@ -187,6 +187,40 @@ JS = r"""
   eq('field text of 1234.5', Core.moneyText(1234.5), '1.234,5');
   eq('field text of 730', Core.moneyText(730), '730');
 
+  /* ---- currency: the rate answer, the cross rate and converting the whole state ---- */
+  const FXJ = { amount: 1.0, base: 'BRL', date: '2026-01-02', rates: { EUR: 0.16, USD: 0.2 } };
+  const fx = Core.normFx(FXJ);
+  eq('fx: answer read with the base at 1', fx, { date: '2026-01-02', rates: { BRL: 1, USD: 0.2, EUR: 0.16 } });
+  for (const [name, bad] of [['another base', { ...FXJ, base: 'USD' }], ['a rate missing', { ...FXJ, rates: { USD: 0.2 } }], ['a zero rate', { ...FXJ, rates: { USD: 0, EUR: 0.16 } }],
+    ['a rate as text', { ...FXJ, rates: { USD: '0.2', EUR: 0.16 } }], ['no date', { ...FXJ, date: undefined }], ['a date in another shape', { ...FXJ, date: '02/01/2026' }], ['no rates', { base: 'BRL', date: '2026-01-02' }], ['null', null], ['text', 'oops']])
+    eq('fx: rejects ' + name, Core.normFx(bad), null);
+  near('fx: real to dollar', Core.fxRate(fx, 'BRL', 'USD'), 0.2);
+  near('fx: dollar to real', Core.fxRate(fx, 'USD', 'BRL'), 5);
+  near('fx: dollar to euro goes through the real', Core.fxRate(fx, 'USD', 'EUR'), 0.8);
+  near('fx: same currency', Core.fxRate(fx, 'EUR', 'EUR'), 1);
+  eq('fx: unknown currency', Core.fxRate(fx, 'BRL', 'GBP'), null);
+  eq('fx: no rates yet', Core.fxRate(null, 'BRL', 'USD'), null);
+  const ST0 = { v: 1, cur: 'BRL', unitPct: 10, deposits: [{ t: 1, v: 1000 }, { t: 2, v: 50.03 }], bets: [
+    { id: 'a', stake: 100, unit: 100, payout: 167, status: 'won', legs: [] }, { id: 'b', stake: 50.03, unit: 105, payout: 0, status: 'open', legs: [] },
+    { id: 'c', stake: 10, payout: 15.19, status: 'cashed', cash: { kind: 'market', full: 34.2, chance: 0.4675 }, legs: [] }, { id: 'd', stake: 40, unit: 100, payout: 40, status: 'cashed', cash: { kind: 'refund', full: null, chance: null }, legs: [] }] };
+  const before = JSON.stringify(ST0), US = Core.convertState(ST0, 'USD', 0.2);
+  eq('convert: the state given is left alone', JSON.stringify(ST0), before);
+  eq('convert: currency', US.cur, 'USD');
+  eq('convert: stakes, payouts and units', US.bets.map(b => [b.stake, b.payout, b.unit]), [[20, 33.4, 20], [10.01, 0, 21], [2, 3.04, undefined], [8, 8, 20]]);
+  eq('convert: the possible return of a market cashout', [US.bets[2].cash, US.bets[3].cash], [{ kind: 'market', full: 6.84, chance: 0.4675 }, { kind: 'refund', full: null, chance: null }]);
+  eq('convert: everything else is kept', [US.v, US.unitPct, US.bets[0].id, US.bets[0].status, US.deposits[1].t], [1, 10, 'a', 'won', 2]);
+  eq('convert: balance before', Core.balanceOf(ST0), 1072.19);
+  eq('convert: balance is the old one at the rate, to the cent', Core.balanceOf(US), 214.44);
+  eq('convert: deposits', US.deposits.map(d => d.v), [200, 10.01]);
+  const tight = { deposits: [{ t: 1, v: 100.06 }], bets: [{ stake: 50.03, payout: 0, status: 'open' }, { stake: 50.03, payout: 0, status: 'open' }] };
+  const tightUS = Core.convertState(tight, 'USD', 0.2);
+  eq('convert: a spent balance never turns negative', Core.balanceOf(tightUS), 0);
+  eq('convert: the cent that rounding moved goes into the largest deposit', [tightUS.deposits[0].v, tightUS.bets.map(b => b.stake)], [20.02, [10.01, 10.01]]);
+  eq('convert: tiny amounts do not vanish', Core.convertState({ deposits: [{ t: 1, v: 0.02 }], bets: [{ stake: 0.02, payout: 0 }] }, 'USD', 0.2).bets[0].stake, 0.01);
+  eq('convert: empty state', Core.convertState({ v: 1, deposits: [], bets: [] }, 'EUR', 0.16), { v: 1, deposits: [], bets: [], cur: 'EUR' });
+  const back = Core.convertState(US, 'BRL', 5);
+  near('convert: there and back lands within cents', Core.balanceOf(back), 1072.19, 0.03);
+
   /* ---- unit: a percentage of the bankroll, 10% by default ---- */
   eq('unit default is 10% of the bankroll', Core.unitValue(1000, undefined), 100);
   eq('unit at 2%', Core.unitValue(1000, 2), 20);

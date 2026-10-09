@@ -605,6 +605,35 @@ const Core = (() => {
   const unitPct = v => { const n = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : Number(v); return isFinite(n) && n > 0 ? clamp(r2(n), 0.1, 100) : UNIT_PCT_DEFAULT; };
   const unitValue = (bankroll, pct) => r2(Math.max(0, Number(bankroll) || 0) * unitPct(pct) / 100);
 
+  /* ---------- currency ----------
+     The bankroll lives in one currency. Depositing in another one converts everything at the day's rate.
+     normFx reads the Frankfurter answer for base=BRL into { date, rates: { BRL: 1, USD, EUR } }, or null if it is not that. */
+  function normFx(j) {
+    if (!j || typeof j !== 'object' || j.base !== 'BRL' || !j.rates || typeof j.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(j.date)) return null;
+    const rates = { BRL: 1 };
+    for (const c of ['USD', 'EUR']) { const v = j.rates[c]; if (typeof v !== 'number' || !isFinite(v) || !(v > 0)) return null; rates[c] = v; }
+    return { date: j.date, rates };
+  }
+  // how many units of `to` one unit of `from` buys
+  const fxRate = (fx, from, to) => (fx && fx.rates && fx.rates[from] > 0 && fx.rates[to] > 0) ? fx.rates[to] / fx.rates[from] : null;
+  const balanceOf = st => r2(st.deposits.reduce((a, d) => a + d.v, 0) - st.bets.reduce((a, b) => a + b.stake, 0) + st.bets.reduce((a, b) => a + (b.payout || 0), 0));
+  // Every amount of the state in the new currency. Each one is rounded to cents, and whatever cents that rounding moved
+  // go into the largest deposit, so the balance afterwards is exactly the old balance at the rate.
+  function convertState(st, to, rate) {
+    const m = v => r2(v * rate);
+    const out = Object.assign({}, st, { cur: to,
+      deposits: st.deposits.map(d => Object.assign({}, d, { v: Math.max(0.01, m(d.v)) })),
+      bets: st.bets.map(b => {
+        const n = Object.assign({}, b, { stake: Math.max(0.01, m(b.stake)), payout: m(b.payout || 0) });
+        if (b.unit > 0) n.unit = Math.round(b.unit * rate * 1e4) / 1e4;
+        if (b.cash && b.cash.full) n.cash = Object.assign({}, b.cash, { full: m(b.cash.full) });
+        return n;
+      }) });
+    const drift = r2(Math.max(0, m(balanceOf(st))) - balanceOf(out));
+    if (drift && out.deposits.length) { const big = out.deposits.reduce((a, d) => (d.v > a.v ? d : a)); big.v = r2(big.v + drift); }
+    return out;
+  }
+
   /* ---------- copying a bet from a print or a pasted tip ----------
      parseTip reads free text (typed, pasted, or what the OCR got out of a screenshot) and finds, among the fights given,
      which one it talks about, which selection, the odd it was printed with and the stake (in units or in money).
@@ -728,7 +757,7 @@ const Core = (() => {
     if (value < 0.01) return { ok: false, why: 'noprice' };
     return { ok: true, kind: 'market', value, full, chance: prob };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, CASHOUT_MARGIN, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
 })();
 
 /* ================= formatting ================= */
@@ -736,7 +765,11 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const CUR = { BRL: 'Real', USD: 'Dólar', EUR: 'Euro' };
 let fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const symbolOf = code => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code }).formatToParts(0).find(x => x.type === 'currency').value;
+const fmtOf = code => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code });
+const symbolOf = code => fmtOf(code).formatToParts(0).find(x => x.type === 'currency').value;
+// "US$ 1 = R$ 5,0050": the rate said from the side that reads as a number above 1
+const rateText = (from, to, rate) => { const [a, b, r] = rate < 1 ? [to, from, 1 / rate] : [from, to, rate]; return `${symbolOf(a)} 1 = ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: b, minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(r)}`; };
+const dateBR = iso => iso.split('-').reverse().join('/');
 const sym = () => fmt.formatToParts(0).find(x => x.type === 'currency').value;
 const money = v => fmt.format(v);
 const signed = v => (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + fmt.format(Math.abs(v));
@@ -764,12 +797,28 @@ const saveS = () => LS.set('oitolados.v1', S);
 function setCurrency(code) { S.cur = CUR[code] ? code : 'BRL'; fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: S.cur }); }
 setCurrency(S.cur);
 
+/* ================= exchange rate ================= */
+// Reference rates from Frankfurter, kept on the device: asked again only when the copy is older than FX_TTL.
+const FX_URL = 'https://api.frankfurter.dev/v1/latest?base=BRL&symbols=USD,EUR', FX_TTL = 12 * 3600e3;
+let FX = LS.get('oitolados.fx.v1');
+if (!(FX && FX.rates && FX.ts)) FX = null;
+async function loadFx() {
+  if (FX && Date.now() - FX.ts < FX_TTL) return FX;
+  try {
+    const fx = Core.normFx(await getJSON(FX_URL, 8000));
+    if (!fx) throw new Error('unexpected answer');
+    FX = Object.assign(fx, { ts: Date.now() }); LS.set('oitolados.fx.v1', FX);
+  } catch (e) { if (!FX) throw e; }          // no answer: an older rate still converts, and the screen shows its date
+  return FX;
+}
+const bankEmpty = () => !S.deposits.length && !S.bets.length;
+
 const D = { events: [], fights: new Map(), odds: {}, results: {}, td: {}, astats: {}, finalSeen: {}, oddsAt: {}, lastSync: 0, from: 0, err: null };
 (() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events, odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0 }); index(); } })();
 function index() { D.fights = new Map(); for (const e of D.events) for (const f of e.fights) D.fights.set(f.id, f); }
 function saveCache() { LS.set('oitolados.cache.v1', { events: D.events, odds: D.odds, results: D.results, td: D.td, astats: D.astats, finalSeen: D.finalSeen, lastSync: D.lastSync, from: D.from }); }
 
-const ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '' };
+const ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null };
 const slip = { sels: [], mode: 'single', stake: '' };
 
 /* ================= ESPN API ================= */
@@ -1306,10 +1355,16 @@ function tblHtml(title, rows) {
 }
 function vCarteira(w) {
   let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div><p>${w.open.length ? `${money(w.atRisk)} em jogo em ${w.open.length} ${w.open.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ` : ''}${money(w.dep)} depositados no total</p></section>`;
+  const dc = CUR[ui.depCur] ? ui.depCur : S.cur, other = dc !== S.cur, conv = other && !bankEmpty(), rate = conv ? Core.fxRate(FX, S.cur, dc) : null, df = fmtOf(dc);
   h += `<section class="card"><span class="label">Depositar dinheiro de mentira</span>
-    <div class="field"><span>${esc(sym())}</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
-    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${fmt.format(v).replace(',00', '')}</button>`).join('')}</div>
-    <button class="btn block" data-act="deposit">Depositar</button></section>`;
+    <div class="segm cur" role="group" aria-label="Moeda do depósito">${Object.keys(CUR).map(c => `<button class="${dc === c ? 'on' : ''}" data-act="depcur" data-c="${c}" aria-pressed="${dc === c}" ${ui.fxBusy ? 'disabled' : ''}>${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div>
+    <div class="field"><span>${esc(symbolOf(dc))}</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
+    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>`;
+  if (conv && ui.fxBusy) h += '<p class="hint" id="fxinfo">Buscando a cotação…</p>';
+  else if (conv && rate) h += `<p class="hint" id="fxinfo">Depositar em ${CUR[dc]} troca a moeda da banca e converte tudo (depósitos e apostas) por <b>${esc(rateText(S.cur, dc, rate))}</b>, cotação de ${esc(dateBR(FX.date))}. Seu saldo de ${money(w.balance)} vira ${df.format(Core.r2(w.balance * rate))}.</p>`;
+  else if (other && !conv) h += `<p class="hint" id="fxinfo">A banca passa a ser em ${CUR[dc]}.</p>`;
+  if (ui.fxMsg) h += `<p class="msg" id="fxmsg">${esc(ui.fxMsg)}</p>`;
+  h += `<button class="btn block" data-act="deposit" ${ui.fxBusy || (conv && !rate) ? 'disabled' : ''}>${conv ? 'Converter a banca e depositar' : 'Depositar'}</button></section>`;
   const roi = w.staked ? w.pnl / w.staked * 100 : null;
   h += `<section class="card"><span class="label">Ganhos e perdas · apostas encerradas</span>
     <div class="pnl ${w.pnl > 0 ? 'pos' : w.pnl < 0 ? 'neg' : ''}">${signed(w.pnl)}</div>
@@ -1321,13 +1376,13 @@ function vCarteira(w) {
     h += tblHtml('Evento', breakdown(w.done, b => { const s = new Set(b.legs.map(l => l.event)); return s.size === 1 ? evLabel({ name: [...s][0] }).main : 'Vários eventos'; }));
   } else h += '<p class="hint">O gráfico e a quebra por mercado aparecem quando a primeira aposta for encerrada.</p>';
   h += '</section>';
-  if (S.deposits.length) h += `<section class="card"><span class="label">Depósitos</span><div>${S.deposits.slice().reverse().slice(0, 8).map(d => `<div class="dep"><span>${esc(dWhen.format(d.t))}</span><b>${money(d.v)}</b></div>`).join('')}</div></section>`;
+  const lastConv = (S.conv || []).slice(-1)[0];
+  if (S.deposits.length) h += `<section class="card"><span class="label">Depósitos</span><div>${S.deposits.slice().reverse().slice(0, 8).map(d => `<div class="dep"><span>${esc(dWhen.format(d.t))}</span><b>${money(d.v)}</b></div>`).join('')}</div>${lastConv ? `<p class="hint" id="convlog">Banca convertida de ${CUR[lastConv.from]} para ${CUR[lastConv.to]} em ${esc(dWhen.format(lastConv.t))}, por ${esc(rateText(lastConv.from, lastConv.to, lastConv.rate))} (cotação de ${esc(dateBR(lastConv.date))}).</p>` : ''}</section>`;
   h += `<section class="card"><span class="label">Unidade</span>
     <div class="unit" id="unitnow">1u = ${money(w.unit)}</div>
     <p class="hint">${pctText(w.unitPct)}% da banca de ${money(w.bank)} (saldo mais o que está em jogo). Muda sozinha quando a banca muda.</p>
     <div class="field"><input id="unitpct" inputmode="decimal" autocomplete="off" value="${esc(pctText(w.unitPct))}" aria-label="Porcentagem da banca que vale uma unidade"><span>% da banca</span></div>
     <button class="btn ghost block" data-act="unit">Aplicar</button></section>`;
-  h += `<section class="card"><span class="label">Moeda da simulação</span><div class="segm cur">${Object.keys(CUR).map(c => `<button class="${S.cur === c ? 'on' : ''}" data-act="cur" data-c="${c}" aria-pressed="${S.cur === c}">${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div><p class="hint">Muda só o símbolo. Os valores continuam os mesmos, sem conversão.</p></section>`;
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
@@ -1450,13 +1505,8 @@ document.addEventListener('click', e => {
   else if (a === 'docash') doCashout(b.dataset.id);
   else if (a === 'again') repeatBet(b.dataset.id);
   else if (a === 'depq') { ui.dep = Core.moneyText(parseMoney(ui.dep) + Number(b.dataset.v)); const el = $('#dep'); if (el) el.value = ui.dep; }
-  else if (a === 'cur') { setCurrency(b.dataset.c); saveS(); renderSheet(); render(); toast(`Moeda da simulação: ${CUR[S.cur]}. Os valores não foram convertidos.`); }
-  else if (a === 'deposit') {
-    const v = parseMoney(($('#dep') || {}).value || ui.dep);
-    if (!v) { toast('Digita um valor pra depositar.'); return; }
-    if (v > 1e9) { toast(`Calma, bilionário. Máximo de ${money(1e9)} por depósito.`); return; }
-    S.deposits.push({ t: Date.now(), v }); saveS(); ui.dep = ''; if (document.activeElement) document.activeElement.blur(); render(); toast(`${money(v)} fictícios na conta.`);
-  }
+  else if (a === 'depcur') pickDepCur(b.dataset.c);
+  else if (a === 'deposit') deposit();
   else if (a === 'backup') {
     const txt = JSON.stringify(S);
     const fail = () => { ui.backup = txt; render(); };
@@ -1467,11 +1517,49 @@ document.addEventListener('click', e => {
     let s = null; try { s = JSON.parse(($('#rs') || {}).value || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
     S = { v: 1, deposits: s.deposits.filter(d => d && d.v > 0 && d.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) };
-    S.unitPct = Core.unitPct(s.unitPct); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
+    S.unitPct = Core.unitPct(s.unitPct); if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && CUR[c.from] && CUR[c.to] && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
   else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
+// The currency is chosen where the money comes in. Picking another one only shows what the deposit will do;
+// nothing changes until the deposit is made.
+async function pickDepCur(code) {
+  if (ui.fxBusy || !CUR[code]) return;
+  ui.depCur = code; ui.fxMsg = ''; ui.fxRate = null;
+  if (document.activeElement) document.activeElement.blur();          // on iOS a tapped button does not take focus away from the field
+  if (code !== S.cur && !bankEmpty()) {
+    ui.fxBusy = true; render();
+    try { ui.fxRate = Core.fxRate(await loadFx(), S.cur, code); } catch (e) { ui.fxMsg = 'Sem cotação agora: não deu pra falar com o serviço de câmbio. Tenta de novo com internet.'; }
+    ui.fxBusy = false;
+  }
+  render();
+}
+async function deposit() {
+  if (ui.fxBusy) return;
+  const to = CUR[ui.depCur] ? ui.depCur : S.cur, v = parseMoney(($('#dep') || {}).value || ui.dep), f = fmtOf(to);
+  if (!v) { toast('Digita um valor pra depositar.'); return; }
+  if (v > 1e9) { toast(`Calma, bilionário. Máximo de ${f.format(1e9)} por depósito.`); return; }
+  let done = '';
+  if (to !== S.cur) {
+    if (!bankEmpty()) {
+      let fx = null;
+      ui.fxBusy = true; try { fx = await loadFx(); } catch (e) { /* handled below */ } ui.fxBusy = false;
+      const rate = Core.fxRate(fx, S.cur, to);
+      if (!rate) { ui.fxMsg = 'Sem cotação agora: não deu pra falar com o serviço de câmbio. Tenta de novo com internet.'; render(); return; }
+      if (ui.fxRate !== rate) { ui.fxRate = rate; ui.fxMsg = 'A cotação mudou. Confere o valor novo e confirma de novo.'; if (document.activeElement) document.activeElement.blur(); render(); return; }
+      const from = S.cur;
+      S = Core.convertState(S, to, rate);
+      S.conv = [...(S.conv || []), { t: Date.now(), from, to, rate, date: fx.date }].slice(-20);
+      slip.stake = ''; done = ` Banca convertida para ${CUR[to]}.`;
+    }
+    setCurrency(to);
+  }
+  S.deposits.push({ t: Date.now(), v }); saveS();
+  ui.dep = ''; ui.depCur = null; ui.fxMsg = ''; ui.fxRate = null;
+  if (document.activeElement) document.activeElement.blur();
+  renderSheet(); render(); toast(`${money(v)} fictícios na conta.${done}`);
+}
 function applyMask(el, typed) {
   let v = el.value, pos = el.selectionStart == null ? v.length : el.selectionStart;
   if (typed === '.' && !v.includes(',') && pos > 0) v = v.slice(0, pos - 1) + ',' + v.slice(pos);   // keypads without a comma key
@@ -1500,7 +1588,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'dep') { const b = document.querySelector('[data-act="deposit"]'); if (b) b.click(); }
 });
 
-window.__OL = { Core, D, ui, slip, imp, sync, settle, get S() { return S; } };
+window.__OL = { Core, D, ui, slip, imp, sync, settle, get S() { return S; }, get FX() { return FX; } };
 pickEvent(); render(); sync(false);
 })();
 </script>

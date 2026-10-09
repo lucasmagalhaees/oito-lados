@@ -181,6 +181,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 - **Contexto:** pedido de máscara nos campos de valor, para operar acima de mil, e de opção para dólar e euro.
 - **Decisão:** máscara no padrão brasileiro em todos os campos de valor. Moeda escolhida na Carteira entre real, dólar e euro.
+- **Revista pela D28** (mesmo dia): a moeda passou a ser escolhida no depósito e a troca converte os valores.
 - **Interpretação que precisou ser feita (confirmar com o Lucas):** trocar a moeda muda só o símbolo. Não há conversão nem câmbio, e não existem carteiras separadas por moeda. O formato numérico continua brasileiro nas três.
 - **Consequência:** corrigiu de passagem um erro antigo: "1.000" digitado era lido como 1.
 
@@ -188,10 +189,10 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 - **Contexto:** pedido de gestão de unidade. Nas palavras do Lucas: "uma unidade geralmente é 10% da banca, mas a porcentagem pode ser parametrizada".
 - **Decisão:** unidade igual a uma porcentagem da banca, 10% por padrão, ajustável na Carteira. Atalhos em unidades no cupom e resultado em unidades na Carteira.
-- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
-  - Banca é o saldo mais o que está em jogo, não só o saldo.
-  - A unidade acompanha a banca o tempo todo (não é fixada por período).
-  - No histórico, cada aposta é medida pela unidade do momento em que foi feita.
+- **Interpretações que precisaram ser feitas:**
+  - Banca é o saldo mais o que está em jogo, não só o saldo. **Confirmado pelo Lucas em 09/10/2026.**
+  - A unidade acompanha a banca o tempo todo (não é fixada por período). **Confirmado na mesma resposta.**
+  - No histórico, cada aposta é medida pela unidade do momento em que foi feita. (Esta não foi perguntada; segue como interpretação.)
 - **Descartado:** unidade fixa em valor, digitada à mão.
 
 ## D25. Cashout por round: não agora
@@ -230,13 +231,27 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Descartado:** cashout parcial (encerrar só parte do valor) e oferta com a luta rolando.
 - **Consequência:** o cashout deixa de ser neutro no resultado: uma aposta encerrada assim entra no histórico com lucro ou prejuízo. A primeira versão da oferta lia a chance do vencedor no modelo conjunto, que não reproduz a moneyline exatamente quando há linhas de método; o teste ponta a ponta acusou a diferença (46,1% contra 46,8%) e a chance de um palpite de vencedor sozinho passou a vir da própria moneyline.
 
+## D28. Moeda escolhida no depósito, com conversão da banca
+
+- **Contexto:** ao revisar a D23, o Lucas pediu: "só deixa trocar moeda na hora de depositar; mudando na banca converte tudo, e cacheia o índice de conversão".
+- **Decisão:** o seletor de moeda saiu da Carteira e foi para o cartão de depósito. Depositar em outra moeda troca a moeda da banca e converte depósitos e apostas pela cotação do dia. A cotação fica guardada no aparelho por 12 h.
+- **Fonte da cotação:** Frankfurter (`api.frankfurter.dev`), gratuito e sem chave. Escolhido por não exigir cadastro nem servidor, o que mantém a D11.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - A banca tem uma moeda só. Não existem carteiras separadas por moeda.
+  - A troca só acontece junto com um depósito, como pedido: não há botão de converter sem depositar.
+  - Com a banca vazia não há o que converter, então a moeda muda sem consultar cotação.
+  - Sem internet, vale a última cotação guardada, com a data na tela. Sem nenhuma guardada, não converte.
+  - Os centavos de arredondamento vão para o maior depósito, para o saldo convertido bater exatamente.
+- **Descartado:** carteiras por moeda; cotação digitada à mão; converter só o saldo e deixar o histórico na moeda antiga (o gráfico e as tabelas somariam moedas diferentes).
+- **Consequência:** segunda dependência de terceiros em tempo de execução, depois do leitor de imagem. Se o serviço sair do ar ou mudar o formato, só a troca de moeda para; o resto do app não depende dele.
+
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
-| Confirmar as interpretações de moeda (D23) e de unidade (D24) | Lucas |
+| Confirmar as interpretações da conversão de moeda (D28) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, e confirmar a regra do valor em dinheiro (D26) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |

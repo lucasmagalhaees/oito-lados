@@ -66,6 +66,8 @@ CONSTANTS = [
     (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
     (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
     (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
+    (r'FX_TTL = 12 \* 3600e3;', 'depois de 12 h'),
+    (r"\.slice\(-20\);\n      slip\.stake = ''", 'as 20 últimas'),
 ]
 for pattern, text in CONSTANTS:
     check('code still has the documented constant', re.search(pattern, html), pattern)
@@ -111,11 +113,13 @@ if lib.exists() and sri:
 check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
 
 # 6. storage keys and API hosts
-for key in ('oitolados.v1', 'oitolados.cache.v1'):
+for key in ('oitolados.v1', 'oitolados.cache.v1', 'oitolados.fx.v1'):
     check('storage key in code and spec', f"'{key}'" in html and f'`{key}`' in spec, key)
 for base in re.findall(r'`(?:SITE|CORE) = (https://[^`]+)`', spec):
     check('API base in code', base in html, base)
 check('spec documents both API bases', len(re.findall(r'`(?:SITE|CORE) = https://', spec)) == 2)
+fx_url = re.search(r"const FX_URL = '(https://[^']+)'", html)
+check('exchange-rate address is the same in the app, the spec and the live check', bool(fx_url) and f'`{fx_url.group(1)}`' in spec and fx_url.group(1) in read('tests/contract_live.py'), fx_url and fx_url.group(1))
 
 # 7. the expected end-to-end balance is the same everywhere it is quoted
 balances = {rel: set(re.findall(r'R\$ 1\.\d{3},\d{2}', read(rel))) for rel in ('CLAUDE.md', 'tests/e2e.py', 'docs/verificacao.md')}

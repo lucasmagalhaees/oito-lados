@@ -6,7 +6,7 @@ and prints prices, settlements and the final balance (expected: R$ 1.609,59).
 """
 import json, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from mock_espn import PHASE, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, TIP_TEXT
+from mock_espn import PHASE, FX, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, TIP_TEXT
 import base64
 import cov
 from playwright.sync_api import sync_playwright
@@ -55,12 +55,41 @@ with sync_playwright() as p:
     assert pg.input_value('#dep') == '1.500', pg.input_value('#dep')
     pg.fill('#dep', '')
     assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
-    pg.click('[data-act=cur][data-c=USD]'); assert bal().replace('\xa0', ' ') == 'US$ 0,00', bal()
-    assert pg.inner_text('.field span') == 'US$', pg.inner_text('.field span')
-    pg.click('[data-act=cur][data-c=EUR]'); assert bal().replace('\xa0', ' ') == '€ 0,00', bal()
-    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 0,00', 'the chosen currency must survive a reload: ' + bal()
-    pg.click('[data-act=tab][data-tab=carteira]'); pg.click('[data-act=cur][data-c=BRL]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
-    pg.fill('#dep', '1.000,00'); pg.click('[data-act=deposit]')
+    # currency: chosen where the money comes in. With an empty bankroll it is only a symbol and no rate is asked for
+    txt = lambda sel: pg.inner_text(sel).replace('\xa0', ' ')
+    pg.click('[data-act=depcur][data-c=USD]')
+    assert pg.inner_text('.field span') == 'US$' and 'A banca passa a ser em Dólar' in txt('#fxinfo'), txt('#fxinfo')
+    assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'picking a currency changes nothing until the deposit: ' + bal()
+    pg.click('[data-act=depcur][data-c=EUR]'); pg.fill('#dep', '80'); pg.click('[data-act=deposit]')
+    assert bal().replace('\xa0', ' ') == '€ 80,00' and FX['calls'] == 0, (bal(), FX['calls'])
+    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'the currency must survive a reload: ' + bal()
+    pg.click('[data-act=tab][data-tab=carteira]')
+    # with money in the bankroll, depositing in another currency converts everything at the day's rate
+    FX['down'] = True; pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxmsg')
+    assert 'Sem cotação agora' in txt('#fxmsg') and pg.is_disabled('[data-act=deposit]'), txt('#fxmsg')
+    FX['down'] = False; pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxinfo b')
+    info = txt('#fxinfo'); print('câmbio:', info)
+    shot('s13-cambio.png')
+    assert '€ 1 = R$ 6,2500' in info and 'cotação de 02/01/2026' in info and 'saldo de € 80,00 vira R$ 500,00' in info, info
+    assert pg.inner_text('[data-act=deposit]') == 'Converter a banca e depositar' and FX['calls'] == 2, FX['calls']
+    pg.click('[data-act=depcur][data-c=EUR]'); pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxinfo b')
+    assert FX['calls'] == 2, 'the rate is kept on the device and not asked for again: %d' % FX['calls']
+    assert pg.evaluate('JSON.parse(localStorage.getItem("oitolados.fx.v1")).date') == '2026-01-02'
+    pg.click('[data-act=deposit]'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'no amount, no deposit and no conversion'
+    # the kept rate expired and the fresh one is different: show it and ask again instead of converting at a rate nobody saw
+    pg.fill('#dep', '500'); pg.evaluate('window.__OL.FX.ts = 0'); FX['body']['rates']['EUR'] = 0.2
+    pg.click('[data-act=deposit]'); pg.wait_for_selector('#fxmsg')
+    assert 'A cotação mudou' in txt('#fxmsg') and '€ 1 = R$ 5,0000' in txt('#fxinfo') and bal().replace('\xa0', ' ') == '€ 80,00', (txt('#fxmsg'), txt('#fxinfo'), bal())
+    pg.evaluate('window.__OL.FX.ts = 0'); FX['body']['rates']['EUR'] = 0.16
+    pg.click('[data-act=deposit]'); pg.wait_for_function('document.querySelector("#fxinfo").textContent.includes("6,2500")')
+    assert bal().replace('\xa0', ' ') == '€ 80,00', bal()
+    # expired again and the rate service is down: the kept rate still converts
+    pg.evaluate('window.__OL.FX.ts = 0'); FX['down'] = True
+    pg.click('[data-act=deposit]'); pg.wait_for_function('window.__OL.S.cur === "BRL"'); FX['down'] = False
+    conv = pg.evaluate('(() => { const S = window.__OL.S; return [S.cur, S.deposits.map(d => d.v), S.conv.map(c => [c.from, c.to, c.rate, c.date])]; })()')
+    assert conv == ['BRL', [500, 500], [['EUR', 'BRL', 6.25, '2026-01-02']]], conv
+    assert 'Banca convertida de Euro para Real' in txt('#convlog') and '€ 1 = R$ 6,2500' in txt('#convlog'), txt('#convlog')
+    assert pg.inner_text('[data-act=deposit]') == 'Depositar' and pg.inner_text('.field span') == 'R$'
     assert bal().replace('\xa0',' ') == 'R$ 1.000,00', bal()
     pg.click('.tabbar [data-tab=lutas]')
     shot('s1-lutas.png')
@@ -194,6 +223,7 @@ with sync_playwright() as p:
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_timeout(200); shot('s6-carteira.png')
     units = pg.inner_text('#pnlu'); print('em unidades:', units)
+    pg.locator('#chart svg').scroll_into_view_if_needed()                # the mouse can only hover what is on screen
     box = pg.locator('#chart svg').bounding_box(); pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] * 0.5)
     tipText = pg.inner_text('#tip'); assert 'aposta' in tipText and 'acumulado' in tipText, tipText        # hovering the chart explains the point
     pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] + 60); pg.wait_for_function('document.getElementById("tip").hidden')
@@ -212,9 +242,15 @@ with sync_playwright() as p:
     pg.fill('#rs', saved); pg.click('[data-act=dorestore]'); pg.wait_for_timeout(400)
     assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 15, (bal(), final)
     print('backup e restauração: saldo', final, 'de volta depois de zerar')
+    # converting a bankroll with a whole history: every amount follows, and the result in units stays the same
+    assert len(pg.evaluate('window.__OL.S.conv')) == 1, 'the conversion log comes back with the backup'
+    pg.click('[data-act=depcur][data-c=USD]'); pg.wait_for_selector('#fxinfo b'); pg.fill('#dep', '100'); pg.click('[data-act=deposit]'); pg.wait_for_function('window.__OL.S.cur === "USD"')
+    usd = pg.evaluate('(() => { const S = window.__OL.S; return [S.bets.length, S.bets[0].stake, S.bets[0].payout, S.bets[0].unit, S.conv.length]; })()')
+    print('banca convertida para dólar: saldo', bal(), '|', pg.inner_text('#pnlu'))
+    assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 2] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
     b.close()
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs
-print('e2e ok: 15 apostas encerradas (3 por cashout: 1 repetida e 1 a valor de mercado), saldo final R$ 1.609,59, sem estouro de largura e sem erro de script')
+print('e2e ok: 15 apostas encerradas (3 por cashout: 1 repetida e 1 a valor de mercado), saldo final R$ 1.609,59, banca convertida duas vezes, sem estouro de largura e sem erro de script')
