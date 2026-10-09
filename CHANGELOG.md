@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.0] - 2026-10-09
+
+### Adicionado
+- Cashout: devolve o valor integral da aposta enquanto nenhuma luta dela começou; congela com luta em andamento.
+
+### Alterado
+- Taxa de acerto conta só apostas ganhas e perdidas; anuladas e encerradas por cashout ficam de fora.
+- Conferência da API real da ESPN: chamadas feitas fora do navegador, com identificação própria; falhas e avisos viram anotações no GitHub Actions; máquina sem acesso à ESPN dá resultado inconclusivo.
+
 ## [0.1.0] - 2026-10-09
 
 ### Adicionado

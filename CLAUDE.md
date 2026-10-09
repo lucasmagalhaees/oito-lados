@@ -61,9 +61,9 @@ O que cada peça do harness cobre:
 - `.claude/settings.json` + `.claude/hooks/verify-on-stop.sh`: hook de parada do Claude Code.
 - `docs/decisoes.md`: tudo que foi decidido e por quê. `docs/verificacao.md`: o que foi verificado e o que não foi. `docs/escala.md`: caminho de escala.
 - `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE` (MIT, Lucas Magalhães).
-- Ainda não foi publicado. Plano: Vercel ligada ao repositório, com deploy de produção a cada merge na `main`.
+- Publicado em https://oito-lados.vercel.app. A Vercel está ligada ao repositório e publica em produção a cada merge na `main`.
 
-O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md`](docs/verificacao.md). Em resumo: lógica e fluxo cobertos por testes e a leitura da ESPN conferida contra respostas reais; **não** verificados ainda um evento ao vivo de verdade, a instalação no iPhone, o CI e o deploy.
+O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md`](docs/verificacao.md). Em resumo: lógica e fluxo cobertos por testes, leitura da ESPN conferida contra respostas reais, CI e deploy de produção funcionando; **não** verificados ainda um evento ao vivo de verdade e a instalação no iPhone.
 
 ## Requisitos do produto
 
@@ -74,6 +74,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 5. Apostas acompanham a luta ao vivo e fecham sozinhas com o resultado oficial.
 6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado e por evento.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
+8. Cashout: devolve o valor integral da aposta, só enquanto nenhuma luta dela começou.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -110,6 +111,8 @@ Detalhes que já morderam:
 - `takedownAvg` igual a 0 aparece tanto para trocador puro quanto para estreante sem minutos.
 - Lutas sem linha publicada devolvem `items: []`. Na data do teste, o card da semana seguinte não tinha linha nenhuma e o do UFC 333 só tinha vencedor nas duas lutas principais.
 - Eventos do Contender Series vêm no mesmo placar e não têm odds; o app esconde.
+- A ESPN recusa navegador headless (403, sem cabeçalho de CORS). Por isso nenhum teste automatizado chama a ESPN pelo Chromium, e o script de conferência não se disfarça de navegador comum.
+- Em 09/10/2026 a ESPN listava duas lutas já encerradas com `format.regulation.periods: 4`. O app usa o número como vem; não foi visto em luta agendada.
 
 ## Arquitetura do `index.html`
 
@@ -134,7 +137,7 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 ```js
 { v: 1,
   deposits: [{ t, v }],
-  bets: [{ id, t, type: 'single'|'multi', stake, odd, sgp, legs, status: 'open'|'won'|'lost'|'void', payout, settledAt }] }
+  bets: [{ id, t, type: 'single'|'multi', stake, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt }] }
 ```
 Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, fight, event, date, odd, src: 'real'|'est', out, res }`. Os textos são copiados na hora da aposta para o histórico continuar legível depois que a luta sai do placar.
 
@@ -200,13 +203,31 @@ Regras:
 
 `Core.betResult`: qualquer perna perdida perde a aposta na hora. Perna anulada tira aquela luta da aposta com odd 1,00 (numa combinada, tira a luta inteira). Tudo anulado devolve a stake.
 
+## Cashout
+
+Regra definida pelo Lucas em 09/10/2026 (D21 em `docs/decisoes.md`): **devolve o valor integral apostado, e só se a luta não começou**. Com luta em andamento, cashout e apostas ficam congelados.
+
+`Core.cashout(bet, fights)` recebe a luta de cada perna e devolve `{ ok: true, value: stake }` ou `{ ok: false, why }`:
+
+| `why` | Quando | O que a tela mostra |
+|---|---|---|
+| `live` | alguma luta da aposta está em andamento | "Cashout congelado" |
+| `started` | alguma luta da aposta já começou ou terminou (inclui cancelada, que é anulada pela liquidação) | "Cashout encerrado" |
+| `unknown` | alguma luta não está no placar carregado | "Cashout indisponível" |
+| `closed` | a aposta não está mais aberta | nada |
+
+- Vale para simples, múltipla e combinada. Numa múltipla, basta **uma** luta ter começado para o cashout acabar.
+- O valor não depende das odds: é sempre a stake. Não há cashout parcial nem valor de mercado.
+- `doCashout` recarrega o placar antes de devolver (mesma regra de `place()`): sem conexão não faz; se a luta começou nesse meio tempo, recusa.
+- A aposta fica com `status: 'cashed'`, `payout` igual à stake e `settledAt`. No saldo ela soma zero. Nas estatísticas conta como apostado e retornado, e fica fora da taxa de acerto, igual a uma aposta anulada.
+
 ## Sincronização
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 16 dias à frente.
 - `loadOdds`: por evento, só lutas `pre`, no máximo a cada 5 min; forçado no botão Atualizar e antes de aceitar aposta.
 - Intervalo do laço: 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta.
 - Antes de gravar uma aposta, `place()` recarrega placar e odds das lutas envolvidas. Se a luta começou, recusa; se a odd mudou, mostra a nova e pede confirmação.
-- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo.
+- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout segue a mesma trava.
 - Só atualiza com o app aberto; ao reabrir, busca os resultados e liquida o que ficou pendente.
 
 ## Interface
@@ -227,11 +248,11 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
 `unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro.
 
-`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade, de dentro de uma página servida em `localhost` (assim o CORS entra na conferência); aviso é normal quando não há card ou odds publicadas, falha significa que a API mudou. `--mock` testa o próprio script.
+`contract.py` passa as respostas reais gravadas pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), imprime preços e liquidações e confere o saldo final esperado de R$ 1.584,30. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz um cashout e confere quando ele congela e quando acaba, imprime preços e liquidações e confere o saldo final esperado de R$ 1.604,40. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 
@@ -250,5 +271,4 @@ No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Iníc
 - PWA de verdade: `manifest.json`, ícone em arquivo, service worker para abrir offline.
 - Linhas alternativas de quedas por lutador (hoje só "pelo menos 1").
 - Notificação quando uma aposta fecha (exige service worker e permissão).
-- Cancelar aposta antes de a luta começar.
 - Mostrar quedas no resultado de todas as lutas, não só das que têm aposta.

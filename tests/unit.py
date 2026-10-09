@@ -135,6 +135,23 @@ JS = r"""
   eq('combo with a void leg drops that fight', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27), leg('f2', 2)], { f1: 4.5 }), ['won', 'void', 'won']), { status: 'won', payout: 20 });
   eq('combo alone with a void leg refunds', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'void']), { status: 'void', payout: 10 });
   eq('combo with a lost leg loses', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'lost']), { status: 'lost', payout: 0 });
+
+  /* ---- cashout: the whole stake, only before any of the bet's fights starts ---- */
+  const ft = (state, extra) => Object.assign({ state, canceled: false }, extra);
+  const open = { status: 'open', stake: 40, legs: [leg('f1', 2)] };
+  eq('cashout before the fight returns the stake', Core.cashout(open, [ft('pre')]), { ok: true, value: 40 });
+  eq('cashout frozen while the fight is live', Core.cashout(open, [ft('in')]), { ok: false, why: 'live' });
+  eq('cashout gone once the fight is over', Core.cashout(open, [ft('post')]), { ok: false, why: 'started' });
+  eq('cashout not offered for a cancelled fight (it settles as void)', Core.cashout(open, [ft('post', { canceled: true })]), { ok: false, why: 'started' });
+  eq('cashout needs the fight on the board', Core.cashout(open, [null]), { ok: false, why: 'unknown' });
+  eq('cashout only for open bets', Core.cashout({ status: 'won', stake: 40, legs: [leg('f1', 2)] }, [ft('pre')]), { ok: false, why: 'closed' });
+  eq('cashout only once', Core.cashout({ status: 'cashed', stake: 40, legs: [leg('f1', 2)] }, [ft('pre')]), { ok: false, why: 'closed' });
+  const multi = { status: 'open', stake: 10, sgp: { f1: 4.5 }, legs: [leg('f1', 2.62), leg('f1', 1.27), leg('f2', 2)] };
+  eq('parlay cashout while every fight is still to start', Core.cashout(multi, [ft('pre'), ft('pre'), ft('pre')]), { ok: true, value: 10 });
+  eq('parlay cashout frozen when one fight is live', Core.cashout(multi, [ft('pre'), ft('pre'), ft('in')]), { ok: false, why: 'live' });
+  eq('parlay cashout gone after its first fight ended', Core.cashout(multi, [ft('post'), ft('post'), ft('pre')]), { ok: false, why: 'started' });
+  eq('a live fight wins over a finished one in the reason shown', Core.cashout(multi, [ft('post'), ft('post'), ft('in')]), { ok: false, why: 'live' });
+  eq('cashout value never depends on the odds', Core.cashout({ status: 'open', stake: 123.45, legs: [leg('f1', 51)] }, [ft('pre')]).value, 123.45);
   return { n, fails };
 }
 """
