@@ -77,7 +77,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 5. Apostas acompanham a luta ao vivo e fecham sozinhas com o resultado oficial.
 6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado e por evento.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
-8. Cashout: devolve o valor integral da aposta, só enquanto nenhuma luta dela começou.
+8. Cashout: devolve o valor integral enquanto nenhuma luta da aposta foi decidida; com parte da múltipla já batida, oferece um valor de mercado para encerrar. Congela com luta em andamento.
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
 10. Campos de valor com máscara de milhares.
 11. Moeda da simulação: real, dólar ou euro.
@@ -147,11 +147,13 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
   cur: 'BRL'|'USD'|'EUR',        // moeda da simulação
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
-  bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt }] }
+  bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
 ```
 Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, fight, event, date, odd, src: 'real'|'est', out, res }`. Os textos são copiados na hora da aposta para o histórico continuar legível depois que a luta sai do placar.
 
 `sgp`: `{ [fid]: odd }` com o preço de cada combinada na mesma luta, fixado na hora da aposta.
+
+`cash`: só em aposta encerrada por cashout: `{ kind: 'refund'|'market', full, chance }`, o retorno possível e a chance usados na oferta.
 
 `unit`: quanto valia uma unidade quando a aposta foi feita. O resultado em unidades do histórico usa esse valor, não a unidade de hoje.
 
@@ -217,21 +219,30 @@ Regras:
 
 ## Cashout
 
-Regra definida pelo Lucas em 09/10/2026 (D21 em `docs/decisoes.md`): **devolve o valor integral apostado, e só se a luta não começou**. Com luta em andamento, cashout e apostas ficam congelados.
+Regra do Lucas em 09/10/2026 (D21, revista pela D27 em `docs/decisoes.md`). São dois regimes, e o que separa um do outro é se alguma luta da aposta já bateu:
 
-`Core.cashout(bet, fights)` recebe a luta de cada perna e devolve `{ ok: true, value: stake }` ou `{ ok: false, why }`:
+1. **Nenhuma luta da aposta foi decidida:** devolve o valor integral apostado (`kind: 'refund'`). Funciona como cancelar a aposta.
+2. **Parte de uma múltipla já bateu e o resto ainda não começou:** oferece um valor de mercado para encerrar (`kind: 'market'`), como numa casa de verdade. Conta: `retorno possível × chance de agora do que falta × (1 − margem)`, com margem de 5% (`CASHOUT_MARGIN`), nunca acima do retorno possível.
+
+Com luta em andamento, cashout e apostas ficam congelados nos dois regimes: a ESPN não publica odd durante a luta, então não existe valor de mercado para calcular.
+
+`Core.cashout(bet, legs, probOf)` é puro. `legs` traz, por perna, `{ state, canceled, out }` da luta (ou `null` se a luta não está no placar) e `probOf(fid, keys)` devolve a chance de agora das seleções daquela luta. Devolve `{ ok: true, kind, value, full, chance }` ou `{ ok: false, why }`:
 
 | `why` | Quando | O que a tela mostra |
 |---|---|---|
 | `live` | alguma luta da aposta está em andamento | "Cashout congelado" |
-| `started` | alguma luta da aposta já começou ou terminou (inclui cancelada, que é anulada pela liquidação) | "Cashout encerrado" |
+| `settling` | uma luta acabou e o resultado dela ainda não foi lido, ou não resta nenhuma luta por começar | "Cashout volta quando sair o resultado" |
+| `noprice` | falta a odd de agora de uma luta que resta | "Cashout indisponível agora" |
 | `unknown` | alguma luta não está no placar carregado | "Cashout indisponível" |
+| `lost` | alguma perna já perdeu (a liquidação fecha a aposta como perdida) | nada |
 | `closed` | a aposta não está mais aberta | nada |
 
-- Vale para simples, múltipla e combinada. Numa múltipla, basta **uma** luta ter começado para o cashout acabar.
-- O valor não depende das odds: é sempre a stake. Não há cashout parcial nem valor de mercado.
-- `doCashout` recarrega o placar antes de devolver (mesma regra de `place()`): sem conexão não faz; se a luta começou nesse meio tempo, recusa.
-- A aposta fica com `status: 'cashed'`, `payout` igual à stake e `settledAt`. No saldo ela soma zero. Nas estatísticas conta como apostado e retornado, e fica fora da taxa de acerto, igual a uma aposta anulada.
+- **Retorno possível** (`full`): stake × odd da aposta, tirando as lutas anuladas, com as odds fixadas na hora da aposta (inclusive o preço da combinada em `sgp`).
+- **Chance de agora** (`chance`): produto, entre as lutas que restam, da chance das seleções de cada uma. Vem de `price(...).chance(keys)`: para um palpite de vencedor sozinho é a moneyline de agora sem a margem da casa; para qualquer outra seleção ou combinada é o `jointModel`, o mesmo que dá preço às combinadas. Seleção estimada usa a estimativa: a oferta não é mais precisa que a odd `≈` que a originou.
+- A oferta muda quando a odd da luta que resta muda. `sync()` recarrega as odds dos eventos que têm luta restante de aposta com luta já encerrada.
+- `doCashout` recarrega placar, odds das lutas restantes e resultados antes de pagar (mesma regra de `place()`): sem conexão não faz; se uma luta começou nesse meio tempo, recusa; se o valor mudou, mostra o novo e pede confirmação de novo.
+- A aposta fica com `status: 'cashed'`, `payout` igual ao valor pago, `settledAt` e `cash: { kind, full, chance }`. Nas estatísticas o lucro ou prejuízo do cashout entra no resultado, e a aposta fica fora da taxa de acerto, igual a uma anulada.
+- Não há cashout parcial (encerrar só uma parte do valor).
 
 ## Repetir aposta
 
@@ -268,7 +279,7 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - `loadOdds`: por evento, só lutas `pre`, no máximo a cada 5 min; forçado no botão Atualizar e antes de aceitar aposta.
 - Intervalo do laço: 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta.
 - Antes de gravar uma aposta, `place()` recarrega placar e odds das lutas envolvidas. Se a luta começou, recusa; se a odd mudou, mostra a nova e pede confirmação.
-- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout segue a mesma trava.
+- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout congela enquanto houver luta da aposta em andamento.
 - Só atualiza com o app aberto; ao reabrir, busca os resultados e liquida o que ficou pendente.
 
 ## Interface
@@ -296,7 +307,7 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do `index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz um cashout e confere quando ele congela e quando acaba, imprime preços e liquidações e confere o saldo final esperado de R$ 1.604,40. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 

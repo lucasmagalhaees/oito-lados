@@ -518,7 +518,10 @@ const Core = (() => {
       tda.push(est(`tda:${s}:no`, nm + ': não', nm + ' não acerta nenhuma queda', 1 - p1));
     }
     add({ id: 'tda', cat: 'Quedas', title: 'Acerta pelo menos 1 queda?', cols: 2, opts: tda });
-    return { groups, map, P, J };
+    // Fair chance of a set of selections of this fight. A lone winner pick reads the moneyline itself: it is the one real
+    // market the joint model does not reproduce exactly (its winner split comes from the method lines when they exist).
+    const chance = keys => (keys.length === 1 && keys[0] === 'ml:a') ? P.pa : (keys.length === 1 && keys[0] === 'ml:b') ? P.pb : J.prob(keys);
+    return { groups, map, P, J, chance };
   }
 
   /* ---------- settlement ----------
@@ -693,17 +696,39 @@ const Core = (() => {
   }
 
   /* ---------- cashout ----------
-     The whole stake comes back, and only while none of the bet's fights has started. Once any of them is live the
-     cashout is frozen; once any has started or finished it is gone, and normal settlement decides the bet.
-     fights: the normalised fight of each leg, in leg order (null when the fight is not on the board). */
-  function cashout(bet, fights) {
+     Two regimes, never while a fight of the bet is live:
+     - nothing of the bet has been won yet and what is left has not started: the whole stake comes back;
+     - part of a parlay has already won and the rest has not started: an offer at market value, like a sportsbook's:
+       what the bet would pay x the chance, at today's prices, that the remaining selections also win, less a margin.
+     legs: for each leg, in order, { state, canceled, out } of its fight (out = settled outcome or null), or null when
+     the fight is not on the board. probOf(fid, keys) gives today's fair probability of those selections of that fight
+     all winning, or null when it cannot be priced. */
+  const CASHOUT_MARGIN = 0.05;
+  function cashout(bet, legs, probOf) {
     if (bet.status && bet.status !== 'open') return { ok: false, why: 'closed' };
-    if (!fights.length || fights.some(f => !f)) return { ok: false, why: 'unknown' };
-    if (fights.some(f => f.state === 'in')) return { ok: false, why: 'live' };
-    if (fights.some(f => f.state !== 'pre' || f.canceled)) return { ok: false, why: 'started' };
-    return { ok: true, value: bet.stake };
+    if (!legs.length || legs.some(x => !x)) return { ok: false, why: 'unknown' };
+    if (legs.some(x => x.state === 'in')) return { ok: false, why: 'live' };
+    if (legs.some(x => x.out === 'lost')) return { ok: false, why: 'lost' };
+    const by = new Map();
+    bet.legs.forEach((l, i) => { const g = by.get(l.fid) || { legs: [], at: [] }; g.legs.push(l); g.at.push(legs[i]); by.set(l.fid, g); });
+    let odd = 1, prob = 1, won = 0, pending = 0;
+    for (const [fid, g] of by) {
+      if (g.at.some(x => x.out === 'void')) continue;                       // a voided fight is out of the bet at odd 1.00
+      const price = (g.legs.length > 1 && bet.sgp && bet.sgp[fid]) ? bet.sgp[fid] : g.legs.reduce((p, l) => p * l.odd, 1);
+      if (g.at.every(x => x.out === 'won')) { odd *= price; won++; continue; }
+      if (g.at.some(x => x.state !== 'pre' || x.canceled)) return { ok: false, why: 'settling' };   // over, result still to come
+      pending++; odd *= price;
+      const p = probOf ? probOf(fid, g.legs.map(l => l.key)) : null;
+      if (p == null) prob = null; else if (prob != null) prob *= p;
+    }
+    if (!pending) return { ok: false, why: 'settling' };
+    if (!won) return { ok: true, kind: 'refund', value: bet.stake };
+    if (!(prob > 0)) return { ok: false, why: 'noprice' };
+    const full = r2(bet.stake * r2(odd)), value = Math.min(full, r2(full * prob * (1 - CASHOUT_MARGIN)));
+    if (value < 0.01) return { ok: false, why: 'noprice' };
+    return { ok: true, kind: 'market', value, full, chance: prob };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, CASHOUT_MARGIN, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
 })();
 
 /* ================= formatting ================= */
@@ -863,10 +888,19 @@ function settle() {
 /* ================= cashout ================= */
 const CASH_WHY = {
   live: 'Cashout congelado: tem luta desta aposta em andamento.',
-  started: 'Cashout encerrado: uma luta desta aposta já começou.',
-  unknown: 'Cashout indisponível: não achei a luta no card agora.'
+  settling: 'Cashout volta quando sair o resultado da luta que acabou.',
+  noprice: 'Cashout indisponível agora: falta a odd atual da luta que resta.',
+  unknown: 'Cashout indisponível: não achei a luta no card agora.',
+  lost: ''
 };
-const cashoutOf = b => Core.cashout(b, b.legs.map(l => D.fights.get(l.fid) || null));
+// today's fair chance of the given selections of one fight: the moneyline for a lone winner pick, the joint model that prices combos for the rest
+function chanceNow(fid, keys) {
+  const f = D.fights.get(fid);
+  if (!f || f.canceled || f.state !== 'pre') return null;
+  const p = priceOf(f);
+  return p ? p.chance(keys) : null;
+}
+const cashoutOf = b => Core.cashout(b, b.legs.map(l => { const f = D.fights.get(l.fid); return f ? { state: f.state, canceled: f.canceled, out: legOut(l, false) } : null; }), chanceNow);
 
 /* ================= repeat a bet ================= */
 // A bet can be repeated while every one of its selections is still open for betting at some price.
@@ -887,15 +921,27 @@ async function doCashout(id) {
   const b = S.bets.find(x => x.id === id && x.status === 'open');
   if (!b || !cashoutOf(b).ok) { ui.cash = null; render(); return; }
   ui.cashing = true; ui.cashMsg = ''; render();
-  // same rule as placing a bet: ask the source right now whether the fight has started
-  try { await loadBoard(); D.lastSync = Date.now(); D.err = null; }
-  catch (e) { ui.cashing = false; ui.cashMsg = 'Sem conexão com a ESPN. Não deu pra confirmar que a luta ainda não começou, tenta de novo.'; render(); return; }
+  const before = cashoutOf(b);
+  // same rule as placing a bet: ask the source right now whether a fight has started, and for today's prices of what is left
+  try {
+    await loadBoard();
+    const byEv = new Map();
+    for (const l of b.legs) { const f = D.fights.get(l.fid); if (f && f.state === 'pre') byEv.set(f.eventId, [...new Set([...(byEv.get(f.eventId) || []), f.id])]); }
+    if (before.kind === 'market') for (const [eid, fids] of byEv) await loadOdds(eid, true, fids);
+    await loadResults();
+    D.lastSync = Date.now(); D.err = null;
+  } catch (e) { ui.cashing = false; ui.cashMsg = 'Sem conexão com a ESPN. Não deu pra confirmar o cashout, tenta de novo.'; render(); return; }
   ui.cashing = false;
+  settle();                                    // a result may have come in while we were asking
+  if (b.status !== 'open') { ui.cash = null; render(); return; }
   const c = cashoutOf(b);
   if (!c.ok) { ui.cash = null; render(); toast(CASH_WHY[c.why] || 'Cashout indisponível.'); return; }
-  b.status = 'cashed'; b.payout = c.value; b.settledAt = Date.now();
+  if (Math.abs(c.value - before.value) > 0.004) { ui.cashMsg = `O valor mudou para ${money(c.value)}. Confere e confirma de novo.`; render(); return; }
+  const outs = b.legs.map(l => legOut(l, false));
+  b.status = 'cashed'; b.payout = c.value; b.settledAt = Date.now(); b.cash = { kind: c.kind, full: c.full || null, chance: c.chance || null };
+  b.legs.forEach((l, i) => { l.out = outs[i]; const f = D.fights.get(l.fid); if (f && f.state === 'post') l.res = resultText(f, D.results[l.fid]); });
   saveS(); saveCache(); ui.cash = null; render();
-  toast(`Cashout feito: ${money(c.value)} de volta no saldo.`);
+  toast(c.kind === 'market' ? `Aposta encerrada por ${money(c.value)} (${signed(c.value - b.stake)}).` : `Cashout feito: ${money(c.value)} de volta no saldo.`);
 }
 
 /* ================= copy a bet from a print or a pasted text ================= */
@@ -1010,6 +1056,8 @@ async function sync(force) {
     await Promise.all([loadOdds(ui.eventId, force), loadResults()]);
     const other = [...new Set(slip.sels.map(s => D.fights.get(s.fid)).filter(f => f && f.eventId !== ui.eventId).map(f => f.eventId))];
     for (const eid of other) await loadOdds(eid, force);
+    const left = [...new Set(openBets().filter(b => b.legs.some(l => { const f = D.fights.get(l.fid); return f && f.state === 'post'; })).flatMap(b => b.legs).map(l => D.fights.get(l.fid)).filter(f => f && f.state === 'pre' && f.eventId !== ui.eventId && !other.includes(f.eventId)).map(f => f.eventId))];
+    for (const eid of left) await loadOdds(eid, force);
     settle(); saveCache();
   } catch (e) { D.err = (e && e.name === 'AbortError') ? 'tempo esgotado' : String((e && e.message) || e); }
   finally { busy = false; render(); schedule(); }
@@ -1201,10 +1249,11 @@ function vApostas() {
     const again = repeatable(b) ? `<button class="btn ghost" data-act="again" data-id="${esc(b.id)}">Repetir aposta</button>` : '';
     if (isOpen) {
       const c = cashoutOf(b);
-      if (c.ok && ui.cash === b.id) h += `<div class="rowbtns co"><button class="btn" data-act="docash" data-id="${esc(b.id)}" ${ui.cashing ? 'disabled' : ''}>${ui.cashing ? 'Conferindo na ESPN…' : 'Confirmar: devolver ' + money(c.value)}</button><button class="btn ghost" data-act="cash" data-id="" ${ui.cashing ? 'disabled' : ''}>Manter aposta</button></div>`;
+      if (c.ok && ui.cash === b.id) h += `<div class="rowbtns co"><button class="btn" data-act="docash" data-id="${esc(b.id)}" ${ui.cashing ? 'disabled' : ''}>${ui.cashing ? 'Conferindo na ESPN…' : (c.kind === 'market' ? 'Confirmar: encerrar por ' : 'Confirmar: devolver ') + money(c.value)}</button><button class="btn ghost" data-act="cash" data-id="" ${ui.cashing ? 'disabled' : ''}>Manter aposta</button></div>`;
       else {
-        if (!c.ok) h += `<p class="hint co">${CASH_WHY[c.why] || 'Cashout indisponível.'}</p>`;
-        if (c.ok || again) h += `<div class="rowbtns co">${c.ok ? `<button class="btn ghost" data-act="cash" data-id="${esc(b.id)}">Cashout · devolve ${money(c.value)}</button>` : ''}${again}</div>`;
+        if (!c.ok && CASH_WHY[c.why]) h += `<p class="hint co">${CASH_WHY[c.why]}</p>`;
+        if (c.ok && c.kind === 'market') h += `<p class="hint co" data-cash="market">Oferta de cashout: ${money(c.full)} de retorno possível × ${Math.round(c.chance * 100)}% de chance do que falta, pelas odds de agora, menos ${Math.round(Core.CASHOUT_MARGIN * 100)}% de margem.</p>`;
+        if (c.ok || again) h += `<div class="rowbtns co">${c.ok ? `<button class="btn ghost" data-act="cash" data-id="${esc(b.id)}">${c.kind === 'market' ? 'Encerrar por ' : 'Cashout · devolve '}${money(c.value)}</button>` : ''}${again}</div>`;
       }
       if (ui.cash === b.id && ui.cashMsg) h += `<p class="msg co">${esc(ui.cashMsg)}</p>`;
     } else if (again) h += `<div class="rowbtns co">${again}</div>`;

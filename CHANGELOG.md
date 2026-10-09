@@ -2,6 +2,14 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2026-10-09
+
+### Adicionado
+- Cashout dinâmico: com parte da múltipla já batida e o resto por começar, o app oferece um valor para encerrar, calculado pelas odds de agora.
+
+### Alterado
+- O cashout não acaba mais quando a primeira luta de uma múltipla termina. Sem nenhuma luta decidida, continua devolvendo o valor integral.
+
 ## [0.2.0] - 2026-10-09
 
 ### Adicionado

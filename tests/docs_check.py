@@ -65,6 +65,7 @@ CONSTANTS = [
     (r'\[0\.5, 1, 2, 3\]\.map\(u =>', 'atalhos de 0,5u, 1u, 2u e 3u'),
     (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
     (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
+    (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
 ]
 for pattern, text in CONSTANTS:
     check('code still has the documented constant', re.search(pattern, html), pattern)
@@ -83,13 +84,15 @@ check('every priced market can be settled', priced == settle, f'{sorted(priced)}
 spec_status = set(re.search(r"status: ((?:'\w+'\|?)+), payout", spec).group(1).replace("'", '').split('|'))
 code_status = set(re.findall(r"status(?: ===|:) '(\w+)'", html)) | {'open'}
 check('bet statuses in the spec match the code', spec_status == code_status, f'{sorted(spec_status)} vs {sorted(code_status)}')
-cash_fn = html[html.index('function cashout(bet, fights)'):html.index('return { r2, am2dec')]
+cash_fn = html[html.index('function cashout(bet, legs, probOf)'):html.index('return { r2, am2dec')]
 code_why = set(re.findall(r"why: '(\w+)'", cash_fn))
 spec_why = set(re.findall(r'^\| `(\w+)` \| ', spec[spec.index('## Cashout'):spec.index('## Sincronização')], re.M))
 spec_why.discard('why')                       # the table header
 check('cashout reasons in the spec match the code', code_why == spec_why, f'{sorted(code_why)} vs {sorted(spec_why)}')
 check('every cashout reason the user can hit has a message', all(f'{w}:' in html[html.index('const CASH_WHY'):html.index('const cashoutOf')] for w in code_why - {'closed'}))
-check('cashout returns the stake and nothing else', 'return { ok: true, value: bet.stake };' in cash_fn)
+check('with nothing decided the cashout is the stake', "if (!won) return { ok: true, kind: 'refund', value: bet.stake };" in cash_fn)
+check('a market cashout never pays more than the bet could', 'Math.min(full, r2(full * prob * (1 - CASHOUT_MARGIN)))' in cash_fn)
+check('spec documents both cashout kinds', "`kind: 'refund'`" in spec and "`kind: 'market'`" in spec)
 
 # 5c. the image reader: versions pinned in the app match the local copies the tests use, and the integrity hash is the real one
 import base64, hashlib

@@ -21,6 +21,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 13. PRs #2 e #3 mesclados; produção no ar em https://oito-lados.vercel.app. Pedido de cashout (D21).
 14. Pedidos em sequência: repetir aposta (D22), máscara de milhares e moeda (D23), unidade (D24), pesquisa sobre pontuação por round (D25) e copiar aposta por imagem ou texto (D26).
 15. Pedido de cobertura de testes: cobertura do `index.html` passa a ser medida e cobrada no `verify.sh`.
+16. Respostas do Lucas às interpretações pendentes: cashout dinâmico em múltipla (D27), moeda só no depósito e com conversão (D28), banca e unidade confirmadas (D24), valor do print configurável (D29).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -163,6 +164,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 ## D21. Cashout devolve o valor integral, só antes da luta
 
 - **Contexto:** pedido de opção de cashout nas apostas. Nas palavras do Lucas: "pode retornar o valor integral apenas se a luta não começou; se a luta está em andamento, congela cashout e apostas".
+- **Revista em parte pela D27** (mesmo dia): o cashout não acaba mais quando a primeira luta de uma múltipla termina. O resto continua valendo.
 - **Decisão:** o cashout devolve a stake inteira enquanto nenhuma luta da aposta começou. Luta em andamento congela. Luta começada ou terminada encerra o cashout, e a aposta segue para a liquidação normal.
 - **Interpretação que precisou ser feita (confirmar com o Lucas):** numa múltipla, basta uma luta ter começado para o cashout acabar, mesmo que as outras ainda não tenham começado. A alternativa seria liberar de novo entre uma luta e outra.
 - **Descartado:** cashout a valor de mercado (stake × odd × chance atual, com margem), que chegou a ser desenhado. Exigiria odds ao vivo, que a ESPN não publica, e o pedido foi por devolução integral.
@@ -200,7 +202,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - **Verdict MMA:** aplicativo em que torcedores pontuam cada round em tempo real, com um placar médio ("Global Scorecard"). A página deles não menciona API pública; os dados aparecem em transmissões da PFL por parceria.
   - **Sportradar MMA:** API paga com estatísticas por round e resumo ao vivo. A página consultada não fala em pontuação por round.
   - **SportsAPI Pro:** a documentação lista notas por round (pelo exemplo, disponíveis depois da decisão) e um endpoint de odds ao vivo durante a luta. Preço, cobertura do UFC e forma de acesso não estavam na página.
-- **Decisão:** não fazer agora. O cashout segue a D21. Se um dia houver odd ao vivo confiável, o caminho é cashout a valor de mercado, não pontuação de round.
+- **Decisão:** não fazer agora. O cashout segue a D21 (e, entre uma luta e outra, a D27). Se um dia houver odd ao vivo confiável, o caminho é cashout a valor de mercado, não pontuação de round.
 - **Próximo passo combinado:** observar num card ao vivo o que a ESPN entrega durante a luta.
 
 ## D26. Copiar aposta de print ou texto, com leitura de imagem no aparelho
@@ -215,12 +217,25 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Consequência:** é a primeira dependência de terceiros em tempo de execução (uma biblioteca baixada de CDN, com versão fixa e hash de integridade no script principal). O leitor só conhece os formatos que foram testados; formato novo pode não ser entendido, e a tela diz o que não entendeu.
 - **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades.
 
+## D27. Cashout dinâmico em múltipla
+
+- **Contexto:** ao confirmar a D21, o Lucas pediu: "seria bacana ter um cashout dinâmico, tipo se 2 da múltipla bateram e falta 1 ele calcula e te oferece um valor para encerrar, igual ocorre numa bet real".
+- **Decisão:** quando parte da múltipla já bateu e o que resta ainda não começou, o app oferece um valor para encerrar: `retorno possível × chance de agora do que falta × (1 − 5%)`. Sem nenhuma luta decidida continua valendo a devolução integral da D21. Luta em andamento continua congelando.
+- **Por que dá para fazer sem odd ao vivo:** entre uma luta e outra a ESPN ainda publica a odd pré-luta das lutas que restam, e é ela que dá a chance de agora. O que a D21 descartou foi cashout **durante** a luta, que segue impossível pela mesma razão.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Margem de 5% sobre o valor justo. Casas reais cobram algo assim; o número é uma constante (`CASHOUT_MARGIN`).
+  - Se a perna que resta é de odd estimada, a oferta usa a estimativa do modelo.
+  - Com perna já perdida não há oferta: a aposta fecha como perdida.
+  - Vale para múltipla entre lutas. Combinada na mesma luta não tem oferta parcial, porque as pernas dela se decidem juntas.
+- **Descartado:** cashout parcial (encerrar só parte do valor) e oferta com a luta rolando.
+- **Consequência:** o cashout deixa de ser neutro no resultado: uma aposta encerrada assim entra no histórico com lucro ou prejuízo. A primeira versão da oferta lia a chance do vencedor no modelo conjunto, que não reproduz a moneyline exatamente quando há linhas de método; o teste ponta a ponta acusou a diferença (46,1% contra 46,8%) e a chance de um palpite de vencedor sozinho passou a vir da própria moneyline.
+
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
-| Confirmar a regra do cashout em múltipla (D21) | Lucas |
+| Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
 | Confirmar as interpretações de moeda (D23) e de unidade (D24) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, e confirmar a regra do valor em dinheiro (D26) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |

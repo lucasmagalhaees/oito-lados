@@ -71,6 +71,10 @@ JS = r"""
   near('joint: over + under takedowns', J.prob(['td:o:1.5']) + J.prob(['td:u:1.5']), 1, 2e-3);
   near('joint: decision matches the distance line', J.prob(['dist:yes']), (1 / 2.3) / (1 / 2.3 + 1 / 1.59), 1e-9);
   near('joint: under 3.5 matches the book total', J.prob(['tot:u:3.5']), (1 / 1.91) / (1 / 1.83 + 1 / 1.91), 1e-6);
+  near('chance: a lone winner pick is the moneyline without the margin', P.chance(['ml:b']), (1 / 2.05) / (1 / 1.8 + 1 / 2.05), 1e-9);
+  near('chance: the two winners sum to 1', P.chance(['ml:a']) + P.chance(['ml:b']), 1, 1e-9);
+  near('chance: anything else comes from the joint model', P.chance(['ml:b', 'tot:o:1.5']), J.prob(['ml:b', 'tot:o:1.5']), 1e-12);
+  near('chance: a single non-winner pick too', P.chance(['dist:yes']), J.prob(['dist:yes']), 1e-12);
   ok('longer fights have more takedowns', J.prob(['dist:yes', 'td:o:1.5']) / J.prob(['dist:yes']) > J.prob(['rnd:1', 'td:o:1.5']) / J.prob(['rnd:1']));
 
   const combo = ks => Core.combo(J, ks, ks.map(k => M[k].odd), M);
@@ -138,22 +142,38 @@ JS = r"""
   eq('combo alone with a void leg refunds', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'void']), { status: 'void', payout: 10 });
   eq('combo with a lost leg loses', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'lost']), { status: 'lost', payout: 0 });
 
-  /* ---- cashout: the whole stake, only before any of the bet's fights starts ---- */
-  const ft = (state, extra) => Object.assign({ state, canceled: false }, extra);
+  /* ---- cashout: the stake back before anything starts; a market offer once part of a parlay has won ---- */
+  const lg = (state, out, extra) => Object.assign({ state, canceled: false, out: out || null }, extra);
   const open = { status: 'open', stake: 40, legs: [leg('f1', 2)] };
-  eq('cashout before the fight returns the stake', Core.cashout(open, [ft('pre')]), { ok: true, value: 40 });
-  eq('cashout frozen while the fight is live', Core.cashout(open, [ft('in')]), { ok: false, why: 'live' });
-  eq('cashout gone once the fight is over', Core.cashout(open, [ft('post')]), { ok: false, why: 'started' });
-  eq('cashout not offered for a cancelled fight (it settles as void)', Core.cashout(open, [ft('post', { canceled: true })]), { ok: false, why: 'started' });
-  eq('cashout needs the fight on the board', Core.cashout(open, [null]), { ok: false, why: 'unknown' });
-  eq('cashout only for open bets', Core.cashout({ status: 'won', stake: 40, legs: [leg('f1', 2)] }, [ft('pre')]), { ok: false, why: 'closed' });
-  eq('cashout only once', Core.cashout({ status: 'cashed', stake: 40, legs: [leg('f1', 2)] }, [ft('pre')]), { ok: false, why: 'closed' });
-  const multi = { status: 'open', stake: 10, sgp: { f1: 4.5 }, legs: [leg('f1', 2.62), leg('f1', 1.27), leg('f2', 2)] };
-  eq('parlay cashout while every fight is still to start', Core.cashout(multi, [ft('pre'), ft('pre'), ft('pre')]), { ok: true, value: 10 });
-  eq('parlay cashout frozen when one fight is live', Core.cashout(multi, [ft('pre'), ft('pre'), ft('in')]), { ok: false, why: 'live' });
-  eq('parlay cashout gone after its first fight ended', Core.cashout(multi, [ft('post'), ft('post'), ft('pre')]), { ok: false, why: 'started' });
-  eq('a live fight wins over a finished one in the reason shown', Core.cashout(multi, [ft('post'), ft('post'), ft('in')]), { ok: false, why: 'live' });
-  eq('cashout value never depends on the odds', Core.cashout({ status: 'open', stake: 123.45, legs: [leg('f1', 51)] }, [ft('pre')]).value, 123.45);
+  const never = () => { throw new Error('a refund must not need a price'); };
+  eq('cashout before the fight returns the stake', Core.cashout(open, [lg('pre')], () => 0.5), { ok: true, kind: 'refund', value: 40 });
+  eq('refund works without any price available', Core.cashout(open, [lg('pre')], () => null), { ok: true, kind: 'refund', value: 40 });
+  eq('cashout frozen while the fight is live', Core.cashout(open, [lg('in')], never), { ok: false, why: 'live' });
+  eq('fight over, result still to come', Core.cashout(open, [lg('post')], () => null), { ok: false, why: 'settling' });
+  eq('cancelled fight is left to settlement', Core.cashout(open, [lg('post', 'void', { canceled: true })], () => null), { ok: false, why: 'settling' });
+  eq('cashout needs the fight on the board', Core.cashout(open, [null], never), { ok: false, why: 'unknown' });
+  eq('cashout only for open bets', Core.cashout({ status: 'won', stake: 40, legs: [leg('f1', 2)] }, [lg('pre')], never), { ok: false, why: 'closed' });
+  eq('cashout only once', Core.cashout({ status: 'cashed', stake: 40, legs: [leg('f1', 2)] }, [lg('pre')], never), { ok: false, why: 'closed' });
+  const two = { status: 'open', stake: 10, legs: [leg('f1', 2), leg('f2', 1.5)] };
+  eq('parlay before any fight: refund', Core.cashout(two, [lg('pre'), lg('pre')], () => 0.5), { ok: true, kind: 'refund', value: 10 });
+  eq('parlay frozen when one fight is live', Core.cashout(two, [lg('post', 'won'), lg('in')], never), { ok: false, why: 'live' });
+  eq('parlay with a lost leg has nothing to cash out', Core.cashout(two, [lg('post', 'lost'), lg('pre')], () => 0.5), { ok: false, why: 'lost' });
+  eq('parlay: one leg won, one to go -> market offer', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => 0.6), { ok: true, kind: 'market', value: 17.1, full: 30, chance: 0.6 });
+  const three = { status: 'open', stake: 10, legs: [leg('f1', 2), leg('f2', 1.5), leg('f3', 3)] };
+  eq('parlay: two legs won, one to go', Core.cashout(three, [lg('post', 'won'), lg('post', 'won'), lg('pre')], () => 0.3), { ok: true, kind: 'market', value: 25.65, full: 90, chance: 0.3 });
+  eq('parlay: one won, two to go multiplies the chances', Core.cashout(three, [lg('post', 'won'), lg('pre'), lg('pre')], fid => (fid === 'f2' ? 0.6 : 0.3)).value, Core.r2(90 * 0.18 * 0.95));
+  eq('parlay: a voided leg and nothing won yet is still a refund', Core.cashout(two, [lg('post', 'void', { canceled: true }), lg('pre')], () => 0.5), { ok: true, kind: 'refund', value: 10 });
+  eq('parlay: a voided leg drops out of the offer', Core.cashout(three, [lg('post', 'void'), lg('post', 'won'), lg('pre')], () => 0.5), { ok: true, kind: 'market', value: 21.38, full: 45, chance: 0.5 });
+  eq('parlay: the fight that is left has no price', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => null), { ok: false, why: 'noprice' });
+  eq('parlay: a finished fight waiting for its result holds the offer', Core.cashout(three, [lg('post', 'won'), lg('post'), lg('pre')], () => 0.5), { ok: false, why: 'settling' });
+  eq('parlay: everything already won is left to settlement', Core.cashout(two, [lg('post', 'won'), lg('post', 'won')], never), { ok: false, why: 'settling' });
+  eq('offer never exceeds what the bet would pay', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => 1).value, 28.5);
+  const combo2 = { status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f1', 2), Object.assign(leg('f2', 2.62), { key: 'fm:ko' }), Object.assign(leg('f2', 1.27), { key: 'tot:o:1.5' })] };
+  let asked = null;
+  eq('same-fight combo still to come is priced as one, at its own odd', Core.cashout(combo2, [lg('post', 'won'), lg('pre'), lg('pre')], (fid, keys) => { asked = [fid, keys]; return 0.2; }), { ok: true, kind: 'market', value: 17.1, full: 90, chance: 0.2 });
+  eq('the price is asked for the selections of that fight together', asked, ['f2', ['fm:ko', 'tot:o:1.5']]);
+  eq('same-fight combo alone, before the fight: refund', Core.cashout({ status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f2', 2.62), leg('f2', 1.27)] }, [lg('pre'), lg('pre')], () => 0.2), { ok: true, kind: 'refund', value: 10 });
+  eq('cashout margin', Core.CASHOUT_MARGIN, 0.05);
 
   /* ---- money fields: thousands mask and parsing (dot groups thousands, comma starts the cents) ---- */
   for (const [raw, want] of [['', ''], ['5', '5'], ['150', '150'], ['1500', '1.500'], ['15000', '15.000'], ['1234567', '1.234.567'], ['1.500', '1.500'], ['15.00', '1.500'],

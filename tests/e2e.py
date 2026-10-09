@@ -2,7 +2,7 @@
 
 Usage: python3 tests/e2e.py [dark|light]   (needs: pip install -r tests/requirements.txt && playwright install chromium)
 Walks one fictional card through pre-fight -> live -> final, places singles, parlays and same-fight combos through the UI,
-and prints prices, settlements and the final balance (expected: R$ 1.604,40).
+and prints prices, settlements and the final balance (expected: R$ 1.609,59).
 """
 import json, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -140,6 +140,8 @@ with sync_playwright() as p:
     pick('f3','fm:ko'); pick('f3','tot:o:1.5'); pick('f2','ml:a'); pg.click('#slipbtn'); pg.click('[data-act=mode][data-m=multi]'); pg.fill('#stake','25'); shot('s9-combo.png')
     pg.click('[data-act=unpick][data-key="fm:ko"]'); pg.click('[data-act=unpick][data-key="tot:o:1.5"]'); pg.click('[data-act=unpick][data-key="ml:a"]')
     bet([('f1','ml:a'),('f3','ml:a')], '10', 'multi')                  # both win @1.67 x 1.80 -> 30.10; used below to check cashout after the first fight
+    bet([('f1','ml:a'),('f3','ml:b')], '10', 'multi')                  # cashed out below at market value once the first fight has won
+    mid = pg.evaluate('window.__OL.S.bets[window.__OL.S.bets.length - 1].id')
     # cashout: a bet on a fight that has not started gives the whole stake back
     bet([('f3','ml:b')], '40')
     before = bal(); cid = pg.evaluate('window.__OL.S.bets[window.__OL.S.bets.length - 1].id')
@@ -158,38 +160,44 @@ with sync_playwright() as p:
     pg.click(f'[data-act=cash][data-id="{again[0]}"]'); pg.click(f'[data-act=docash][data-id="{again[0]}"]')
     pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{again[0]}").status === "cashed"')
     print('repetir', again[1:], '-> cashout de novo | saldo', bal())
-    assert bal() == before.replace('690', '730'), (before, bal())
+    assert bal() == before.replace('680', '720'), (before, bal())
     multi_again = pg.locator('.bet', has_text='Múltipla').first.locator('[data-act=again]')
     multi_again.click(); pg.wait_for_selector('#stake')
     kind = pg.evaluate('[window.__OL.slip.mode, window.__OL.slip.sels.length, window.__OL.slip.stake]')
     assert kind[0] == 'multi' and kind[1] >= 2, kind
     for _ in range(kind[1]): pg.click('#panel [data-act=unpick]')     # leave the slip empty again
-    assert pg.locator('[data-act=cash]').count() == 12, 'every other open bet should still offer cashout before the card starts'
+    assert pg.locator('[data-act=cash]').count() == 13, 'every other open bet should still offer cashout before the card starts'
     pg.click('.tabbar [data-tab=lutas]')
     print('balance after bets', bal(), '| open', pg.evaluate('window.__OL.S.bets.length'))
     PHASE['n'] = 1; sync(); pg.click('.tabbar [data-tab=apostas]'); pg.wait_for_timeout(200); shot('s4-live.png')
     frozen = pg.locator('.hint.co', has_text='Cashout congelado').count(); still = pg.locator('[data-act=cash]').count()
     print('fase 1: cashout congelado em', frozen, 'apostas, disponível em', still)
-    assert frozen == 6 and still == 6, (frozen, still)       # 6 bets touch the live fight; the other 6 are on fights still to start
+    assert frozen == 7 and still == 6, (frozen, still)       # 7 bets touch the live fight; the other 6 are on fights still to start
     print('phase1 statuses', pg.evaluate('window.__OL.S.bets.map(b=>b.status)'), 'td', pg.evaluate('JSON.stringify(window.__OL.D.td)'))
     PHASE['n'] = 2; sync(); sync(); pg.wait_for_timeout(200)
     opened = pg.evaluate('window.__OL.S.bets.filter(b => b.status === "open").length')
-    gone = pg.locator('.hint.co', has_text='Cashout encerrado').count(); frozen = pg.locator('.hint.co', has_text='Cashout congelado').count(); still = pg.locator('[data-act=cash]').count()
-    print('fase 2:', opened, 'abertas | cashout encerrado', gone, '| congelado', frozen, '| disponível', still)
-    assert (opened, gone, frozen, still) == (9, 1, 4, 4), (opened, gone, frozen, still)   # gone: parlay whose first fight is over; frozen: bets touching the live fight; still: bets entirely on the main event
+    offers = pg.locator('[data-cash=market]').count(); frozen = pg.locator('.hint.co', has_text='Cashout congelado').count(); still = pg.locator('[data-act=cash]').count()
+    print('fase 2:', opened, 'abertas | oferta de mercado', offers, '| congelado', frozen, '| disponível', still)
+    assert (opened, offers, frozen, still) == (10, 2, 4, 6), (opened, offers, frozen, still)   # offers: the two parlays whose first fight has won; frozen: bets touching the live fight; still: offers plus bets entirely on the main event
+    # dynamic cashout: one leg of the parlay has won, the other fight has not started, so the offer is the fair value of what is left
+    pg.click(f'[data-act=cash][data-id="{mid}"]'); shot('s12-cashout-mercado.png')
+    pg.click(f'[data-act=docash][data-id="{mid}"]'); pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{mid}").status === "cashed"')
+    dyn = pg.evaluate(f'(() => {{ const b = window.__OL.S.bets.find(b => b.id === "{mid}"); return [b.payout, b.cash.kind, b.cash.full, b.cash.chance, b.legs.map(l => l.out || null)]; }})()')
+    print('cashout dinâmico', dyn)
+    assert dyn[:3] == [15.19, 'market', 34.2] and abs(dyn[3] - 0.4675) < 5e-4 and dyn[4] == ['won', None], dyn   # 10 x 3.42 x 46.75% x 0.95
     print('phase2 statuses', pg.evaluate('window.__OL.S.bets.map(b=>[b.type,b.legs.map(l=>l.key).join("+"),b.status,b.payout])'), bal())
     PHASE['n'] = 3; sync(); sync()
     st = pg.evaluate('window.__OL.S.bets.map(b=>[b.type,b.legs.map(l=>l.key+"@"+l.odd).join("+"),b.stake,b.status,b.payout])')
     for s in st: print('  ', s)
     print('final balance', bal())
-    assert bal().replace('\xa0', ' ') == 'R$ 1.604,40', bal()
+    assert bal().replace('\xa0', ' ') == 'R$ 1.609,59', bal()
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_timeout(200); shot('s6-carteira.png')
     units = pg.inner_text('#pnlu'); print('em unidades:', units)
     box = pg.locator('#chart svg').bounding_box(); pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] * 0.5)
     tipText = pg.inner_text('#tip'); assert 'aposta' in tipText and 'acumulado' in tipText, tipText        # hovering the chart explains the point
     pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] + 60); pg.wait_for_function('document.getElementById("tip").hidden')
-    assert units.startswith('+6,04u'), units                  # R$ 604,40 of profit with every bet placed at a R$ 100,00 unit
+    assert units.startswith('+6,1u'), units                   # R$ 609,59 of profit with every bet placed at a R$ 100,00 unit
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
     pg.click('[data-act=event]'); pg.wait_for_selector('.fight')                                       # picking the event again keeps the card on screen
@@ -202,11 +210,11 @@ with sync_playwright() as p:
     pg.click('[data-act=reset]'); pg.click('[data-act=doreset]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
     pg.click('[data-act=restore]'); pg.fill('#rs', 'isto não é um backup'); pg.click('[data-act=dorestore]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'a bad backup must change nothing'
     pg.fill('#rs', saved); pg.click('[data-act=dorestore]'); pg.wait_for_timeout(400)
-    assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 14, (bal(), final)
+    assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 15, (bal(), final)
     print('backup e restauração: saldo', final, 'de volta depois de zerar')
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
     b.close()
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs
-print('e2e ok: 14 apostas encerradas (2 por cashout, 1 delas repetida), saldo final R$ 1.604,40, sem estouro de largura e sem erro de script')
+print('e2e ok: 15 apostas encerradas (3 por cashout: 1 repetida e 1 a valor de mercado), saldo final R$ 1.609,59, sem estouro de largura e sem erro de script')

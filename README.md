@@ -21,7 +21,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Mercados:** vencedor, método (KO/TKO, finalização, decisão), vai até a decisão, total de rounds, round em que acaba, vencedor e round, quedas na luta e por lutador.
 - **Simples, múltipla e combinada:** a combinada na mesma luta é precificada pela chance de tudo acontecer junto, não pela multiplicação das odds. Combinações impossíveis ou redundantes são recusadas.
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
-- **Cashout:** devolve o valor integral da aposta enquanto nenhuma luta dela começou. Com luta em andamento, cashout e apostas ficam congelados.
+- **Cashout:** devolve o valor integral enquanto nenhuma luta da aposta foi decidida. Se parte da múltipla já bateu e o resto ainda não começou, oferece um valor para encerrar, calculado pelas odds de agora. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
 - **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora e o mesmo valor. A imagem é lida no próprio aparelho.
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). O cupom aceita valor em unidades e a Carteira mostra o resultado em unidades.
