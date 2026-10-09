@@ -42,8 +42,11 @@ async () => {
   ok('scoreboard has events[]', Array.isArray(sb.events));
   const events = (sb.events || []).map(Core.normEvent), fights = events.flatMap(e => e.fights);
   if (!fights.length) { warns.push('no UFC fights within 21 days either way: nothing else could be checked'); return { checks, warns }; }
-  const bad = fights.find(f => !(f.id && f.a.id && f.b.id && f.a.last && f.b.last && isFinite(f.date) && [3, 5].includes(f.rounds) && f.weight));
-  ok(`all ${fights.length} fights have ids, names, date, weight class and 3 or 5 rounds`, !bad, bad && JSON.stringify(bad));
+  const bad = fights.find(f => !(f.id && f.a.id && f.b.id && f.a.last && f.b.last && isFinite(f.date) && Number.isInteger(f.rounds) && f.rounds >= 1 && f.rounds <= 5 && f.weight));
+  ok(`all ${fights.length} fights have ids, names, date, weight class and a round count from 1 to 5`, !bad, bad && JSON.stringify(bad));
+  // UFC bouts are 3 or 5 rounds; anything else is reported, not failed: the app uses the number as ESPN gives it
+  const unusual = fights.filter(f => ![3, 5].includes(f.rounds));
+  if (unusual.length) warns.push(`${unusual.length} fight(s) listed with a round count other than 3 or 5: ` + unusual.slice(0, 3).map(f => `${f.a.last} x ${f.b.last} (${f.rounds} rounds, ${f.state}, fight ${f.id})`).join('; '));
   const odd = fights.find(f => !['pre', 'in', 'post'].includes(f.state));
   ok('every fight state is pre, in or post', !odd, odd && odd.state);
   const allPost = events.filter(e => e.fights.length && e.fights.every(f => f.state === 'post'));
