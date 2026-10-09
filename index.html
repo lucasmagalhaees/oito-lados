@@ -750,6 +750,21 @@ const CASH_WHY = {
   unknown: 'Cashout indisponível: não achei a luta no card agora.'
 };
 const cashoutOf = b => Core.cashout(b, b.legs.map(l => D.fights.get(l.fid) || null));
+
+/* ================= repeat a bet ================= */
+// A bet can be repeated while every one of its selections is still open for betting at some price.
+const repeatable = b => b.legs.length > 0 && b.legs.every(l => { const f = D.fights.get(l.fid), p = f && canBet(f) ? priceOf(f) : null; return !!(p && p.map[l.key]); });
+// Repeating only fills the slip (same selections, same kind, same stake) and opens it: the bet is still placed by the
+// usual button, at today's odds, after the usual check with the source.
+function repeatBet(id) {
+  const b = S.bets.find(x => x.id === id);
+  if (!b || !repeatable(b)) { render(); return; }
+  slip.sels = b.legs.map(l => ({ fid: l.fid, key: l.key }));
+  slip.mode = b.type === 'multi' ? 'multi' : 'single';
+  slip.stake = String(b.stake).replace('.', ',');
+  ui.msg = ''; ui.cash = null; ui.sheet = true;
+  renderSheet(); render();
+}
 async function doCashout(id) {
   if (ui.cashing) return;
   const b = S.bets.find(x => x.id === id && x.status === 'open');
@@ -961,13 +976,16 @@ function vApostas() {
     h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b></div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
       (isOpen ? `<div><small>Retorno</small><b>${money(Core.r2(b.stake * odd))}</b></div>`
         : `<div><small>Resultado</small><b class="${profit > 0 ? 'pos' : profit < 0 ? 'neg' : ''}">${signed(profit)}</b></div>`) + '</div>';
+    const again = repeatable(b) ? `<button class="btn ghost" data-act="again" data-id="${esc(b.id)}">Repetir aposta</button>` : '';
     if (isOpen) {
       const c = cashoutOf(b);
       if (c.ok && ui.cash === b.id) h += `<div class="rowbtns co"><button class="btn" data-act="docash" data-id="${esc(b.id)}" ${ui.cashing ? 'disabled' : ''}>${ui.cashing ? 'Conferindo na ESPN…' : 'Confirmar: devolver ' + money(c.value)}</button><button class="btn ghost" data-act="cash" data-id="" ${ui.cashing ? 'disabled' : ''}>Manter aposta</button></div>`;
-      else if (c.ok) h += `<button class="btn ghost block co" data-act="cash" data-id="${esc(b.id)}">Cashout · devolve ${money(c.value)}</button>`;
-      else h += `<p class="hint co">${CASH_WHY[c.why] || 'Cashout indisponível.'}</p>`;
+      else {
+        if (!c.ok) h += `<p class="hint co">${CASH_WHY[c.why] || 'Cashout indisponível.'}</p>`;
+        if (c.ok || again) h += `<div class="rowbtns co">${c.ok ? `<button class="btn ghost" data-act="cash" data-id="${esc(b.id)}">Cashout · devolve ${money(c.value)}</button>` : ''}${again}</div>`;
+      }
       if (ui.cash === b.id && ui.cashMsg) h += `<p class="msg co">${esc(ui.cashMsg)}</p>`;
-    }
+    } else if (again) h += `<div class="rowbtns co">${again}</div>`;
     h += `<p class="when">Feita em ${esc(dWhen.format(b.t))}${b.settledAt ? ' · encerrada em ' + esc(dWhen.format(b.settledAt)) + (b.status === 'cashed' ? ' por cashout' : '') : ''}</p></article>`;
   }
   return h;
@@ -1137,6 +1155,7 @@ document.addEventListener('click', e => {
   else if (a === 'filter') { ui.filter = b.dataset.f; ui.cash = null; render(); }
   else if (a === 'cash') { ui.cash = b.dataset.id || null; ui.cashMsg = ''; render(); }
   else if (a === 'docash') doCashout(b.dataset.id);
+  else if (a === 'again') repeatBet(b.dataset.id);
   else if (a === 'depq') { ui.dep = String(parseMoney(ui.dep) + Number(b.dataset.v)).replace('.', ','); const el = $('#dep'); if (el) el.value = ui.dep; }
   else if (a === 'deposit') {
     const v = parseMoney(($('#dep') || {}).value || ui.dep);

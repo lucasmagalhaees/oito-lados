@@ -79,6 +79,22 @@ with sync_playwright() as p:
     cashed = pg.evaluate(f'(() => {{ const b = window.__OL.S.bets.find(b => b.id === "{cid}"); return [b.status, b.payout, b.stake]; }})()')
     assert cashed == ['cashed', 40, 40], cashed
     print('cashout', cashed, '| saldo', before, '->', bal())
+    # repeat: the cashed-out bet goes back into the slip with the same selection and stake, and is placed by the usual button
+    pg.click('[data-act=filter][data-f=done]'); pg.click(f'[data-act=again][data-id="{cid}"]'); pg.wait_for_selector('#stake')
+    assert pg.input_value('#stake') == '40' and pg.locator('#panel .sel').count() == 1, (pg.input_value('#stake'), pg.locator('#panel .sel').count())
+    shot('s11-repetir.png'); n0 = pg.evaluate('window.__OL.S.bets.length')
+    pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length === {n0 + 1}')
+    again = pg.evaluate('(() => { const b = window.__OL.S.bets[window.__OL.S.bets.length - 1]; return [b.id, b.type, b.stake, b.status, b.legs.map(l => l.key).join("+")]; })()')
+    assert again[1:] == ['single', 40, 'open', 'ml:b'], again
+    pg.click(f'[data-act=cash][data-id="{again[0]}"]'); pg.click(f'[data-act=docash][data-id="{again[0]}"]')
+    pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{again[0]}").status === "cashed"')
+    print('repetir', again[1:], '-> cashout de novo | saldo', bal())
+    assert bal() == before.replace('690', '730'), (before, bal())
+    multi_again = pg.locator('.bet', has_text='Múltipla').first.locator('[data-act=again]')
+    multi_again.click(); pg.wait_for_selector('#stake')
+    kind = pg.evaluate('[window.__OL.slip.mode, window.__OL.slip.sels.length, window.__OL.slip.stake]')
+    assert kind[0] == 'multi' and kind[1] >= 2, kind
+    for _ in range(kind[1]): pg.click('#panel [data-act=unpick]')     # leave the slip empty again
     assert pg.locator('[data-act=cash]').count() == 12, 'every other open bet should still offer cashout before the card starts'
     pg.click('.tabbar [data-tab=lutas]')
     print('balance after bets', bal(), '| open', pg.evaluate('window.__OL.S.bets.length'))
@@ -100,10 +116,11 @@ with sync_playwright() as p:
     assert bal().replace('\xa0', ' ') == 'R$ 1.604,40', bal()
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_timeout(200); shot('s6-carteira.png')
+    pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     b.close()
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs
-print('e2e ok: 13 apostas encerradas (1 por cashout), saldo final R$ 1.604,40, sem estouro de largura e sem erro de script')
+print('e2e ok: 14 apostas encerradas (2 por cashout, 1 delas repetida), saldo final R$ 1.604,40, sem estouro de largura e sem erro de script')
