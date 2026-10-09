@@ -6,11 +6,16 @@ and prints prices, settlements and the final balance (expected: R$ 1.604,40).
 """
 import json, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from mock_espn import PHASE, handle, calls
+from mock_espn import PHASE, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, TIP_TEXT
+import base64
+import cov
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SHOTS = ROOT / 'tests' / 'shots'; SHOTS.mkdir(exist_ok=True)
+
+if not ocr_files_installed():
+    sys.exit('faltam os arquivos do leitor de imagem: rode  npm ci --prefix tests')
 
 errs = []
 with sync_playwright() as p:
@@ -20,6 +25,8 @@ with sync_playwright() as p:
     pg.on('console', lambda m: errs.append(m.text) if m.type in ('error',) else None)
     pg.on('pageerror', lambda e: errs.append('PAGEERROR '+str(e)))
     pg.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_())
+    ctx.route('https://cdn.jsdelivr.net/**', local_cdn); pg.route('https://cdn.jsdelivr.net/**', local_cdn)
+    cov.start(pg)
     pg.goto((ROOT / 'index.html').as_uri())
     pg.wait_for_selector('.fight .opt.ml')
     pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
@@ -74,6 +81,41 @@ with sync_playwright() as p:
       const all = Object.keys(p.map); const tot1 = J.prob(['ml:a']) + J.prob(['ml:b']);
       return [t(['fm:ko','tot:o:1.5']), t(['ml:a','fm:sub']), t(['ml:a','mov:a:sub']), t(['dist:yes','tot:u:1.5']), t(['mov:b:ko','rnd:1']), t(['ml:a','td:o:1.5']), t(['fm:sub','tda:a:yes']), t(['td:u:0.5','tda:a:yes']), t(['ml:b','dist:yes','td:u:1.5']), t(['wr:a:2','tot:o:1.5']), t(['rnd:2','tot:u:1.5']), t(['ml:a','fm:ko']), t(['ml:b','rnd:3']), t(['fm:ko','fm:sub']), 'sum ml ' + tot1.toFixed(6), 'td over1.5 single ' + p.map['td:o:1.5'].odd + ' p=' + J.prob(['td:o:1.5']).toFixed(4)]; }""")
     for c in combos: print('  combo', c)
+    # copy a bet: first from a pasted tip, then from a print read on the device, then something that is not on the card
+    pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
+    pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    got = pg.inner_text('#impres'); value = pg.inner_text('#impvalue').replace('\xa0', ' ')
+    assert 'Connor Lee Dunne vence' in got and 'Odd do print 1.44' in got and 'odd agora 2.05' in got, got
+    assert value == 'R$ 50,00 · 0,5u', value
+    pg.click('[data-act=impgo]'); pg.wait_for_selector('#stake')
+    assert pg.input_value('#stake') == '50' and pg.evaluate('JSON.stringify(window.__OL.slip.sels)') == '[{"fid":"f3","key":"ml:b"}]', pg.evaluate('JSON.stringify(window.__OL.slip)')
+    pg.click('#panel [data-act=unpick]')
+    art = ctx.new_page(); art.set_content(PRINT_HTML); art.locator('#print').screenshot(path=str(SHOTS / 'print.png')); art.close()
+    CDN_DOWN['on'] = True                                             # the reader cannot be downloaded: say so and offer the text route
+    pg.click('[data-act=imp]'); pg.set_input_files('#impfile', str(SHOTS / 'print.png')); pg.wait_for_selector('#panel .msg')
+    assert 'Não consegui ler a imagem' in pg.inner_text('#panel .msg'), pg.inner_text('#panel .msg')
+    CDN_DOWN['on'] = False
+    pg.set_input_files('#impfile', str(SHOTS / 'print.png')); pg.wait_for_selector('#impres', timeout=120000)
+    got = pg.inner_text('#impres'); value = pg.inner_text('#impvalue').replace('\xa0', ' '); read = pg.input_value('#imptext')
+    print('print lido:', ' | '.join(read.splitlines()))
+    assert 'Connor Lee Dunne vence' in got and 'Odd do print 2.05' in got, got
+    assert value == 'R$ 250,00 · 2,5u' and 'mesmo valor do print' in pg.inner_text('#panel'), value
+    shot('s12-copiar.png'); pg.click('[data-act=impgo]'); pg.wait_for_selector('#stake')
+    assert pg.input_value('#stake') == '250' and pg.evaluate('window.__OL.slip.sels.length') == 1, pg.input_value('#stake')
+    pg.click('#panel [data-act=unpick]')
+    pg.click('[data-act=imp]')
+    for text, expect in [('Fulano x Beltrano\nFulano para vencer a luta', 'Não achei nenhuma luta'), ('', 'Cola um texto'), ('Almeida x Dunne', 'não entendi qual é a aposta'), ('Dunne e Teles', 'mais de uma luta possível')]:
+        pg.fill('#imptext', text); pg.click('[data-act=impread]'); pg.wait_for_selector('#panel .msg')
+        assert expect in pg.inner_text('#panel .msg'), (text, pg.inner_text('#panel .msg'))
+    # a print pasted from the clipboard goes through the same reader
+    png = base64.b64encode((SHOTS / 'print.png').read_bytes()).decode()
+    pg.evaluate('''b64 => { const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const dt = new DataTransfer(); dt.items.add(new File([bytes], 'print.png', { type: 'image/png' }));
+        document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }''', png)
+    pg.wait_for_selector('#impres', timeout=120000); assert 'Connor Lee Dunne vence' in pg.inner_text('#impres')
+    pg.keyboard.press('Escape'); assert pg.evaluate('document.getElementById("sheet").hidden'), 'Escape closes the import sheet'
+    pg.click('[data-act=imp]')
+    pg.click('[data-act=impclose]'); assert pg.evaluate('document.getElementById("sheet").hidden')
+    print('leitor de imagem: arquivos pedidos', sorted({u.rsplit('/', 1)[1] for u in cdn_calls}))
     # unit: 10% of the bankroll by default, adjustable; the slip can stake in units
     pg.click('.tabbar [data-tab=carteira]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
     pg.fill('#unitpct', '2,5'); pg.click('[data-act=unit]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 25,00', pg.inner_text('#unitnow')
@@ -144,11 +186,26 @@ with sync_playwright() as p:
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_timeout(200); shot('s6-carteira.png')
     units = pg.inner_text('#pnlu'); print('em unidades:', units)
+    box = pg.locator('#chart svg').bounding_box(); pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] * 0.5)
+    tipText = pg.inner_text('#tip'); assert 'aposta' in tipText and 'acumulado' in tipText, tipText        # hovering the chart explains the point
+    pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] + 60); pg.wait_for_function('document.getElementById("tip").hidden')
     assert units.startswith('+6,04u'), units                  # R$ 604,40 of profit with every bet placed at a R$ 100,00 unit
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
+    pg.click('[data-act=event]'); pg.wait_for_selector('.fight')                                       # picking the event again keeps the card on screen
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
+    # the person's data: backup, restore and reset
+    pg.click('.tabbar [data-tab=carteira]'); final = bal(); saved = pg.evaluate('JSON.stringify(window.__OL.S)')
+    pg.click('[data-act=backup]'); pg.wait_for_timeout(300)                                             # copies to the clipboard, or shows the text when it cannot
+    pg.click('[data-act=reset]'); pg.click('[data-act=reset]')                                           # opening and backing out of the reset keeps everything
+    assert bal() == final, bal()
+    pg.click('[data-act=reset]'); pg.click('[data-act=doreset]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
+    pg.click('[data-act=restore]'); pg.fill('#rs', 'isto não é um backup'); pg.click('[data-act=dorestore]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'a bad backup must change nothing'
+    pg.fill('#rs', saved); pg.click('[data-act=dorestore]'); pg.wait_for_timeout(400)
+    assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 14, (bal(), final)
+    print('backup e restauração: saldo', final, 'de volta depois de zerar')
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
+    cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
     b.close()
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs

@@ -91,6 +91,22 @@ check('cashout reasons in the spec match the code', code_why == spec_why, f'{sor
 check('every cashout reason the user can hit has a message', all(f'{w}:' in html[html.index('const CASH_WHY'):html.index('const cashoutOf')] for w in code_why - {'closed'}))
 check('cashout returns the stake and nothing else', 'return { ok: true, value: bet.stake };' in cash_fn)
 
+# 5c. the image reader: versions pinned in the app match the local copies the tests use, and the integrity hash is the real one
+import base64, hashlib
+ocr = re.search(r"const OCR = \{ lib: '([\d.]+)', core: '([\d.]+)', data: '([\d.]+)' \};", html)
+deps = json.loads(read('tests/package.json'))['dependencies']
+check('app pins the OCR versions', bool(ocr))
+if ocr:
+    check('OCR versions in the app match tests/package.json', list(ocr.groups()) == [deps['tesseract.js'], deps['tesseract.js-core'], deps['@tesseract.js-data/por']], f'{ocr.groups()} vs {deps}')
+    check('spec states the OCR version', f'Tesseract.js {ocr.group(1)}' in spec, ocr.group(1))
+lib = ROOT / 'tests' / 'node_modules' / 'tesseract.js' / 'dist' / 'tesseract.min.js'
+sri = re.search(r"const OCR_SRI = '(sha384-[^']+)';", html)
+check('app carries an integrity hash for the OCR script', bool(sri))
+if lib.exists() and sri:
+    real = 'sha384-' + base64.b64encode(hashlib.sha384(lib.read_bytes()).digest()).decode()
+    check('integrity hash matches the pinned OCR file', real == sri.group(1), f'{real} vs {sri.group(1)}')
+check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
+
 # 6. storage keys and API hosts
 for key in ('oitolados.v1', 'oitolados.cache.v1'):
     check('storage key in code and spec', f"'{key}'" in html and f'`{key}`' in spec, key)
@@ -100,9 +116,9 @@ check('spec documents both API bases', len(re.findall(r'`(?:SITE|CORE) = https:/
 
 # 7. the expected end-to-end balance is the same everywhere it is quoted
 balances = {rel: set(re.findall(r'R\$ 1\.\d{3},\d{2}', read(rel))) for rel in ('CLAUDE.md', 'tests/e2e.py', 'docs/verificacao.md')}
-asserts = re.findall(r"== '(R\$ [\d.,]+)', bal\(\)", read('tests/e2e.py'))
-check('e2e asserts a final balance', bool(asserts))
-final = asserts[-1] if asserts else None      # the last balance assertion is the end-of-card one
+end = re.search(r"print\('final balance', bal\(\)\)\n\s*assert bal\(\)\.replace\([^)]*\) == '(R\$ [\d.,]+)'", read('tests/e2e.py'))
+check('e2e asserts the balance at the end of the card', bool(end))
+final = end.group(1) if end else None
 for rel, found in balances.items():
     check(f'{rel} quotes the asserted balance', final in found, f'{final} not in {found}')
 

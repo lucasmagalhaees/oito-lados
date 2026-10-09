@@ -10,6 +10,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 - Máscara de milhares nos campos de valor.
 - Moeda da simulação: real, dólar ou euro.
 - Gestão de unidade: porcentagem da banca, atalhos em unidades no cupom e resultado em unidades.
+- Copiar aposta a partir de um print (lido no aparelho por OCR) ou de um texto colado.
+- Cobertura de código medida pelo navegador e cobrada no `verify.sh`.
 
 ### Corrigido
 - "1.000" digitado num campo de valor era lido como 1.

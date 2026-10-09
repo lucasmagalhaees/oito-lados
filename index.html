@@ -393,12 +393,6 @@ const Core = (() => {
     return { pa, pb, M, pDec, F, R, sh: shares(g, R) };
   }
   // negative binomial: takedown counts are burstier than Poisson
-  function nbCdf(k, lam, r) {
-    if (lam <= 0) return 1;
-    let p = Math.pow(r / (r + lam), r), c = p;
-    for (let i = 0; i < k; i++) { p = p * (i + r) / (i + 1) * (lam / (r + lam)); c += p; }
-    return Math.min(1, c);
-  }
   // takedowns landed per 15 min. ESPN reports 0 both for pure strikers and for fighters with no UFC minutes yet, so 0 gets a low prior rather than "never".
   const tdRate = x => (x && typeof x.tdAvg === 'number' && x.tdAvg > 0) ? clamp(x.tdAvg, 0.15, 5) : (x && x.tdAvg === 0) ? 0.5 : 0.9;
   function nbPmf(lam, r, K) {
@@ -608,6 +602,96 @@ const Core = (() => {
   const unitPct = v => { const n = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : Number(v); return isFinite(n) && n > 0 ? clamp(r2(n), 0.1, 100) : UNIT_PCT_DEFAULT; };
   const unitValue = (bankroll, pct) => r2(Math.max(0, Number(bankroll) || 0) * unitPct(pct) / 100);
 
+  /* ---------- copying a bet from a print or a pasted tip ----------
+     parseTip reads free text (typed, pasted, or what the OCR got out of a screenshot) and finds, among the fights given,
+     which one it talks about, which selection, the odd it was printed with and the stake (in units or in money).
+     It only names selections; whether each one can be bet on right now is decided by the caller against live prices. */
+  const plain = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const hasWord = (hay, needle) => needle.length >= 3 && new RegExp('(^|[^a-z0-9])' + reEsc(needle) + '($|[^a-z0-9])').test(hay);
+  const nameForms = x => [plain(x.name), plain(x.last)].map(n => n.replace(/\./g, ' ').replace(/\s+/g, ' ').trim()).filter((v, i, a) => v && a.indexOf(v) === i);
+  const mentions = (hay, x) => nameForms(x).some(n => hasWord(hay, n));
+  const TIP = {
+    units: /(\d+(?:[.,]\d+)?)\s*(?:unidades?|unid|un|units?|u)(?![a-z0-9])/,
+    half: /meia unidade/,
+    money: /(?:r\$|us\$|\$|€)\s*(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)/,
+    anyMoney: /(?:r\$|us\$|\$|€)\s*[\d.,]+/g,
+    odd: /(?:^|[^\d.,])(\d{1,2}[.,]\d{2})(?![\d.,])/,
+    over: /(?:mais de|over|acima de|\+)\s*(\d)[.,]5/,
+    under: /(?:menos de|under|abaixo de)\s*(\d)[.,]5/,
+    takedown: /queda|takedown/,
+    distNo: /nao (?:vai|chega)\s+(?:ate|para|a)\s+(?:a\s+|o\s+)?(?:decisao|distancia|final)|sem decisao|antes do (?:fim|tempo)|inside the distance/,
+    dist: /(?:vai|ir|chega|chegar)\s+(?:ate|para|a)\s+(?:a\s+|o\s+)?(?:decisao|distancia|final)|go(?:es)? the distance|luta completa/,
+    no: /(?:^|[^a-z])nao(?:$|[^a-z])/,
+    ko: /(?:^|[^a-z])(?:ko|tko|nocaute)(?:$|[^a-z])/,
+    sub: /finaliza|submiss/,
+    dec: /decisao|pontos|decision/,
+    round: /round\s*(\d)(?!\d)|(\d)\s*[oº]?\s*round(?!s)/,
+    win: /para (?:ganhar|vencer)|vencedor|moneyline|(?:^|[^a-z])ml(?:$|[^a-z])|vence(?:$|[^a-z])|to win|vitoria/
+  };
+  function tipMarket(win, pick, f) {
+    const method = TIP.ko.test(win) ? 'ko' : TIP.sub.test(win) ? 'sub' : null;
+    const rd = TIP.round.exec(win), n = rd ? +(rd[1] || rd[2]) : 0;
+    if (pick) {
+      if (method) return { key: `mov:${pick}:${method}` };
+      if (n >= 1 && n <= f.rounds) return { key: `wr:${pick}:${n}` };
+      if (TIP.dec.test(win) && !TIP.dist.test(win)) return { key: `mov:${pick}:dec` };
+      return { key: 'ml:' + pick, assumed: !TIP.win.test(win) };
+    }
+    const ov = TIP.over.exec(win), un = TIP.under.exec(win);
+    if (ov || un) {
+      const line = +(ov || un)[1] + 0.5, side = ov ? 'o' : 'u';
+      if (TIP.takedown.test(win)) return { key: `td:${side}:${line}` };
+      if (line < f.rounds) return { key: `tot:${side}:${line}` };
+    }
+    if (TIP.distNo.test(win)) return { key: 'dist:no' };
+    if (TIP.dist.test(win)) return { key: 'dist:' + (TIP.no.test(win) ? 'no' : 'yes') };
+    if (method) return { key: 'fm:' + method };
+    if (TIP.dec.test(win)) return { key: 'fm:dec' };
+    if (n >= 1 && n <= f.rounds) return { key: 'rnd:' + n };
+    return null;
+  }
+  function parseTip(text, fights) {
+    const raw = String(text == null ? '' : text).split(/\r?\n/).map(l => l.replace(/[*_`~]+/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const out = { items: [], problems: [], stake: { kind: 'default', units: 1 } };
+    if (!raw.length) { out.problems.push({ code: 'empty' }); return out; }
+    const L = raw.map(plain), N = L.map(l => l.replace(/\./g, ' ')), whole = L.join(' \n '), wholeN = N.join(' \n ');
+    const u = TIP.units.exec(whole), m = TIP.money.exec(whole);
+    if (u && parseFloat(u[1].replace(',', '.')) > 0) out.stake = { kind: 'units', units: parseFloat(u[1].replace(',', '.')) };
+    else if (TIP.half.test(whole)) out.stake = { kind: 'units', units: 0.5 };
+    else if (m && parseMoney(m[1]) > 0) out.stake = { kind: 'money', money: parseMoney(m[1]) };
+
+    const both = fights.filter(f => mentions(wholeN, f.a) && mentions(wholeN, f.b));
+    const one = both.length ? [] : fights.filter(f => mentions(wholeN, f.a) !== mentions(wholeN, f.b));
+    const found = both.length ? both : (one.length === 1 ? one : []);
+    if (!found.length) { out.problems.push({ code: one.length > 1 ? 'ambiguous' : 'nofight' }); return out; }
+    const other = (i, f) => found.some(g => g !== f && (mentions(N[i], g.a) || mentions(N[i], g.b)));
+    for (const f of found) {
+      const at = N.map(l => ({ a: mentions(l, f.a), b: mentions(l, f.b) }));
+      const sel = at.findIndex(x => x.a !== x.b), match = at.findIndex(x => x.a && x.b);
+      let pick = sel >= 0 ? (at[sel].a ? 'a' : 'b') : null;
+      const start = sel >= 0 ? sel : match;
+      if (!pick) {                      // everything on one line: "Dunne vence no round 2 (Almeida x Dunne)"
+        const backs = k => nameForms(f[k]).some(n => new RegExp('(^|[^a-z0-9])' + reEsc(n) + '\\s*[-:,]?\\s*(?:vence|ganha|por |para (?:ganhar|vencer)|ml(?![a-z])|to win)').test(N[match]));
+        const times = k => Math.max(...nameForms(f[k]).map(n => N[match].split(n).length - 1));
+        if (backs('a') !== backs('b')) pick = backs('a') ? 'a' : 'b';
+        else if (times('a') !== times('b')) pick = times('a') > times('b') ? 'a' : 'b';
+      }
+      // the selection is described on its line and on the next ones, up to where another fighter or fight comes in
+      const lines = [];
+      for (let i = start; i < L.length && lines.length < 4; i++) { if (i !== start && (at[i].a || at[i].b || other(i, f))) break; lines.push(L[i]); }
+      let win = lines.join(' \n '), mk = tipMarket(win, pick, f);
+      if (!mk && !pick) {               // "Mais de 2.5 rounds" written above the fight instead of below it
+        const before = []; for (let i = start - 1; i >= 0 && before.length < 3; i--) { if (at[i].a || at[i].b || other(i, f)) break; before.unshift(L[i]); }
+        win = before.join(' \n '); mk = tipMarket(win, pick, f);
+      }
+      if (!mk) { out.problems.push({ code: 'nomarket', fid: f.id }); continue; }
+      const od = TIP.odd.exec(win.replace(TIP.anyMoney, ' ').replace(/(\d)[.,]5(?!\d)/g, ' '));
+      out.items.push({ fid: f.id, key: mk.key, assumed: !!mk.assumed, printedOdd: od ? parseFloat(od[1].replace(',', '.')) : null, quote: raw[start] });
+    }
+    return out;
+  }
+
   /* ---------- cashout ----------
      The whole stake comes back, and only while none of the bet's fights has started. Once any of them is live the
      cashout is frozen; once any has started or finished it is gone, and normal settlement decides the bet.
@@ -619,7 +703,7 @@ const Core = (() => {
     if (fights.some(f => f.state !== 'pre' || f.canceled)) return { ok: false, why: 'started' };
     return { ok: true, value: bet.stake };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, maskMoney, parseMoney, moneyText, unitPct, unitValue, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
 })();
 
 /* ================= formatting ================= */
@@ -814,6 +898,107 @@ async function doCashout(id) {
   toast(`Cashout feito: ${money(c.value)} de volta no saldo.`);
 }
 
+/* ================= copy a bet from a print or a pasted text ================= */
+// The image is read on the device: the OCR library is fetched from a CDN only when a picture is chosen, and the picture
+// itself never leaves the phone. Versions are pinned here and mirrored in tests/package.json (checked by docs_check).
+const OCR = { lib: '7.0.0', core: '7.0.0', data: '1.0.0' };
+const OCR_URL = {
+  lib: `https://cdn.jsdelivr.net/npm/tesseract.js@${OCR.lib}/dist/tesseract.min.js`,
+  worker: `https://cdn.jsdelivr.net/npm/tesseract.js@${OCR.lib}/dist/worker.min.js`,
+  core: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${OCR.core}`,
+  lang: `https://cdn.jsdelivr.net/npm/@tesseract.js-data/por@${OCR.data}/4.0.0_best_int`
+};
+const OCR_SRI = 'sha384-2BQ3U3OdKOb0Uczxqr41I9UvZkzr4V9Hv8uSzMMZAlmhsFClvdZX5wi5fDCzG+tM';
+const imp = { open: false, text: '', busy: false, pct: 0, res: null, err: '' };
+let ocrLib = null;
+function loadOcr() {
+  return ocrLib || (ocrLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = OCR_URL.lib; s.integrity = OCR_SRI; s.crossOrigin = 'anonymous';
+    s.onload = () => (window.Tesseract ? res(window.Tesseract) : rej(new Error('ocr')));
+    s.onerror = () => { ocrLib = null; rej(new Error('ocr')); };
+    document.head.appendChild(s);
+  }));
+}
+async function readImage(file) {
+  const T = await loadOcr();
+  const worker = await T.createWorker('por', 1, { workerPath: OCR_URL.worker, corePath: OCR_URL.core, langPath: OCR_URL.lang,
+    logger: m => { if (m.status === 'recognizing text') { imp.pct = Math.round(m.progress * 100); const el = $('#impstatus'); if (el) el.textContent = impStatus(); } } });
+  try { return (await worker.recognize(file)).data.text; } finally { await worker.terminate(); }
+}
+const impStatus = () => imp.busy ? (imp.pct ? `Lendo a imagem… ${imp.pct}%` : 'Preparando o leitor de imagem…')
+  : 'A imagem é lida aqui no aparelho e não é enviada pra lugar nenhum. Na primeira vez o leitor baixa uns 5 MB.';
+const TIP_WHY = {
+  empty: () => 'Cola um texto ou escolhe uma imagem.',
+  nofight: () => 'Não achei nenhuma luta do card que ainda não começou. Confere se os nomes dos lutadores estão no texto.',
+  ambiguous: () => 'Achei mais de uma luta possível com um lutador só de cada. Inclui o nome dos dois lutadores.',
+  nomarket: f => `Achei ${f ? f.a.last + ' x ' + f.b.last : 'a luta'}, mas não entendi qual é a aposta.`
+};
+// what the parser understood, checked against what can be bet on right now
+function impResolve(res) {
+  const w = wallet(), ok = [], notes = res.problems.map(p => (TIP_WHY[p.code] || TIP_WHY.nofight)(p.fid && D.fights.get(p.fid)));
+  for (const it of res.items) {
+    const f = D.fights.get(it.fid), p = f && canBet(f) ? priceOf(f) : null, x = p && p.map[it.key];
+    if (x) ok.push({ it, f, x }); else notes.push(`${f ? f.a.last + ' x ' + f.b.last : 'Uma luta'}: essa aposta não tem odd agora.`);
+  }
+  const st = res.stake;
+  const value = st.kind === 'money' ? st.money : Core.r2(st.units * w.unit);
+  return { ok, notes, value, unit: w.unit, st };
+}
+async function runImport(text) {
+  imp.text = text; imp.err = ''; imp.res = null;
+  const pre = [...D.fights.values()].filter(f => f.state === 'pre' && !f.canceled);
+  const res = Core.parseTip(text, pre);
+  const need = new Map();           // odds are only kept for the event on screen: fetch the ones this tip needs
+  for (const it of res.items) { const f = D.fights.get(it.fid); if (f && !D.odds[f.id]) need.set(f.eventId, [...(need.get(f.eventId) || []), f.id]); }
+  if (need.size) { imp.busy = true; renderImport(); for (const [eid, fids] of need) { try { await loadOdds(eid, true, fids); } catch (e) { /* shown as "no odd now" below */ } } imp.busy = false; }
+  imp.res = res; renderImport();
+}
+async function importImage(file) {
+  if (!file || imp.busy) return;
+  imp.busy = true; imp.pct = 0; imp.err = ''; imp.res = null; renderImport();
+  let text = null;
+  try { text = await readImage(file); }
+  catch (e) { imp.err = 'Não consegui ler a imagem. Confere a internet (o leitor é baixado na primeira vez) ou cola o texto da aposta.'; }
+  imp.busy = false;
+  if (text == null) { renderImport(); return; }
+  if (!text.trim()) { imp.err = 'Não achei texto nessa imagem.'; renderImport(); return; }
+  await runImport(text.trim());
+}
+function renderImport() {
+  $('#sheet').hidden = false; $('#slipbar').hidden = true;
+  let h = `<div class="ph"><h3>Copiar aposta</h3><button class="x" data-act="impclose" aria-label="Fechar">×</button></div>
+    <p class="hint">Cola o texto de uma aposta ou escolhe o print. Vale pra luta que ainda não começou. A odd é a de agora; o valor é o mesmo do print.</p>
+    <textarea id="imptext" placeholder="Ex.: Fulano vs. Beltrano · Fulano para vencer a luta · Stake 1 unidade" aria-label="Texto da aposta">${esc(imp.text)}</textarea>
+    <div class="rowbtns"><button class="btn" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><label class="btn ghost" for="impfile">Escolher imagem</label><input type="file" id="impfile" accept="image/*" hidden ${imp.busy ? 'disabled' : ''}></div>
+    <p class="hint" id="impstatus">${esc(impStatus())}</p>`;
+  if (imp.err) h += `<p class="msg">${esc(imp.err)}</p>`;
+  if (imp.res && !imp.busy) {
+    const r = impResolve(imp.res);
+    if (r.ok.length) {
+      h += '<div id="impres">';
+      for (const { it, f, x } of r.ok)
+        h += `<div class="sel"><div class="t"><b>${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span></div></div>`;
+      const how = r.st.kind === 'units' ? `${fu(r.st.units)} do print` : r.st.kind === 'money' ? 'mesmo valor do print' : 'o print não diz o valor, considerei 1u';
+      h += `</div><dl class="sum" style="margin-top:10px"><dt>Valor</dt><dd id="impvalue">${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${how}</dd></dl>`;
+      if (!(r.value > 0)) h += '<p class="msg">Sem banca não dá pra calcular a unidade. Deposita primeiro; as seleções vão pro cupom sem valor.</p>';
+    }
+    for (const n of r.notes) h += `<p class="msg">${esc(n)}</p>`;
+    if (r.ok.length) h += `<button class="btn block" data-act="impgo">Levar pro cupom</button>`;
+  }
+  $('#panel').innerHTML = h;
+}
+function importToSlip() {
+  if (!imp.res) return;
+  const r = impResolve(imp.res); if (!r.ok.length) return;
+  slip.sels = r.ok.map(o => ({ fid: o.f.id, key: o.it.key }));
+  slip.mode = r.ok.length > 1 ? 'multi' : 'single';
+  slip.stake = r.value > 0 ? Core.moneyText(r.value) : '';
+  imp.open = false; imp.res = null; imp.text = ''; ui.msg = ''; ui.sheet = true;
+  renderSheet(); render();
+}
+function closeImport() { imp.open = false; imp.res = null; imp.err = ''; renderSheet(); render(); }
+
 /* ================= sync loop ================= */
 let busy = false, timer = null;
 async function sync(force) {
@@ -919,7 +1104,7 @@ function render() {
 }
 function renderSlipBar() {
   const n = slip.sels.length, bar = $('#slipbar');
-  bar.hidden = !n || ui.sheet;
+  bar.hidden = !n || ui.sheet || imp.open;
   if (!n) return;
   const c = slipCalc();
   $('#slipbtn').innerHTML = `<span>Cupom · ${n} ${n > 1 ? 'seleções' : 'seleção'}</span><span>${c.ok && c.multiOk ? (c.sameFight ? 'Combinada ' : 'Múltipla ') + fo(c.odd) : c.ok && n === 1 ? fo(c.odd) : 'Abrir'} ›</span>`;
@@ -940,6 +1125,7 @@ function vLutas(w) {
   const book = (ev.fights.map(f => D.odds[f.id]).find(Boolean) || {}).book;
   const info = D.err ? `Sem conexão com a ESPN · dados de ${D.lastSync ? dTime.format(D.lastSync) : '—'}` : `${book ? 'Odds ' + esc(book) + ' via ESPN' : 'Dados ESPN'} · atualizado às ${dTime.format(D.lastSync || Date.now())}`;
   let h = `<div class="events">${chips}</div><div class="sync"><span>${info}</span><button data-act="refresh">${busy ? 'Atualizando…' : 'Atualizar'}</button></div>`;
+  h += `<button class="btn ghost block" data-act="imp" style="margin-top:10px">Copiar aposta de um print ou texto</button>`;
   if (!S.deposits.length) h += `<div class="cta"><p><b>Saldo fictício zerado.</b> Coloca quanto quiser pra começar a simular.</p><button class="btn" data-act="tab" data-tab="carteira">Depositar</button></div>`;
   const times = [...new Set(ev.fights.map(f => f.date))].sort((a, b) => b - a);
   const main = Math.max(...ev.fights.map(f => f.idx));
@@ -1103,6 +1289,7 @@ function vCarteira(w) {
 }
 
 function renderSheet() {
+  if (imp.open) { renderImport(); return; }
   const sh = $('#sheet'); sh.hidden = !ui.sheet;
   if (!ui.sheet) { renderSlipBar(); return; }
   const c = slipCalc();
@@ -1180,7 +1367,7 @@ async function place() {
 
 /* ================= events ================= */
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b) { if (e.target.id === 'sheet') { ui.sheet = false; renderSheet(); } return; }
+  const b = e.target.closest('[data-act]'); if (!b) { if (e.target.id === 'sheet' && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); } return; }
   const a = b.dataset.act;
   if (a === 'tab') { ui.tab = b.dataset.tab; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); if (document.activeElement) document.activeElement.blur(); render(); window.scrollTo(0, 0); }
   else if (a === 'event') { ui.eventId = b.dataset.id; render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
@@ -1195,6 +1382,10 @@ document.addEventListener('click', e => {
   }
   else if (a === 'unpick') { slip.sels = slip.sels.filter(s => !(s.fid === b.dataset.fid && s.key === b.dataset.key)); ui.msg = ''; if (!slip.sels.length) ui.sheet = false; renderSheet(); render(); }
   else if (a === 'sheet') { ui.sheet = !ui.sheet; ui.msg = ''; renderSheet(); }
+  else if (a === 'imp') { imp.open = true; imp.res = null; imp.err = ''; ui.sheet = false; renderImport(); }
+  else if (a === 'impclose') { if (!imp.busy) closeImport(); }
+  else if (a === 'impread') { if (!imp.busy) runImport(($('#imptext') || {}).value || ''); }
+  else if (a === 'impgo') importToSlip();
   else if (a === 'mode') { slip.mode = b.dataset.m; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = b.dataset.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(b.dataset.v); slip.stake = v ? Core.moneyText(v) : ''; const el = $('#stake'); if (el) el.value = slip.stake; slipSummary(); }
   else if (a === 'stu') { const w = wallet(); if (w.unit > 0) { slip.stake = Core.moneyText(Core.r2(w.unit * Number(b.dataset.u))); const el = $('#stake'); if (el) el.value = slip.stake; ui.msg = ''; slipSummary(); } }
@@ -1246,14 +1437,21 @@ function applyMask(el, typed) {
 document.addEventListener('input', e => {
   if (e.target.id === 'stake') { slip.stake = applyMask(e.target, e.data); ui.msg = ''; slipSummary(); }
   else if (e.target.id === 'dep') ui.dep = applyMask(e.target, e.data);
+  else if (e.target.id === 'imptext') imp.text = e.target.value;
+});
+document.addEventListener('change', e => { if (e.target.id === 'impfile') importImage(e.target.files && e.target.files[0]); });
+document.addEventListener('paste', e => {
+  if (!imp.open || imp.busy) return;
+  const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type));
+  if (f) { e.preventDefault(); importImage(f); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && ui.sheet) { ui.sheet = false; renderSheet(); }
+  if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); }
   if (e.key === 'Enter' && e.target.id === 'unitpct') { const b = document.querySelector('[data-act="unit"]'); if (b) b.click(); }
   if (e.key === 'Enter' && e.target.id === 'dep') { const b = document.querySelector('[data-act="deposit"]'); if (b) b.click(); }
 });
 
-window.__OL = { Core, D, ui, slip, sync, settle, get S() { return S; } };
+window.__OL = { Core, D, ui, slip, imp, sync, settle, get S() { return S; } };
 pickEvent(); render(); sync(false);
 })();
 </script>

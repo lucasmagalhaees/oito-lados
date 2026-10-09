@@ -5,6 +5,8 @@ Loads the page with the network blocked and exercises window.__OL.Core directly.
 """
 import pathlib, sys
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import cov
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -174,6 +176,51 @@ JS = r"""
   eq('unit never negative', Core.unitValue(-50, 10), 0);
   for (const [raw, want] of [[10, 10], ['5', 5], ['2,5', 2.5], [0, 10], [-3, 10], ['abc', 10], [null, 10], [250, 100], [0.01, 0.1], [33.333, 33.33]])
     eq(`unit percentage ${JSON.stringify(raw)}`, Core.unitPct(raw), want);
+
+  /* ---- copying a bet from a pasted tip or from the text read off a print ---- */
+  const card = [
+    { id: 'f1', rounds: 3, a: { name: 'Marina Teles', last: 'Teles' }, b: { name: 'Joana Prado Jr.', last: 'Prado Jr.' } },
+    { id: 'f3', rounds: 5, a: { name: 'Rafael Almeida', last: 'Almeida' }, b: { name: 'Connor Lee Dunne', last: 'Dunne' } },
+  ];
+  const tip = text => { const r = Core.parseTip(text, card); return { items: r.items.map(i => [i.fid, i.key, i.printedOdd, i.assumed]), stake: r.stake, problems: r.problems }; };
+  const one = (fid, key, odd, assumed) => [[fid, key, odd == null ? null : odd, !!assumed]];
+  const U = n => ({ kind: 'units', units: n }), DEF = { kind: 'default', units: 1 };
+  eq('tip: channel format with emojis and markdown', tip("🥊 *Rafael Almeida vs. Connor Lee Dunne*\n\n🎰 *Connor Lee Dunne* - Para vencer a luta\n\n💰 Odd - 1.44\n💎 Stake - 1 unidade"),
+     { items: one('f3', 'ml:b', 1.44), stake: U(1), problems: [] });
+  eq('tip: text read off a betting-slip print', tip("R$1.750,00 Simples\n& Reutilizar Seleções O Compartilhar\no Connor Lee Dunne 1.44\nPara Ganhar a Luta\nRafael Almeida x Connor Lee Dunne\nSáb 26 Sep 21:00\nAposta Retornos\nR$1.750,00 R$2.527,77"),
+     { items: one('f3', 'ml:b', 1.44), stake: { kind: 'money', money: 1750 }, problems: [] });
+  eq('tip: the stake of a print is its first amount, not the return', tip("R$250,00 Simples\nConnor Lee Dunne 2.05\nPara Ganhar a Luta\nRafael Almeida x Connor Lee Dunne\nAposta Retornos\nR$250,00 R$512,50").stake, { kind: 'money', money: 250 });
+  eq('tip: fighter by submission', tip("Almeida x Dunne\nRafael Almeida por finalização @ 4.00\n2u"), { items: one('f3', 'mov:a:sub', 4), stake: U(2), problems: [] });
+  eq('tip: fighter by KO/TKO', tip("Almeida x Dunne\nDunne por KO/TKO").items, one('f3', 'mov:b:ko', null));
+  eq('tip: fighter by decision', tip("Almeida x Dunne - Almeida por decisão - 1u").items, one('f3', 'mov:a:dec', null));
+  eq('tip: winner and round on one line', tip("Dunne vence no round 2 (Almeida x Dunne) 3 unidades"), { items: one('f3', 'wr:b:2', null), stake: U(3), problems: [] });
+  eq('tip: selection after a colon on the matchup line', tip("Almeida x Dunne: Dunne ML").items, one('f3', 'ml:b', null));
+  eq('tip: selection named twice on the matchup line', tip("Dunne - Almeida x Dunne").items, one('f3', 'ml:b', null, true));
+  eq('tip: over rounds', tip("ALMEIDA X DUNNE - mais de 2.5 rounds - 0,5 unidade"), { items: one('f3', 'tot:o:2.5', null), stake: U(0.5), problems: [] });
+  eq('tip: under rounds in English', tip("Almeida x Dunne\nUnder 4.5 rounds").items, one('f3', 'tot:u:4.5', null));
+  eq('tip: a rounds line the fight does not have is not a market', tip("Teles x Prado Jr.\nMais de 3.5 rounds").problems, [{ code: 'nomarket', fid: 'f1' }]);
+  eq('tip: goes to decision', tip("Almeida vs Dunne\nLuta vai até a decisão - Sim\nodd 2.30").items, one('f3', 'dist:yes', 2.3));
+  eq('tip: does not go to decision', tip("Almeida vs Dunne\nLuta não vai até a decisão").items, one('f3', 'dist:no', null));
+  eq('tip: goes to decision answered no', tip("Almeida vs Dunne\nLuta vai até a decisão - Não").items, one('f3', 'dist:no', null));
+  eq('tip: fight ends by KO, written above the fight', tip("Luta termina por KO/TKO\nAlmeida x Dunne\nR$ 50,00"), { items: one('f3', 'fm:ko', null), stake: { kind: 'money', money: 50 }, problems: [] });
+  eq('tip: fight ends by decision', tip("Almeida x Dunne\nLuta termina por decisão").items, one('f3', 'fm:dec', null));
+  eq('tip: fight ends in a round', tip("Almeida x Dunne\nLuta acaba no round 1").items, one('f3', 'rnd:1', null));
+  eq('tip: takedowns', tip("Teles x Prado Jr.\nMais de 1.5 quedas\nmeia unidade"), { items: one('f1', 'td:o:1.5', null), stake: U(0.5), problems: [] });
+  eq('tip: two fights in one message', tip("Marina Teles x Joana Prado Jr.\nMarina Teles ML 1.67\n\nRafael Almeida x Connor Lee Dunne\nRafael Almeida por KO/TKO 9.00\nStake: 1u"),
+     { items: [['f1', 'ml:a', 1.67, false], ['f3', 'mov:a:ko', 9, false]], stake: U(1), problems: [] });
+  eq('tip: only the fighter is named', tip("Aposta no Dunne, 1u"), { items: one('f3', 'ml:b', null, true), stake: U(1), problems: [] });
+  eq('tip: accents, case and a missing middle name', tip("RAFAEL ALMEIDA x CONNOR DUNNE\nconnor dunne para ganhar a luta").items, one('f3', 'ml:b', null));
+  eq('tip: surname with a suffix', tip("Teles x Prado Jr\nPrado Jr para vencer a luta").items, one('f1', 'ml:b', null));
+  eq('tip: no stake means one unit', tip("Almeida x Dunne\nAlmeida para vencer").stake, DEF);
+  for (const [txt, units] of [['2u', 2], ['0,5u', 0.5], ['1.5 un', 1.5], ['3 unidades', 3], ['Stake - 1 unidade', 1], ['2 units', 2]])
+    eq(`tip: stake "${txt}"`, tip("Almeida x Dunne\nAlmeida para vencer\n" + txt).stake, U(units));
+  eq('tip: units win over a money amount', tip("R$ 100,00\nAlmeida x Dunne\nAlmeida para vencer\n1u").stake, U(1));
+  eq('tip: the odd is not mistaken for the stake or the line', tip("Almeida x Dunne\nMais de 2.5 rounds 1.54\nR$ 30,00"), { items: one('f3', 'tot:o:2.5', 1.54), stake: { kind: 'money', money: 30 }, problems: [] });
+  eq('tip: fight not on the card', tip("Fulano x Beltrano\nFulano para vencer"), { items: [], stake: DEF, problems: [{ code: 'nofight' }] });
+  eq('tip: one fighter of each of two fights', tip("Dunne e Teles").problems, [{ code: 'ambiguous' }]);
+  eq('tip: fight found but no bet described', tip("Almeida x Dunne").problems, [{ code: 'nomarket', fid: 'f3' }]);
+  eq('tip: empty', tip("  \n ").problems, [{ code: 'empty' }]);
+  eq('tip: a name inside another word is not a match', tip("Almeidas x Dunnes\nvence").problems, [{ code: 'nofight' }]);
   return { n, fails };
 }
 """
@@ -182,9 +229,11 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page()
     page.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())
+    cov.start(page)
     page.goto((ROOT / 'index.html').as_uri())
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS)
+    cov.stop(page, 'unit')
     browser.close()
 
 for f in res['fails']:

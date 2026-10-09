@@ -17,3 +17,5 @@ node_modules/
 # harness state
 .claude/.stop-blocks
 .claude/settings.local.json
+tests/node_modules/
+tests/.coverage/

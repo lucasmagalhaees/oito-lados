@@ -19,7 +19,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 11. Acesso de escrita do Claude ao repositório liberado; primeiro branch enviado.
 12. PR #1 (o app) aprovado e mesclado pelo Lucas. Primeiro deploy na Vercel falhou por detecção de Python (ver D12); correção enviada no PR seguinte, junto com a documentação e o harness.
 13. PRs #2 e #3 mesclados; produção no ar em https://oito-lados.vercel.app. Pedido de cashout (D21).
-14. Pedidos em sequência: repetir aposta (D22), máscara de milhares e moeda (D23), unidade (D24), pesquisa sobre pontuação por round (D25) e copiar aposta por imagem ou texto (em aberto).
+14. Pedidos em sequência: repetir aposta (D22), máscara de milhares e moeda (D23), unidade (D24), pesquisa sobre pontuação por round (D25) e copiar aposta por imagem ou texto (D26).
+15. Pedido de cobertura de testes: cobertura do `index.html` passa a ser medida e cobrada no `verify.sh`.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -140,6 +141,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   6. `verificacao.md`: o que foi verificado, como e quando, separado do que não foi.
   7. Regras em `CLAUDE.md`.
 - **Consequência:** afirmar "funciona" exige saída de comando. O que não tem como testar fica escrito como não verificado.
+- **Ajuste em 09/10/2026 (cobertura):** a cobertura de código do `index.html` passou a ser medida pelo navegador durante os testes (`tests/cov.py`) e cobrada no `verify.sh` completo, com mínimos de 95% das funções e 90% do código. A primeira medição achou uma função morta, que foi removida.
 - **Ajuste em 09/10/2026:** a primeira execução de `contract_live.py` no GitHub falhou porque a ESPN recusa navegador headless. Em vez de disfarçar o navegador, o script passou a chamar a API pelo Python, identificando-se, e a conferir o cabeçalho de CORS. Máquina que não alcança a ESPN dá resultado inconclusivo, não falha.
 
 ## D17. KO e TKO são um mercado; desclassificação conta junto
@@ -201,9 +203,17 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Decisão:** não fazer agora. O cashout segue a D21. Se um dia houver odd ao vivo confiável, o caminho é cashout a valor de mercado, não pontuação de round.
 - **Próximo passo combinado:** observar num card ao vivo o que a ESPN entrega durante a luta.
 
-## Pedido em aberto: copiar aposta a partir de imagem ou texto
+## D26. Copiar aposta de print ou texto, com leitura de imagem no aparelho
 
-Em 09/10/2026 o Lucas pediu para enviar o print de uma aposta (imagem ou texto) e o app copiar a operação, aplicando o valor em unidades. Ainda **não foi decidido** como ler a imagem (no aparelho, por um serviço de IA, ou só texto) nem de onde vêm os prints. Não implementar antes dessa definição e de ter prints de exemplo.
+- **Contexto:** pedido de enviar o print de uma aposta, em imagem ou texto, e o app copiar a operação. O Lucas mandou dois exemplos reais: um print de casa de apostas e uma mensagem de canal de palpites. Regra dita por ele: "a odd pode ser diferente, mas aplique a mesma stake"; o valor em unidades.
+- **Decisão:**
+  - Texto é interpretado por um leitor determinístico (`Core.parseTip`), coberto por testes.
+  - Imagem é lida no aparelho por OCR (Tesseract.js), baixado só quando se escolhe uma imagem.
+  - A aposta copiada usa a odd de agora. O valor é o do original: em unidades quando o original fala em unidades, o mesmo valor em dinheiro quando traz dinheiro, e 1u quando não diz.
+  - Nada é apostado sozinho: o resultado vai para o cupom.
+- **Descartado:** ler a imagem com um serviço de IA de visão. Seria mais tolerante a formatos diferentes, mas exige servidor e chave paga, o que contraria a D11 (MVP sem backend), e mandaria a imagem para fora do aparelho.
+- **Consequência:** é a primeira dependência de terceiros em tempo de execução (uma biblioteca baixada de CDN, com versão fixa e hash de integridade no script principal). O leitor só conhece os formatos que foram testados; formato novo pode não ser entendido, e a tela diz o que não entendeu.
+- **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades.
 
 ## Pendências em 09/10/2026
 
@@ -212,7 +222,7 @@ Em 09/10/2026 o Lucas pediu para enviar o print de uma aposta (imagem ou texto) 
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Confirmar a regra do cashout em múltipla (D21) | Lucas |
 | Confirmar as interpretações de moeda (D23) e de unidade (D24) | Lucas |
-| Definir como ler a imagem e mandar prints de exemplo para o recurso de copiar aposta | Lucas |
+| Testar o copiar aposta no iPhone com prints reais, e confirmar a regra do valor em dinheiro (D26) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

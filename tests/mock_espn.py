@@ -78,3 +78,42 @@ def handle(route):
     if m: return ok(dict(splits=dict(categories=[dict(name='general', stats=[dict(name='takedownAvg', value={'301':1.52,'302':0.3}.get(m.group(1), 1.0))])])))
     route.fulfill(status=404, body='{}')
 
+
+
+# ---- OCR files: the app loads them from the CDN; tests answer those requests with the same files from tests/node_modules
+import pathlib as _pathlib
+_NPM = _pathlib.Path(__file__).resolve().parent / 'node_modules'
+_CDN = [(r'/npm/tesseract\.js@[\d.]+/dist/([\w.-]+)$', 'tesseract.js/dist/{0}'),
+        (r'/npm/tesseract\.js-core@[\d.]+/([\w.-]+)$', 'tesseract.js-core/{0}'),
+        (r'/npm/@tesseract\.js-data/(\w+)@[\d.]+/([\w.]+)/([\w.]+)$', '@tesseract.js-data/{0}/{1}/{2}')]
+_TYPES = {'.js': 'application/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream'}
+cdn_calls = []
+CDN_DOWN = {'on': False}          # set to True to simulate the CDN being unreachable
+
+def local_cdn(route):
+    url = route.request.url.split('?')[0]; cdn_calls.append(url)
+    if CDN_DOWN['on']:
+        return route.abort()
+    for pattern, target in _CDN:
+        hit = re.search(pattern, url)
+        if hit:
+            path = _NPM / target.format(*hit.groups())
+            if path.exists():
+                return route.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': _TYPES.get(path.suffix, 'application/octet-stream')}, body=path.read_bytes())
+    route.fulfill(status=404, body='not in tests/node_modules')
+
+def ocr_files_installed():
+    return (_NPM / 'tesseract.js' / 'dist' / 'tesseract.min.js').exists()
+
+# a bet print like the ones people share, with the invented fighters of this card (rendered to an image by the tests)
+PRINT_HTML = """<div id="print" style="width:420px;background:#2b3030;color:#fff;font:16px Arial,sans-serif;padding:18px">
+  <div style="color:#19e6a2;font-weight:700;font-size:18px">R$250,00 Simples</div>
+  <div style="margin:14px 0;display:flex;gap:8px"><span style="background:#444;padding:8px 14px">Reutilizar Seleções</span><span style="background:#444;padding:8px 14px">Compartilhar</span></div>
+  <div><b style="font-size:17px">Connor Lee Dunne</b> &nbsp; 2.05</div>
+  <div style="color:#ccc;font-size:13px;margin:6px 0 12px">Para Ganhar a Luta</div>
+  <div style="font-weight:700;font-size:13px">Rafael Almeida x Connor Lee Dunne</div>
+  <div style="color:#999;font-size:12px">Sáb 10 Out 21:00</div>
+  <div style="display:flex;justify-content:space-between;margin-top:28px"><div>Aposta<br><b>R$250,00</b></div><div style="text-align:right">Retornos<br><b>R$512,50</b></div></div>
+  <div style="background:#1b8a5e;text-align:center;padding:12px;margin-top:12px;font-weight:700">Encerrar Aposta R$250,00</div>
+</div>"""
+TIP_TEXT = "🥊 *Rafael Almeida vs. Connor Lee Dunne*\n\n🎰 *Connor Lee Dunne* - Para vencer a luta\n\n💰 Odd - 1.44\n💎 Stake - 0,5 unidade"
