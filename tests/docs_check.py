@@ -67,7 +67,7 @@ CONSTANTS = [
     (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
     (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
     (r'FX_TTL = 12 \* 3600e3;', 'depois de 12 h'),
-    (r"\.slice\(-20\);\n      slip\.stake = ''", 'as 20 últimas'),
+    (r"\.slice\(-20\);\n    slip\.stake = ''", 'as 20 últimas'),
 ]
 for pattern, text in CONSTANTS:
     check('code still has the documented constant', re.search(pattern, html), pattern)

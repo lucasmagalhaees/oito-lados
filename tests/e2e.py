@@ -59,14 +59,16 @@ with sync_playwright() as p:
     txt = lambda sel: pg.inner_text(sel).replace('\xa0', ' ')
     pg.click('[data-act=depcur][data-c=USD]')
     assert pg.inner_text('.field span') == 'US$' and 'A banca passa a ser em Dólar' in txt('#fxinfo'), txt('#fxinfo')
-    assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'picking a currency changes nothing until the deposit: ' + bal()
+    assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'picking a currency changes nothing by itself: ' + bal()
+    assert pg.inner_text('[data-act=convonly]') == 'Só trocar a moeda para Dólar', pg.inner_text('[data-act=convonly]')
+    pg.click('[data-act=convonly]'); assert bal().replace('\xa0', ' ') == 'US$ 0,00' and FX['calls'] == 0 and pg.locator('[data-act=convonly]').count() == 0, (bal(), FX['calls'])
     pg.click('[data-act=depcur][data-c=EUR]'); pg.fill('#dep', '80'); pg.click('[data-act=deposit]')
     assert bal().replace('\xa0', ' ') == '€ 80,00' and FX['calls'] == 0, (bal(), FX['calls'])
     pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'the currency must survive a reload: ' + bal()
     pg.click('[data-act=tab][data-tab=carteira]')
     # with money in the bankroll, depositing in another currency converts everything at the day's rate
     FX['down'] = True; pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxmsg')
-    assert 'Sem cotação agora' in txt('#fxmsg') and pg.is_disabled('[data-act=deposit]'), txt('#fxmsg')
+    assert 'Sem cotação agora' in txt('#fxmsg') and pg.is_disabled('[data-act=deposit]') and pg.is_disabled('[data-act=convonly]'), txt('#fxmsg')
     FX['down'] = False; pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxinfo b')
     info = txt('#fxinfo'); print('câmbio:', info)
     shot('s13-cambio.png')
@@ -91,6 +93,22 @@ with sync_playwright() as p:
     assert 'Banca convertida de Euro para Real' in txt('#convlog') and '€ 1 = R$ 6,2500' in txt('#convlog'), txt('#convlog')
     assert pg.inner_text('[data-act=deposit]') == 'Depositar' and pg.inner_text('.field span') == 'R$'
     assert bal().replace('\xa0',' ') == 'R$ 1.000,00', bal()
+    # converting without depositing: the whole bankroll moves to the other currency and nothing is added
+    pg.click('[data-act=depcur][data-c=USD]'); pg.wait_for_selector('#fxinfo b')
+    assert 'US$ 1 = R$ 5,0000' in txt('#fxinfo') and 'saldo de R$ 1.000,00 vira US$ 200,00' in txt('#fxinfo'), txt('#fxinfo')
+    assert pg.inner_text('[data-act=convonly]') == 'Só converter a banca, sem depositar'
+    shot('s15-converter.png'); pg.click('[data-act=convonly]'); pg.wait_for_function('window.__OL.S.cur === "USD"')
+    only = pg.evaluate('(() => { const S = window.__OL.S; return [S.deposits.map(d => d.v), S.conv.length, S.conv[1].from, S.conv[1].to, S.conv[1].rate]; })()')
+    assert bal().replace('\xa0', ' ') == 'US$ 200,00' and only == [[100, 100], 2, 'BRL', 'USD', 0.2], (bal(), only)
+    assert pg.inner_text('[data-act=deposit]') == 'Depositar' and pg.locator('[data-act=convonly]').count() == 0
+    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == 'US$ 200,00', 'a conversion without a deposit is saved: ' + bal()
+    pg.click('[data-act=tab][data-tab=carteira]'); pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxinfo b')
+    pg.evaluate('window.__OL.FX.ts = 0'); FX['body']['rates']['USD'] = 0.25              # the same guard as a deposit: a rate nobody saw is shown first
+    pg.click('[data-act=convonly]'); pg.wait_for_selector('#fxmsg'); assert 'A cotação mudou' in txt('#fxmsg') and bal().replace('\xa0', ' ') == 'US$ 200,00', (txt('#fxmsg'), bal())
+    pg.evaluate('window.__OL.FX.ts = 0'); FX['body']['rates']['USD'] = 0.2
+    pg.click('[data-act=convonly]'); pg.wait_for_function('document.querySelector("#fxinfo").textContent.includes("5,0000")')
+    pg.click('[data-act=convonly]'); pg.wait_for_function('window.__OL.S.cur === "BRL"')
+    assert bal().replace('\xa0',' ') == 'R$ 1.000,00' and pg.evaluate('window.__OL.S.conv.length') == 3, bal()
     pg.click('.tabbar [data-tab=lutas]')
     shot('s1-lutas.png')
     pick = lambda fid, key: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
@@ -268,14 +286,14 @@ with sync_playwright() as p:
     assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 15, (bal(), final)
     print('backup e restauração: saldo', final, 'de volta depois de zerar')
     # converting a bankroll with a whole history: every amount follows, and the result in units stays the same
-    assert len(pg.evaluate('window.__OL.S.conv')) == 1, 'the conversion log comes back with the backup'
+    assert len(pg.evaluate('window.__OL.S.conv')) == 3, 'the conversion log comes back with the backup'
     pg.click('[data-act=depcur][data-c=USD]'); pg.wait_for_selector('#fxinfo b'); pg.fill('#dep', '100'); pg.click('[data-act=deposit]'); pg.wait_for_function('window.__OL.S.cur === "USD"')
     usd = pg.evaluate('(() => { const S = window.__OL.S; return [S.bets.length, S.bets[0].stake, S.bets[0].payout, S.bets[0].unit, S.conv.length]; })()')
     print('banca convertida para dólar: saldo', bal(), '|', pg.inner_text('#pnlu'))
-    assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 2] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
+    assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 4] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
     b.close()
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs
-print('e2e ok: 15 apostas encerradas (3 por cashout: 1 repetida e 1 a valor de mercado), saldo final R$ 1.609,59, banca convertida duas vezes, sem estouro de largura e sem erro de script')
+print('e2e ok: 15 apostas encerradas (3 por cashout: 1 repetida e 1 a valor de mercado), saldo final R$ 1.609,59, banca convertida quatro vezes (duas sem depositar), sem estouro de largura e sem erro de script')

@@ -6,7 +6,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 
 ### Adicionado
 - Cashout dinâmico: com parte da múltipla já batida e o resto por começar, o app oferece um valor para encerrar, calculado pelas odds de agora.
-- Conversão de moeda: depositar em outra moeda converte a banca inteira pela cotação do dia, guardada no aparelho por 12 h.
+- Conversão de moeda: passar a banca para outra moeda converte tudo pela cotação do dia, guardada no aparelho por 12 h. Dá para converter junto com um depósito ou sem depositar.
 - Configuração do valor ao copiar um print que traz dinheiro: mesmo valor, convertido em unidades ou um número fixo de unidades.
 
 ### Alterado

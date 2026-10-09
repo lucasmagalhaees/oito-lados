@@ -22,6 +22,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 14. Pedidos em sequência: repetir aposta (D22), máscara de milhares e moeda (D23), unidade (D24), pesquisa sobre pontuação por round (D25) e copiar aposta por imagem ou texto (D26).
 15. Pedido de cobertura de testes: cobertura do `index.html` passa a ser medida e cobrada no `verify.sh`.
 16. Respostas do Lucas às interpretações pendentes: cashout dinâmico em múltipla (D27), moeda só no depósito e com conversão (D28), banca e unidade confirmadas (D24), valor do print configurável (D29).
+17. Pedido de um botão para converter a banca sem depositar (ajuste na D28). Dúvida do Lucas sobre o modo "fixo" do valor de print (D29), explicada; ele ainda não disse se fica.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -234,11 +235,11 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 ## D28. Moeda escolhida no depósito, com conversão da banca
 
 - **Contexto:** ao revisar a D23, o Lucas pediu: "só deixa trocar moeda na hora de depositar; mudando na banca converte tudo, e cacheia o índice de conversão".
-- **Decisão:** o seletor de moeda saiu da Carteira e foi para o cartão de depósito. Depositar em outra moeda troca a moeda da banca e converte depósitos e apostas pela cotação do dia. A cotação fica guardada no aparelho por 12 h.
+- **Decisão:** o seletor de moeda saiu do cartão próprio e foi para o cartão de depósito. Passar para outra moeda, com ou sem depósito, troca a moeda da banca e converte depósitos e apostas pela cotação do dia. A cotação fica guardada no aparelho por 12 h.
 - **Fonte da cotação:** Frankfurter (`api.frankfurter.dev`), gratuito e sem chave. Escolhido por não exigir cadastro nem servidor, o que mantém a D11.
 - **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
   - A banca tem uma moeda só. Não existem carteiras separadas por moeda.
-  - A troca só acontece junto com um depósito, como pedido: não há botão de converter sem depositar.
+  - ~~A troca só acontece junto com um depósito: não há botão de converter sem depositar.~~ **Corrigida pelo Lucas no mesmo dia:** ele pediu o botão de converter a banca sem depositar. O cartão de depósito passou a ter os dois: converter e depositar, ou só converter.
   - Com a banca vazia não há o que converter, então a moeda muda sem consultar cotação.
   - Sem internet, vale a última cotação guardada, com a data na tela. Sem nenhuma guardada, não converte.
   - Os centavos de arredondamento vão para o maior depósito, para o saldo convertido bater exatamente.

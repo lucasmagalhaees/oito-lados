@@ -25,7 +25,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
 - **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. O que fazer com um print que traz o valor em dinheiro é configurável: mesmo valor, convertido em unidades ou um número fixo de unidades. A imagem é lida no próprio aparelho.
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). O cupom aceita valor em unidades e a Carteira mostra o resultado em unidades.
-- **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida na hora de depositar, e depositar em outra moeda converte a banca inteira pela cotação do dia.
+- **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
 
 ## Como funciona

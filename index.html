@@ -1384,10 +1384,12 @@ function vCarteira(w) {
     <div class="field"><span>${esc(symbolOf(dc))}</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
     <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>`;
   if (conv && ui.fxBusy) h += '<p class="hint" id="fxinfo">Buscando a cotação…</p>';
-  else if (conv && rate) h += `<p class="hint" id="fxinfo">Depositar em ${CUR[dc]} troca a moeda da banca e converte tudo (depósitos e apostas) por <b>${esc(rateText(S.cur, dc, rate))}</b>, cotação de ${esc(dateBR(FX.date))}. Seu saldo de ${money(w.balance)} vira ${df.format(Core.r2(w.balance * rate))}.</p>`;
+  else if (conv && rate) h += `<p class="hint" id="fxinfo">Passar para ${CUR[dc]} troca a moeda da banca e converte tudo (depósitos e apostas) por <b>${esc(rateText(S.cur, dc, rate))}</b>, cotação de ${esc(dateBR(FX.date))}. Seu saldo de ${money(w.balance)} vira ${df.format(Core.r2(w.balance * rate))}.</p>`;
   else if (other && !conv) h += `<p class="hint" id="fxinfo">A banca passa a ser em ${CUR[dc]}.</p>`;
   if (ui.fxMsg) h += `<p class="msg" id="fxmsg">${esc(ui.fxMsg)}</p>`;
-  h += `<button class="btn block" data-act="deposit" ${ui.fxBusy || (conv && !rate) ? 'disabled' : ''}>${conv ? 'Converter a banca e depositar' : 'Depositar'}</button></section>`;
+  h += `<button class="btn block" data-act="deposit" ${ui.fxBusy || (conv && !rate) ? 'disabled' : ''}>${conv ? 'Converter a banca e depositar' : 'Depositar'}</button>`;
+  if (other) h += `<button class="btn ghost block" data-act="convonly" ${ui.fxBusy || (conv && !rate) ? 'disabled' : ''}>${conv ? 'Só converter a banca, sem depositar' : `Só trocar a moeda para ${CUR[dc]}`}</button>`;
+  h += '</section>';
   const roi = w.staked ? w.pnl / w.staked * 100 : null;
   h += `<section class="card"><span class="label">Ganhos e perdas · apostas encerradas</span>
     <div class="pnl ${w.pnl > 0 ? 'pos' : w.pnl < 0 ? 'neg' : ''}">${signed(w.pnl)}</div>
@@ -1547,6 +1549,7 @@ document.addEventListener('click', e => {
   }
   else if (a === 'depcur') pickDepCur(b.dataset.c);
   else if (a === 'deposit') deposit();
+  else if (a === 'convonly') convertOnly();
   else if (a === 'backup') {
     const txt = JSON.stringify(S);
     const fail = () => { ui.backup = txt; render(); };
@@ -1575,30 +1578,43 @@ async function pickDepCur(code) {
   }
   render();
 }
+// Moves the bankroll to another currency. With nothing in it there is nothing to convert and only the currency changes.
+// Returns true when the bankroll is now in `to`; false when it stopped to show a message (no rate, or a rate nobody saw yet).
+async function switchCurrency(to) {
+  if (to === S.cur) return true;
+  if (!bankEmpty()) {
+    let fx = null;
+    ui.fxBusy = true; try { fx = await loadFx(); } catch (e) { /* handled below */ } ui.fxBusy = false;
+    const rate = Core.fxRate(fx, S.cur, to);
+    if (!rate) { ui.fxMsg = 'Sem cotação agora: não deu pra falar com o serviço de câmbio. Tenta de novo com internet.'; render(); return false; }
+    if (ui.fxRate !== rate) { ui.fxRate = rate; ui.fxMsg = 'A cotação mudou. Confere o valor novo e confirma de novo.'; if (document.activeElement) document.activeElement.blur(); render(); return false; }
+    const from = S.cur;
+    S = Core.convertState(S, to, rate);
+    S.conv = [...(S.conv || []), { t: Date.now(), from, to, rate, date: fx.date }].slice(-20);
+    slip.stake = '';
+  }
+  setCurrency(to);
+  return true;
+}
+const depDone = () => { ui.depCur = null; ui.fxMsg = ''; ui.fxRate = null; if (document.activeElement) document.activeElement.blur(); renderSheet(); render(); };
 async function deposit() {
   if (ui.fxBusy) return;
   const to = CUR[ui.depCur] ? ui.depCur : S.cur, v = parseMoney(($('#dep') || {}).value || ui.dep), f = fmtOf(to);
   if (!v) { toast('Digita um valor pra depositar.'); return; }
   if (v > 1e9) { toast(`Calma, bilionário. Máximo de ${f.format(1e9)} por depósito.`); return; }
-  let done = '';
-  if (to !== S.cur) {
-    if (!bankEmpty()) {
-      let fx = null;
-      ui.fxBusy = true; try { fx = await loadFx(); } catch (e) { /* handled below */ } ui.fxBusy = false;
-      const rate = Core.fxRate(fx, S.cur, to);
-      if (!rate) { ui.fxMsg = 'Sem cotação agora: não deu pra falar com o serviço de câmbio. Tenta de novo com internet.'; render(); return; }
-      if (ui.fxRate !== rate) { ui.fxRate = rate; ui.fxMsg = 'A cotação mudou. Confere o valor novo e confirma de novo.'; if (document.activeElement) document.activeElement.blur(); render(); return; }
-      const from = S.cur;
-      S = Core.convertState(S, to, rate);
-      S.conv = [...(S.conv || []), { t: Date.now(), from, to, rate, date: fx.date }].slice(-20);
-      slip.stake = ''; done = ` Banca convertida para ${CUR[to]}.`;
-    }
-    setCurrency(to);
-  }
+  const converted = to !== S.cur && !bankEmpty();
+  if (!await switchCurrency(to)) return;
   S.deposits.push({ t: Date.now(), v }); saveS();
-  ui.dep = ''; ui.depCur = null; ui.fxMsg = ''; ui.fxRate = null;
-  if (document.activeElement) document.activeElement.blur();
-  renderSheet(); render(); toast(`${money(v)} fictícios na conta.${done}`);
+  ui.dep = ''; depDone(); toast(`${money(v)} fictícios na conta.${converted ? ` Banca convertida para ${CUR[to]}.` : ''}`);
+}
+// the same change of currency, without putting any money in
+async function convertOnly() {
+  if (ui.fxBusy) return;
+  const to = CUR[ui.depCur] ? ui.depCur : S.cur;
+  if (to === S.cur) return;
+  const converted = !bankEmpty();
+  if (!await switchCurrency(to)) return;
+  saveS(); depDone(); toast(converted ? `Banca convertida para ${CUR[to]}: ${money(wallet().balance)} de saldo.` : `A banca agora é em ${CUR[to]}.`);
 }
 function applyMask(el, typed) {
   let v = el.value, pos = el.selectionStart == null ? v.length : el.selectionStart;

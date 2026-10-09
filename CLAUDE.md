@@ -80,7 +80,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 8. Cashout: devolve o valor integral enquanto nenhuma luta da aposta foi decidida; com parte da múltipla já batida, oferece um valor de mercado para encerrar. Congela com luta em andamento.
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
 10. Campos de valor com máscara de milhares.
-11. Moeda da banca: real, dólar ou euro, escolhida na hora de depositar. Depositar em outra moeda converte a banca inteira pela cotação do dia.
+11. Moeda da banca: real, dólar ou euro, escolhida no cartão de depósito. Passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
 13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. O valor segue o original; o que fazer com um valor em dinheiro é configurável.
 
@@ -260,15 +260,15 @@ O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas
 
 ## Moeda e câmbio
 
-Regra do Lucas em 09/10/2026 (D28): **a moeda só se troca na hora de depositar, e trocar converte tudo**.
+Regra do Lucas em 09/10/2026 (D28): **a moeda se troca no cartão de depósito, e trocar converte tudo**.
 
-- O cartão de depósito tem o seletor de moeda. Escolher outra moeda não muda nada sozinho: mostra a cotação e quanto o saldo vira. A troca acontece no depósito (`deposit`).
+- O cartão de depósito tem o seletor de moeda. Escolher outra moeda não muda nada sozinho: mostra a cotação e quanto o saldo vira. A troca acontece por um de dois botões: "Converter a banca e depositar" (`deposit`) ou "Só converter a banca, sem depositar" (`convertOnly`). Os dois passam por `switchCurrency`.
 - **Banca vazia** (sem depósito e sem aposta): a moeda escolhida vira a da banca, sem consultar cotação.
 - **Banca com movimento:** `Core.convertState(S, to, rate)` converte depósitos, stake, payout e `unit` de cada aposta e o `cash.full`. Cada valor é arredondado a centavos, e os centavos que o arredondamento deslocar vão para o maior depósito, de modo que o saldo depois é exatamente o saldo antigo pela cotação. `unit` guarda 4 casas para o resultado em unidades não mudar. Ida e volta entre duas moedas pode diferir em centavos.
 - A conversão fica registrada em `S.conv` e a última aparece no cartão de Depósitos.
 - **Cotação:** serviço Frankfurter, `https://api.frankfurter.dev/v1/latest?base=BRL&symbols=USD,EUR`, sem chave. `Core.normFx` só aceita resposta com `base` BRL, `date` no formato AAAA-MM-DD e `rates.USD` e `rates.EUR` numéricos e positivos. Par que não envolve o real é calculado passando pelo real (`Core.fxRate`).
 - **Cache:** a cotação fica em `oitolados.fx.v1` e só é pedida de novo depois de 12 h (`FX_TTL`). Sem resposta do serviço, vale a cotação guardada, com a data dela na tela; sem nenhuma guardada, a conversão não é feita.
-- Se a cotação mudou entre a tela e a confirmação, `deposit` mostra a nova e pede confirmação de novo, como `place()` faz com a odd.
+- Se a cotação mudou entre a tela e a confirmação, `switchCurrency` mostra a nova e pede confirmação de novo, como `place()` faz com a odd.
 - O que o Frankfurter devolve e se ele aceita chamada do navegador são fatos de terceiro, conferidos em 09/10/2026 (ver `docs/verificacao.md`). `tests/contract_live.py` confere os dois toda semana, e a resposta real gravada está em `tests/fixtures/fx/`.
 
 ## Unidade
@@ -332,7 +332,7 @@ python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do `index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, deposita em outra moeda e confere a conversão da banca (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 
