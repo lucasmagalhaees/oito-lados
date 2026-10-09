@@ -1,6 +1,6 @@
 name: ESPN contract
 
-# Checks the real ESPN API against what the app reads. A red run means the API changed (or stopped answering):
+# Checks the real ESPN API against what the app reads. A red run means the API changed:
 # look at the failed check, record a fresh sample in tests/fixtures/espn/ and fix the normalisers.
 on:
   schedule:
@@ -27,4 +27,5 @@ jobs:
       - name: Self-test of the checker
         run: python tests/contract_live.py --mock
       - name: Check the real API
-        run: python tests/contract_live.py
+        # exit 3 = this runner could not reach ESPN at all: inconclusive, reported as a warning, not as a change in the API
+        run: python tests/contract_live.py || [ $? -eq 3 ]

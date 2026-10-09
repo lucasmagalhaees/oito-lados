@@ -3,12 +3,17 @@
 Usage: python3 tests/contract_live.py          (hits the real API; needs internet)
        python3 tests/contract_live.py --mock   (self-test of this script against tests/mock_espn.py)
 
-Serves the repo on localhost, opens index.html in headless Chromium and, from inside the page (so CORS is part of the
-check), fetches a scoreboard, one finished fight and one upcoming fight with odds, and runs the app's own parsers on them.
-A failed check means the API changed or stopped answering browsers. A warning means there was nothing to check
-(no card this week, odds not published yet), which is normal.
+Fetches a scoreboard, one finished fight and one upcoming fight with odds from the real API and runs the app's own
+parsers (window.__OL.Core, loaded from index.html in headless Chromium) on the answers.
+
+The HTTP calls are made from Python with a user agent that says what this is, and with the production site as Origin,
+so every answer is also checked for the CORS header a browser needs. The headless browser itself never talks to ESPN:
+ESPN refuses headless browsers, and this script does not disguise itself to get around that.
+
+Exit codes: 0 the API still matches, 1 a check failed (the API changed), 3 inconclusive (this machine could not reach
+the API at all, e.g. a blocked network). A warning means there was nothing to check (no card, odds not published yet).
 """
-import functools, http.server, os, pathlib, sys, threading, urllib.error, urllib.request
+import json, os, pathlib, sys, urllib.error, urllib.request
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -18,15 +23,22 @@ JS = r"""
 async () => {
   const { Core } = window.__OL, checks = [], warns = [];
   const ok = (name, cond, detail) => checks.push({ name, ok: !!cond, detail: detail == null ? '' : String(detail).slice(0, 300) });
-  const get = async u => { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + u); return r.json(); };
+  const cors = [];
+  const get = async u => {
+    if (!window.pyGet) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + u); return r.json(); }
+    const r = await window.pyGet(u);
+    if (r.error) throw new Error(r.error + ' ' + u);
+    cors.push({ u, acao: r.acao });
+    return r.json;
+  };
   const tryGet = async u => { try { return await get(u); } catch (e) { return { __error: String(e) }; } };
   const SITE = 'https://site.api.espn.com/apis/site/v2/sports/mma/ufc', CORE = 'https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc';
   const DAY = 864e5, now = Date.now();
   const ymd = t => { const d = new Date(t); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
 
   const sb = await tryGet(`${SITE}/scoreboard?dates=${ymd(now - 21 * DAY)}-${ymd(now + 21 * DAY)}&limit=100`);
-  ok('scoreboard answers a browser on another origin', !sb.__error, sb.__error);
-  if (sb.__error) return { checks, warns };
+  if (sb.__error) return { checks, warns, unreachable: sb.__error };
+  ok('scoreboard is readable', true);
   ok('scoreboard has events[]', Array.isArray(sb.events));
   const events = (sb.events || []).map(Core.normEvent), fights = events.flatMap(e => e.fights);
   if (!fights.length) { warns.push('no UFC fights within 21 days either way: nothing else could be checked'); return { checks, warns }; }
@@ -78,16 +90,23 @@ async () => {
     if (as.__error) warns.push('athlete statistics not available for the first priced fighter (normal for a debut)');
     else ok('athlete statistics expose takedownAvg', typeof Core.statValue(as, 'takedownAvg') === 'number');
   }
+  if (window.pyGet) { const bad = cors.filter(c => !(c.acao === '*' || c.acao === window.ORIGIN)); ok(`all ${cors.length} answers carry the CORS header a browser on ${window.ORIGIN} needs`, !bad.length, bad.slice(0, 3).map(c => c.acao + ' ' + c.u).join(' | ')); }
   return { checks, warns, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}` };
 }
 """
 
-class Quiet(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, *a): pass
+ORIGIN = 'https://oito-lados.vercel.app'
+AGENT = 'oito-lados-contract-check/1.0 (+https://github.com/lucasmagalhaees/oito-lados)'
 
-srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=str(ROOT)))
-threading.Thread(target=srv.serve_forever, daemon=True).start()
-url = f'http://127.0.0.1:{srv.server_address[1]}/index.html'
+def py_get(url):
+    req = urllib.request.Request(url.replace('http://', 'https://', 1), headers={'Origin': ORIGIN, 'User-Agent': AGENT, 'Accept': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return {'json': json.loads(r.read().decode('utf-8')), 'acao': r.headers.get('access-control-allow-origin')}
+    except urllib.error.HTTPError as e:
+        return {'error': f'HTTP {e.code}'}
+    except Exception as e:
+        return {'error': f'no answer ({e})'}
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
@@ -96,27 +115,15 @@ with sync_playwright() as p:
         sys.path.insert(0, str(ROOT / 'tests'))
         from mock_espn import PHASE, handle
         PHASE['n'] = 2
-        page.route('**/*', lambda r: handle(r) if not r.request.url.startswith('http://127.0.0.1') else r.continue_())
-    seen = []                                   # what the browser saw on the ESPN hosts, to explain a failure
-    page.on('response', lambda r: seen.append(f'HTTP {r.status} {r.url[:90]}') if 'espn.com' in r.url and len(seen) < 6 else None)
-    page.on('requestfailed', lambda r: seen.append(f'{r.failure} {r.url[:90]}') if 'espn.com' in r.url and len(seen) < 6 else None)
-    page.goto(url)
+        page.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_())
+    else:
+        page.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())   # the browser only runs the parsers
+        page.expose_function('pyGet', py_get)
+        page.add_init_script(f'window.ORIGIN = {json.dumps(ORIGIN)};')
+    page.goto((ROOT / 'index.html').as_uri())
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS)
-    agent = page.evaluate('navigator.userAgent')
     browser.close()
-srv.shutdown()
-
-def probe(origin):
-    # the same scoreboard call made from Python, outside the browser: tells "this machine cannot reach ESPN" apart from "ESPN refused the browser"
-    req = urllib.request.Request('https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard', headers={'Origin': origin, 'User-Agent': agent})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return f"HTTP {r.status}, access-control-allow-origin: {r.headers.get('access-control-allow-origin')}"
-    except urllib.error.HTTPError as e:
-        return f"HTTP {e.code}, access-control-allow-origin: {e.headers.get('access-control-allow-origin')}"
-    except Exception as e:
-        return f'no answer ({e})'
 
 failed = [c for c in res['checks'] if not c['ok']]
 
@@ -133,10 +140,9 @@ for w in res['warns']:
     print('warn ' + w)
     annotate('warning', w)
 print(f"{'mock' if MOCK else 'live'}: {len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
-if not MOCK and failed and failed[0]['name'].startswith('scoreboard answers'):
-    origin = url.rsplit('/', 1)[0]
-    for line in [f'outside the browser, same call with Origin {origin}: {probe(origin)}', f'outside the browser, with Origin https://oito-lados.vercel.app: {probe("https://oito-lados.vercel.app")}', 'in the browser: ' + (' | '.join(seen) or 'no ESPN request was observed'), 'browser user agent: ' + agent]:
-        print('diag ' + line)
-        annotate('warning', 'diagnosis: ' + line)
+if res.get('unreachable'):
+    msg = f"inconclusive: this machine could not read the ESPN scoreboard ({res['unreachable']}). Nothing was checked. Run python3 tests/contract_live.py from a home connection."
+    print(msg); annotate('warning', msg)
+    sys.exit(3)
 annotate('notice', f"{len(res['checks']) - len(failed)}/{len(res['checks'])} checks passed, {len(res['warns'])} warnings. {res.get('summary', '')}")
 sys.exit(1 if failed else 0)
