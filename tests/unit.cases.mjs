@@ -101,7 +101,12 @@ export default function cases(Core) {
   table('cancelled bout', fight({ canceled: true, winner: null }), null, null, { 'ml:a': 'void', 'td:o:1.5': 'void' });
   table('final without a recognised method', fight(), { method: 'unknown', round: 2, time: null }, TD, { 'ml:a': 'won', 'ml:b': 'lost', 'fm:ko': 'void', 'tot:o:1.5': 'void' });
   table('not started', fight({ state: 'pre', period: 0, winner: null }), null, null, { 'ml:a': null, 'tot:o:1.5': null });
-  table('over but result not posted yet', fight(), null, TD, { 'ml:a': null, 'td:o:2.5': null });
+  // a winner pick is decided by the mark on the scoreboard, without waiting for the method to be published; nothing else is
+  table('over, winner marked, result not posted yet', fight(), null, TD, { 'ml:a': 'won', 'ml:b': 'lost', 'mov:a:ko': null, 'fm:ko': null, 'dist:no': null, 'tot:o:1.5': null, 'rnd:2': null, 'wr:a:2': null, 'td:o:2.5': null, 'tda:a:yes': null });
+  table('over, no winner marked, result not posted yet', fight({ winner: null }), null, TD, { 'ml:a': null, 'ml:b': null, 'fm:dec': null });
+  table('a no contest that was read voids the winner pick even with a winner marked', fight(), { method: 'nc', round: 1, time: 30 }, TD, { 'ml:a': 'void', 'ml:b': 'void' });
+  table('in progress, a winner mark decides nothing', fight({ state: 'in' }), null, TD, { 'ml:a': null, 'ml:b': null });
+  eq('in progress, shown early: still no winner', [Core.legOutcome('ml:a', fight({ state: 'in' }), null, TD, true), Core.legOutcome('ml:b', fight({ state: 'in' }), KO, TD, true)], [null, null]);
   table('takedown stats missing', fight(), KO, null, { 'td:o:1.5': null, 'tda:a:yes': null, 'ml:a': 'won' });
   table('takedown stats not frozen yet', fight(), KO, { a: 1, b: 0, final: false }, { 'td:o:0.5': 'won', 'td:u:0.5': 'lost', 'td:o:1.5': null, 'td:u:1.5': null, 'tda:a:yes': 'won', 'tda:b:yes': null, 'tda:b:no': null });
   table('takedown stats never arrived', fight(), Object.assign({ tdUnavailable: true }, KO), null, { 'td:o:1.5': 'void', 'tda:a:yes': 'void' });

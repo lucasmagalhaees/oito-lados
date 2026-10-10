@@ -36,4 +36,6 @@ jobs:
         run: python tests/contract_live.py --mock
       - name: Check the real API
         # exit 3 = this runner could not reach ESPN at all: inconclusive, reported as a warning, not as a change in the API
+        env:
+          OL_SAMPLES: "1"      # prints one real status per result name, to record as a fixture when a new one shows up
         run: python tests/contract_live.py || [ $? -eq 3 ]

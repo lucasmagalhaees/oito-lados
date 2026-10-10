@@ -73,6 +73,31 @@ async () => {
     ok('takedownsLanded is published for both fighters of a finished fight', tds.every(v => typeof v === 'number'), JSON.stringify(tds));
   }
 
+  // every finished fight of the last months: the names ESPN gives to results, how the app classifies each of them, and
+  // whether the scoreboard marks the winner once the fight is over (a winner pick is settled by that mark)
+  const wide = await tryGet(`${SITE}/scoreboard?dates=${ymd(now - 120 * DAY)}-${ymd(now)}&limit=100`);
+  const past = wide.__error ? [] : (wide.events || []).map(Core.normEvent).flatMap(e => e.fights).filter(f => f.state === 'post' && !f.canceled).sort((a, b) => b.date - a.date).slice(0, 160);
+  const results = {}, samples = {}, marks = []; let swept = 0, bare = 0;
+  for (const f of past) {
+    const st = await tryGet(`${CORE}/events/${f.eventId}/competitions/${f.id}/status`);
+    if (st.__error) continue;
+    swept++;
+    const r = Core.normResult(st);
+    if (!r) { bare++; continue; }
+    const k = `${(st.result || {}).name || ''} | ${(st.result || {}).displayName || ''}`;
+    (results[k] = results[k] || { method: r.method, n: 0 }).n++;
+    if (!samples[k]) samples[k] = { fight: f.id, event: f.eventId, winner: f.winner, status: { result: st.result, period: st.period, clock: st.clock, displayClock: st.displayClock, type: st.type && { name: st.type.name, state: st.type.state, completed: st.type.completed } } };
+    if (['ko', 'sub', 'dec'].includes(r.method) && !f.winner) marks.push(`no winner marked: ${f.a.last} x ${f.b.last} (${k}, fight ${f.id})`);
+    if (['draw', 'nc'].includes(r.method) && f.winner) marks.push(`winner marked on a ${r.method}: ${f.a.last} x ${f.b.last} (fight ${f.id})`);
+  }
+  if (!swept) warns.push('no finished fight in the last 120 days could be read: result names not swept');
+  else {
+    const unknown = Object.keys(results).filter(k => results[k].method === 'unknown');
+    ok(`every result name seen in ${swept} finished fights is one the app classifies`, !unknown.length, unknown.join(' ; '));
+    ok('a fight that ended with a winner has it marked on the scoreboard, and a draw or a no contest has none', !marks.length, marks.slice(0, 5).join(' ; '));
+    if (bare) warns.push(`${bare} finished fight(s) of ${swept} have no result object in their status`);
+  }
+
   const pre = fights.filter(f => f.state === 'pre' && !f.canceled).sort((a, b) => a.date - b.date);
   if (!pre.length) warns.push('no upcoming fight in the window: odds not checked');
   let priced = null, tried = 0;
@@ -101,7 +126,7 @@ async () => {
     else ok('athlete statistics expose takedownAvg', typeof Core.statValue(as, 'takedownAvg') === 'number');
   }
   if (window.pyGet) { const bad = cors.filter(c => !(c.acao === '*' || c.acao === window.ORIGIN)); ok(`all ${cors.length} answers carry the CORS header a browser on ${window.ORIGIN} needs`, !bad.length, bad.slice(0, 3).map(c => c.acao + ' ' + c.u).join(' | ')); }
-  return { checks, warns, fxRaw, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}` };
+  return { checks, warns, fxRaw, results, samples, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}, ${swept} results swept` };
 }
 """
 
@@ -149,6 +174,13 @@ for c in res['checks']:
 for w in res['warns']:
     print('warn ' + w)
     annotate('warning', w)
+# the names ESPN gives to results and what the app makes of each; with OL_SAMPLES=1, one real status per name, to record as a fixture
+for k, v in sorted((res.get('results') or {}).items(), key=lambda kv: -kv[1]['n']):
+    print(f"res  {k} -> {v['method']} x{v['n']}")
+    annotate('notice', f"result name: {k} -> {v['method']} x{v['n']}")
+if os.environ.get('OL_SAMPLES') == '1':
+    for k, v in (res.get('samples') or {}).items():
+        print('sample ' + json.dumps({k: v}, ensure_ascii=False))
 if res.get('fxRaw'):
     print('fx   ' + res['fxRaw'])
     annotate('notice', 'exchange-rate answer: ' + res['fxRaw'])

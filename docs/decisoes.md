@@ -41,6 +41,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 10. PR #13 mesclado às 16:01; o workflow `Produção` passou no commit `6886992`. O Lucas pediu "mais melhorias"; das dez propostas, respondeu "faz todos menos o 3" (ficou de fora guardar a odd de fechamento): D49 a D56. No meio, perguntou se dava para ter um retrospecto das últimas lutas de cada atleta, guardado no aparelho, e qual o peso disso na performance. Respondido com o que a ESPN oferece e o custo em chamadas (anotado na D57); **o retrospecto não foi implementado e espera ele mandar**.
 11. PR #14 mesclado às 16:45; o workflow `Produção` passou no commit `5d7d4e7`. Terceira leva de dez propostas; resposta: "Não faz: 1 8 7 6 9". Ficaram cinco: lista de copiar recolhida, apostas no card da luta, abertas agrupadas por evento, unidades por origem e os testes do núcleo sem navegador (D58 a D62). De fora, a pedido dele: lembrete de backup, aviso de amostra pequena, guardar o texto original da aposta, limite de exposição por evento e exportar em CSV.
 12. Com a terceira leva em andamento, entre 16:59 e 17:04, mais pedidos, **ainda não feitos e fora deste PR**: um botão para colar o texto da área de transferência; sugerir stake de 0,2u a 0,4u em múltipla com mais de quatro seleções; setinhas de meio em meio no campo de unidades; e uma revisão da regra de valor ao copiar ("tem que seguir o que foi parametrizado: ou segue a stake, ou segue o valor"; em unidades, print que não diz unidades vale 1u, e não o dinheiro do print, o que revê a D42), com a stake em unidades e a hora de cada aposta à vista para conferir o consolidado. E uma pergunta: dá para mandar notificação quando a aposta é resolvida? Respondida (D63).
+13. Às 17:09: "deixa quieto esse lance da notificação" e "só garante que está numa forma bacana esse lance de resolver a aposta, pra ganho e pra perda; seria bacana não demorar tanto depois que a luta acabou, mas eu consigo esperar um tempo". É a primeira noite com luta de verdade. Revisão do caminho de liquidação (D64), num PR à frente dos outros pedidos da fila.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -617,6 +618,28 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Não sabido:** onde rodar de graça com a frequência necessária, e se a ESPN responde a um servidor desses (ela recusa navegador automatizado).
 - **Decisão:** nenhuma. Espera o Lucas.
 
+## D64. Resolver a aposta mais cedo e sem anular por engano
+
+- **Contexto (10/10/2026):** o pedido do item 13 da linha do tempo, na primeira noite em que o app roda com luta de verdade. O caminho de liquidação nunca foi visto ao vivo.
+- **O que a revisão achou:**
+  1. **A aposta de vencedor esperava o método.** A luta aparecia como encerrada, com o vencedor marcado no placar, e a aposta só fechava depois de o resultado oficial (método, round, tempo) ser lido, que é outra chamada e pode chegar depois.
+  2. **Um nome de resultado desconhecido anulava na hora.** Se a ESPN publicasse o resultado com um nome que o leitor não classifica, toda aposta de método, round e total daquela luta era anulada imediatamente e sem volta. O `CLAUDE.md` dizia "depois de 1 dia"; o código só esperava um dia quando o resultado não vinha, não quando vinha com nome estranho.
+  3. **Depois do fim da luta o app perguntava devagar.** Sem outra luta ao vivo, o intervalo caía para 30 s justamente enquanto uma aposta esperava o resultado.
+- **Decisão:**
+  1. Vencedor decide com a luta encerrada e o vencedor marcado no placar, sem esperar o método. Um no contest já lido continua anulando.
+  2. Resultado com nome desconhecido não anula nada por 1 dia: é pedido de novo a cada sincronização e o nome aparece na aposta. Depois de 1 dia vale a regra antiga.
+  3. Enquanto uma aposta aberta espera por uma luta que já acabou, o app pergunta a cada 8 s, por até 30 min.
+  4. A aposta aberta diz o que está esperando: "Fulano venceu · método ainda não publicado", ou "esperando as quedas fecharem (até 2 min)".
+  5. Voltar ao app sincroniza também quando a página é restaurada da memória ou a conexão volta.
+- **Conferido na ESPN de verdade em 10/10/2026** (workflow `ESPN contract`, execução 38082833284, 160 lutas encerradas dos últimos 120 dias): os seis nomes de resultado vistos são todos classificados; toda luta com vencedor tinha o vencedor marcado no placar; todas tinham resultado. A varredura passou a fazer parte da conferência semanal.
+- **O que continua igual, de propósito:**
+  - Quedas esperam 2 min depois de a luta aparecer como encerrada, para a estatística parar de mexer. Uma múltipla com perna de quedas espera junto.
+  - Uma perna já perdida com a luta em andamento (um "acaba no round 1" com a luta no round 3) só vira prejuízo quando a luta acaba. Aparece como "já perdeu", e o dinheiro só se mexe com a luta encerrada.
+  - Nada acontece com o app fechado. Ao abrir, a primeira sincronização liquida o que ficou.
+- **O que não se sabe:** quanto tempo a ESPN leva, depois do gongo, para marcar a luta como encerrada, marcar o vencedor e publicar o resultado. Esse atraso não é do app e só esta noite mostra. Se a ESPN marcar o vencedor junto com o resultado, o item 1 não ganha tempo nenhum; não perde nada.
+- **Risco aceito no item 1:** a aposta de vencedor fecha com a marca do placar. Se a ESPN marcar o vencedor errado e corrigir depois, a aposta já fechou. O mesmo valia antes, com o resultado lido.
+- **Teste que mudou de propósito:** o caso "luta encerrada, resultado não publicado" esperava a aposta de vencedor pendente; agora espera decidida quando há vencedor marcado e pendente quando não há.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -637,6 +660,6 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |
 | Ver como a ESPN escreve um peso casado feminino, para a cor do canto (D40) | Quem vir um no card |
 | Abrir o app no iPhone depois deste PR: ver se abre sem internet (modo avião) e se o aviso de versão nova aparece no merge seguinte (D37) | Lucas |
-| Testar num evento ao vivo de verdade | Lucas, no próximo card |
+| Testar num evento ao vivo de verdade: reparar quanto tempo passa entre o fim da luta e a aposta fechar, e se alguma aposta mostra "ainda não reconhecido pelo app" (D64) | Lucas, no card de 10/10/2026 |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |
