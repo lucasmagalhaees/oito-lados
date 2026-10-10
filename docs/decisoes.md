@@ -45,6 +45,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 14. PR #15 mesclado às 17:19 (depois de um conserto: o `docs_check.py` falhou no CI por exigir uma pasta que só existe depois de um teste rodar). PR #16, da liquidação, aberto com o CI verde. Em seguida, os pedidos do item 12: botão de colar (D65), stake sugerida em múltipla longa (D66), setas no campo de unidades (D67), a regra de valor ao copiar seguida à risca (D68) e a stake e a hora à vista em cada aposta lida (D69).
 15. PR #16 mesclado às 17:42 e PR #17 às 17:46. A checagem de produção do #16 foi cancelada pela do #17 (o workflow `Produção` cancela a execução anterior do mesmo branch); a do #17 passou no commit `3491921`. O Lucas perguntou por que a do #16 "falhou" (respondido: cancelada, não falha) e se compartilhar a sessão já exigiria um backend. Respondido, sem implementar nada: mandar uma cópia já sai pelo backup por texto; acompanhar ao vivo, ou a mesma banca em dois aparelhos, é a etapa 2 do `docs/escala.md` e só começa se ele pedir. Às 17:57: "falta trazer a quantidade de unidades apostadas no evento, e de outras visualizações de unidades também, ganhos potenciais em reais e em unidades" (D70).
 16. PR #18 mesclado às 18:33; o workflow `Produção` passou no commit `23ed70e`. Às 18:37, quatro coisas: perguntou se o retrospecto das três últimas lutas tinha sido feito (não tinha: ele mesmo tinha dito que avisaria; a pergunta voltou para ele); pediu busca pelo nome do lutador (D71); sugeriu separar o card em preliminar e principal para navegar melhor (D72); e perguntou da aposta com a luta em andamento, respondendo ele mesmo "deixa como tá" (D73).
+17. PR #19 mesclado às 19:03; o workflow `Produção` passou no commit `c425193`. Às 19:24, com o card rolando, uma captura do iPhone e o pedido: a sinalização da seleção que bateu e da que foi perdida numa múltipla não está clara. Às 19:26: é de interface que ele fala; "de resto, acho que está funcionando bem, ele está mostrando as apostas conforme o evento vai transcorrendo" (D74). É o primeiro retorno dele com luta de verdade: as apostas fecharam sozinhas, e um empate real foi lido como empate. Às 19:36, outra captura: as informações de gestão de banca no topo da Carteira eram só texto, sem cor nem formatação (D75). Às 19:40, mais dois pedidos, **fora deste PR**: colar uma imagem que não está na galeria, e marcar toda aposta que vem do copiar como do tipster, para comparar com as dele.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -740,6 +741,30 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 
 Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você conseguiu fazer aquele lance de quantas por finalização, quantas por KO, quantas por decisão? Eu não vi isso implementado". Respondido: não foi feito, porque ele tinha dito que avisaria. A pergunta foi devolvida a ele ("é pra fazer agora?"), sem presumir a resposta. O que falta antes do código continua sendo gravar a resposta real da ESPN (regra 2 do `CLAUDE.md`): desta máquina o terminal não alcança a ESPN, então a amostra teria que ser capturada por um workflow no GitHub ou por ele.
 
+## D74. Onde está cada seleção de uma aposta, em palavras e em cor
+
+- **Contexto (10/10/2026, 19:24 e 19:26, com o card rolando e uma captura do iPhone):** "a terminologia da aposta que, numa múltipla, já bateu, e da que foi perdida, não tá legal, tem que ficar bem mais claro" e "estou falando de UX e UI, principalmente UI. De resto, acho que está funcionando bem".
+- **O que a captura mostrava:**
+  - Uma múltipla aberta cuja primeira luta tinha acabado em **empate**. A seleção trazia só um círculo cinza pequeno com uma seta e a palavra "Empate". Nada dizia que ela estava anulada nem o que isso fazia com a múltipla. E a aposta continuava mostrando odd 3.44 e retorno de R$ 13.760,00, quando já pagava 1.68 e R$ 6.720,00.
+  - Outra múltipla com a primeira luta em "AO VIVO · R1 3:11", que o Lucas já sabia perdida. O que a ESPN dizia naquele instante não dá para saber daqui; minutos depois ela dava a luta como encerrada, com o outro lutador vencedor.
+- **Decisão:**
+  - Cada seleção vira um bloco com a borda na cor do estado e uma etiqueta com o estado em palavras: Bateu, Perdeu, Anulada, Ao vivo, Vai começar, Aguardando, Não começou, Não contou.
+  - A múltipla conta as seleções por estado embaixo do título.
+  - Seleção anulada numa múltipla: o bloco explica ("Sai da múltipla: esta luta passa a valer odd 1.00."), a odd dela aparece riscada, e a odd, o retorno e o ganho da aposta passam a ser os que ela paga agora, com "era X" ao lado. Os totais do evento e da Carteira acompanham. **Isso corrige número errado na tela, não só aparência:** o que a aposta pagava de verdade já estava certo na liquidação.
+  - Luta que a ESPN já dá como em andamento, mas sem round ("R0"), aparece como "vai começar".
+- **Interpretações que precisaram ser feitas:** as palavras de cada estado; "Não contou" para a seleção de que a aposta não precisou; "Bateu" e "Perdeu" já com a luta rolando quando o resultado está decidido no papel (era "já bateu" numa linha pequena).
+- **O que não muda:** quando a aposta fecha. Se a ESPN demora para dar a luta como encerrada, a seleção continua "Ao vivo" até lá.
+- **Fatos da ESPN vistos de passagem, em 10/10/2026, pelo resumo de uma ferramenta de leitura de páginas, **sem amostra gravada**:** o empate vem como `result.name` "draw", sem vencedor marcado no placar (era um dos três nomes que nunca tinham aparecido); a luta prestes a começar vem como "STATUS_PRE_FIGHT" com `state` "in" e `period` 0; o card de verdade tinha sete lutas numa hora e cinco em outra, o que bate com a regra das partes do card (D72); e o relógio do placar de uma luta encerrada (3:11) somava 5:00 com o do `status` (1:49).
+
+## D75. Gestão da banca no topo da Carteira
+
+- **Contexto (10/10/2026, 19:36, com uma captura do iPhone):** "essas informações de gestão de banca podem ficar melhor para o usuário, dá para ficar melhor organizado também. Tá só um texto aí, não tem nenhuma cor, não tem formatação". A captura mostrava, embaixo do saldo, duas frases corridas: o que estava em jogo e o retorno e o ganho se todas batessem (o que a D70 tinha posto ali uma hora antes).
+- **Decisão:** as frases viram o cartão "Gestão da banca": três números lado a lado (banca, em jogo, uma unidade) e dois quadros coloridos, um verde para "se todas baterem" e um vermelho para "se todas perderem", cada um dizendo para quanto a banca vai.
+- **Interpretações que precisaram ser feitas:**
+  - **O quadro "se todas perderem" é novo.** Ele não pediu; é a outra metade da mesma conta (o que está em jogo, dito como perda) e é o que faz daquilo gestão de banca: o pior e o melhor caso lado a lado.
+  - O valor da unidade sobe para o topo. Continua também no cartão de configuração da unidade.
+- **Junto, sem ele pedir:** nos quadros de três números, valores a partir de R$ 100.000,00 quebravam no meio do número em 393 px. A banca dele é dessa ordem (R$ 100.000,00 depositados). Os quadros passam a dois por linha quando um número é longo.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -754,6 +779,9 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
 | Dizer se o retrospecto dos lutadores é para fazer agora (D57) | Lucas |
+| Confirmar o quadro "se todas perderem" e a unidade no topo da Carteira (D75) | Lucas |
+| Confirmar as palavras de cada estado da seleção, e "Bateu" e "Perdeu" já com a luta rolando quando está decidido no papel (D74) | Lucas |
+| Gravar como amostra a resposta real de um empate e de uma luta em "STATUS_PRE_FIGHT" (D74) | Quem rodar `OL_SAMPLES=1 python3 tests/contract_live.py` de uma conexão comum |
 | Confirmar: a busca em todos os eventos carregados e sem chamada à ESPN, e "separar o card" como ver uma parte por vez (D71, D72) | Lucas |
 | Ver num card de verdade se as partes do card saem certas das horas das lutas (D72) | Lucas, no próximo card |
 | Confirmar: "ganhos potenciais" como lucro (retorno menos a stake), o retorno sem unidades e as telas escolhidas (D70) | Lucas |

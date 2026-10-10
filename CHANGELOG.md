@@ -2,6 +2,17 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.15.0] - 2026-10-10
+
+### Alterado
+- Cada seleção de uma aposta diz onde está, em palavras e em cor: bateu, perdeu, anulada, ao vivo, vai começar, aguardando, não começou ou não contou. A múltipla conta as seleções por estado embaixo do título.
+- Luta que a ESPN dá como em andamento, mas ainda sem round, aparece como "vai começar" em vez de "R0".
+- O topo da Carteira virou o cartão "Gestão da banca": banca, em jogo e valor da unidade lado a lado, e dois quadros coloridos dizendo para onde a banca vai se as apostas abertas baterem todas ou perderem todas.
+- Quadros de três números passam a dois por linha quando um valor é longo, em vez de quebrar o número no meio.
+
+### Corrigido
+- Múltipla aberta com uma seleção anulada (por empate, por exemplo) continuava mostrando a odd e o retorno originais. Agora mostra o que ela paga sem aquela luta, com "era X" ao lado, e os totais do evento e da Carteira acompanham. O valor pago na liquidação já estava certo.
+
 ## [0.14.0] - 2026-10-10
 
 ### Adicionado

@@ -32,6 +32,8 @@ ST = {
 RES = {'f1': dict(id=356,name='kotko',displayName='KO/TKO',description='Punch',displayDescription='Punch'),
        'f2': dict(id=263,name='decision---unanimous',displayName='Decision - Unanimous'),
        'f3': dict(id=1,name='submission',displayName='Submission',description='Rear Naked Choke',displayDescription='Rear Naked Choke')}
+# a draw as the source names it (seen on 10/10/2026): no description, and no winner on the scoreboard
+DRAW = dict(id=269, name='draw', displayName='Draw', shortDisplayName='Draw')
 TD = {'f1': [None,(1,0),(2,1),(2,1)], 'f2': [None,None,(0,0),(0,0)], 'f3': [None,None,None,(3,0)]}
 # one more event, a week ahead and with no line published yet, on the board only while a test asks for it (ESPN['next'])
 EV2 = '600000002'
@@ -43,14 +45,16 @@ def comp(fid, f, st, when):
         status=dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post')),
         format=dict(regulation=dict(periods=f['rounds'])))
 def scoreboard():
-    comps = [comp(fid, f, ST[fid][PHASE['n']] if fid in ST else PRE, NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)) for fid, f in (ALL if ESPN['extra'] else F).items()]
+    # a fight that ends in a draw is over with no winner marked on either side
+    state = lambda fid: (lambda st: st[:5] + (None,) if fid == ESPN['draw'] else st)(ST[fid][PHASE['n']] if fid in ST else PRE)
+    comps = [comp(fid, f, state(fid), NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)) for fid, f in (ALL if ESPN['extra'] else F).items()]
     evs = [dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)]
     if ESPN['next']: evs.append(dict(id=EV2, name='UFC 999: Teles vs. Farias', date=iso(NOW+7*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, f, PRE, NOW+7*86400e3) for fid, f in NEXT.items()]))
     return dict(events=evs)
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
-# knobs for the tests: a second event on the board (next), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
+# knobs for the tests: a second event on the board (next), a fight that ends in a draw (draw: its id), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
 # is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False}
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None}
 def odds(fid):
     if fid not in ALL: return dict(count=0, items=[])          # a fight with no line published, as the source answers it
     f = ALL[fid]
@@ -87,7 +91,7 @@ def handle(route):
     if m:
         fid = m.group(1); st = ST[fid][PHASE['n']] if fid in ST else PRE
         o = dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post'))
-        if st[0]=='post' and not ESPN['noresult']: o['result'] = dict(RES[fid], **ESPN['resname']) if ESPN['resname'] else RES[fid]
+        if st[0]=='post' and not ESPN['noresult']: o['result'] = DRAW if fid == ESPN['draw'] else dict(RES[fid], **ESPN['resname']) if ESPN['resname'] else RES[fid]
         return ok(o)
     m = re.search(r'/competitions/(\w+)/competitors/(\w+)/statistics', u)
     if m:

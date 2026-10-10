@@ -10,7 +10,7 @@ import { legOut, resultText } from './settle';
 import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
 import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
-import type { Bet, CardPart, Currency, Fight, FightEvent, Leg, OpenTotals, Option, Outcome, Period, Side } from '../core';
+import type { Bet, CardPart, Currency, Fight, FightEvent, Leg, LegState, OpenTotals, Option, Outcome, Period, Side } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
 import type { CopyMeta, Slip } from './state';
 
@@ -124,7 +124,7 @@ function optBtn(f: Fight, x: Option, cls?: string): string {
 function fightCard(f: Fight, isMain: boolean): string {
   const p = priceOf(f), can = canBet(f), res = D.results[f.id];
   const state = f.canceled ? '<span class="chip">Cancelada</span>'
-    : f.state === 'in' ? `<span class="chip live"><i class="dot"></i>AO VIVO · R${f.period} ${esc(f.clock)}</span>`
+    : f.state === 'in' ? `<span class="chip live"><i class="dot"></i>${liveText(f)}</span>`
     : f.state === 'post' ? '<span class="chip">Encerrada</span>' : '';
   const side = (k: Side): string => {
     const x = f[k], ml = p && p.groups[0].opts.find(o => o.key === 'ml:' + k);
@@ -155,13 +155,31 @@ function fightCard(f: Fight, isMain: boolean): string {
 }
 
 const isCombo = (b: Bet): boolean => b.type === 'multi' && new Set(b.legs.map(l => l.fid)).size === 1;
-const GLY: Record<Outcome, string> = { won: '✓', lost: '✕', void: '↺' };
+// the words a selection's state is said in: on its tag, and in the count at the top of a multiple
+const LEG: Record<LegState, { tag: string; one: string; many: string; g: string }> = {
+  won: { tag: 'Bateu', one: 'bateu', many: 'bateram', g: '✓' },
+  lost: { tag: 'Perdeu', one: 'perdeu', many: 'perderam', g: '✕' },
+  void: { tag: 'Anulada', one: 'anulada', many: 'anuladas', g: '↺' },
+  live: { tag: 'Ao vivo', one: 'ao vivo', many: 'ao vivo', g: '●' },
+  starting: { tag: 'Vai começar', one: 'vai começar', many: 'vão começar', g: '●' },
+  waiting: { tag: 'Aguardando', one: 'aguardando resultado', many: 'aguardando resultado', g: '…' },
+  pending: { tag: 'Não começou', one: 'não começou', many: 'não começaram', g: '' },
+  unused: { tag: 'Não contou', one: 'não contou', many: 'não contaram', g: '–' }
+};
+const LEG_ORDER: LegState[] = ['won', 'lost', 'void', 'live', 'starting', 'waiting', 'pending', 'unused'];
+/** A fight in progress, as text: the round and the clock, or that it is about to start while the source has it in the
+ *  cage with no round yet. */
+export const liveText = (f: Fight): string => f.period > 0 ? `AO VIVO · R${f.period} ${esc(f.clock)}` : 'VAI COMEÇAR';
+/** What each selection of an open bet has come to for sure (never what is only decided on paper with the fight on). */
+const settledOut = (l: Leg): Outcome | null => legOut(l, false);
 const PILL: Record<Bet['status'], string> = { open: 'Aberta', won: 'Ganhou', lost: 'Perdeu', void: 'Anulada', cashed: 'Cashout' };
 /** What a set of open bets has at stake and what it can pay, in money and in units: the consolidated view of an event
  *  and of everything that is open. The units are of the bets that have one. */
+/** Three figures side by side are what a phone holds while they are short; longer ones go two to a row instead of breaking. */
+const wideIf = (...texts: string[]): string => texts.some(x => x.length > 12) ? ' wide' : '';
 function totalsHtml(t: OpenTotals, cls: string): string {
   const u = t.unitBets > 0, all = t.n > 1;
-  return `<div class="tot ${cls}"><p class="hint">${t.n} ${all ? 'apostas' : 'aposta'} · retorno e ganho se ${all ? 'todas baterem' : 'bater'}${u && t.unitBets < t.n ? ` · unidades de ${t.unitBets} delas, as que guardam a unidade` : ''}</p>
+  return `<div class="tot ${cls}${wideIf(money(t.stake), money(t.ret), signed(t.gain))}"><p class="hint">${t.n} ${all ? 'apostas' : 'aposta'} · retorno e ganho se ${all ? 'todas baterem' : 'bater'}${u && t.unitBets < t.n ? ` · unidades de ${t.unitBets} delas, as que guardam a unidade` : ''}</p>
     <div><small>Em jogo</small><b class="st">${money(t.stake)}</b>${u ? `<span class="un stu">${fu(t.units)}</span>` : ''}</div><div><small>Retorno</small><b class="rt">${money(t.ret)}</b></div><div><small>Ganho</small><b class="gn">${signed(t.gain)}</b>${u ? `<span class="un gnu">${signedU(t.gainUnits)}</span>` : ''}</div></div>`;
 }
 function vApostas(): string {
@@ -175,32 +193,41 @@ function vApostas(): string {
   if (origins.some(Boolean)) h += `<div class="quick froms" id="byorigin" role="group" aria-label="Mostrar apostas de uma origem"><button class="${ui.origin == null ? 'on' : ''}" data-act="origin" aria-pressed="${ui.origin == null}">Todas</button>${origins.map(k => `<button class="${ui.origin === k ? 'on' : ''}" data-act="origin" data-v="${esc(k)}" aria-pressed="${ui.origin === k}">${esc(originName(k))}</button>`).join('')}</div>`;
   if (!list.length) return h + `<p class="empty">${ui.origin != null ? `Nenhuma aposta ${ui.filter === 'open' ? 'aberta' : 'encerrada'} ${ui.origin ? 'de ' + esc(ui.origin) : 'sem origem'}.` : ui.filter === 'open' ? 'Nenhuma aposta aberta. Escolhe uma odd em Lutas pra montar o cupom.' : 'Nada encerrado ainda. As apostas fecham sozinhas quando sai o resultado oficial.'}</p>`;
   // open bets go by event, in the order the fights happen, each event with what is at stake and what it can pay
-  const groups = ui.filter === 'open' ? Core.openByEvent(open, fid => D.fights.get(fid)?.idx ?? 0) : [];
+  const groups = ui.filter === 'open' ? Core.openByEvent(open, fid => D.fights.get(fid)?.idx ?? 0, settledOut) : [];
   const head = new Map(groups.map(g => [g.bets[0].id, g] as const));
-  if (groups.length > 1) h += `<div class="seg label" id="openall">Tudo em aberto</div>${totalsHtml(Core.openTotals(open), 'opentot')}`;
+  if (groups.length > 1) h += `<div class="seg label" id="openall">Tudo em aberto</div>${totalsHtml(Core.openTotals(open, settledOut), 'opentot')}`;
   for (const b of ui.filter === 'open' ? groups.flatMap(g => g.bets) : list) {
     const isOpen = b.status === 'open', g = head.get(b.id);
     if (g) h += `<div class="seg label grp" data-eid="${esc(g.eid)}">${g.eid ? esc(evLabel({ name: g.event }).main) : 'Vários eventos'} · ${esc(dDay.format(g.date))}</div>${totalsHtml(g, 'grpsum')}`;
     const anyLive = isOpen && b.legs.some(l => { const f = D.fights.get(l.fid); return f && f.state === 'in'; });
     const odd = b.odd || Core.r2(b.legs.reduce((p, l) => p * l.odd, 1)), same = isCombo(b);
     h += `<article class="bet"><div class="bh"><b>${b.type === 'multi' ? `${same ? 'Combinada' : 'Múltipla'} · ${b.legs.length} seleções` : 'Simples'}</b><span class="pill ${anyLive ? 'live' : b.status}">${anyLive ? 'Ao vivo' : PILL[b.status]}</span></div>`;
-    for (const l of b.legs) {
-      const f = D.fights.get(l.fid), out = isOpen ? legOut(l, true) : l.out;
-      let cls: string = out || '', g = out ? GLY[out] : '', line2: string;
+    // every selection says in words where it stands, and a multiple counts them at the top
+    const states = b.legs.map(l => Core.legState(isOpen ? legOut(l, true) : l.out, isOpen, D.fights.get(l.fid)));
+    const several = new Set(b.legs.map(l => l.fid)).size > 1;
+    if (b.legs.length > 1) h += `<p class="tally">${LEG_ORDER.filter(k => states.includes(k)).map(k => { const n = states.filter(x => x === k).length; return `<span class="tl ${k}">${n} ${n > 1 ? LEG[k].many : LEG[k].one}</span>`; }).join(' · ')}</p>`;
+    b.legs.forEach((l, i) => {
+      const f = D.fights.get(l.fid), st = states[i], out = st === 'won' || st === 'lost' || st === 'void' ? st : null;
+      let line2: string;
       if (isOpen && f && f.state === 'in') {
         const td = D.td[l.fid];
-        if (!out) { cls = 'live'; g = '●'; }
-        line2 = `<span class="lv">AO VIVO · R${f.period} ${esc(f.clock)}${td && /^td/.test(l.key) ? ` · quedas ${td.a}–${td.b}` : ''}${out === 'won' ? ' · já bateu' : out === 'lost' ? ' · já perdeu' : ''}</span>`;
+        line2 = `<span class="lv">${liveText(f)}${td && /^td/.test(l.key) ? ` · quedas ${td.a}–${td.b}` : ''}${out === 'won' ? ' · já bateu' : out === 'lost' ? ' · já perdeu' : ''}</span>`;
       } else if (f && f.state === 'post') line2 = `<span>${esc(resultText(f, D.results[l.fid]))}${isOpen && !out && /^td/.test(l.key) && !(D.td[l.fid] && D.td[l.fid].final) ? ' · esperando as quedas fecharem (até 2 min)' : ''}</span>`;
       else if (!isOpen && l.res) line2 = `<span>${esc(l.res)}</span>`;
       else line2 = `<span>${esc(dWhen.format(l.date))}</span>`;
-      h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${sideDot(l.key, l.weight || D.fights.get(l.fid)?.weight)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
-    }
+      // a void selection leaves a multiple: its fight counts as odd 1.00 from then on
+      const gone = st === 'void' && several;
+      if (gone) line2 += `<span class="why">Sai da múltipla: esta luta passa a valer odd 1.00.</span>`;
+      h += `<div class="leg s-${st}"><i class="g ${st}" aria-hidden="true">${LEG[st].g}</i><div class="t"><b>${sideDot(l.key, l.weight || D.fights.get(l.fid)?.weight)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><div class="o"><span class="lo">${gone ? `<s>${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</s> 1.00` : `${l.src === 'est' ? '≈' : ''}${fo(l.odd)}`}</span><em class="ls ${st}">${LEG[st].tag}</em></div></div>`;
+    });
     const profit = b.payout - b.stake, edge = Core.printedEdge(b);
     if (b.from || edge) h += `<p class="src">${b.from ? `De ${esc(b.from)}` : 'Copiada'}${edge ? ` · odd do print ${fo(edge.printed)}, você pegou ${fo(edge.got)} (${signedPct(edge.diff)})` : ''}</p>`;
-    const u = b.unit && b.unit > 0 ? b.unit : 0, ret = Core.r2(b.stake * odd);
-    h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b>${u ? `<span class="un">${fu(b.stake / u)}</span>` : ''}</div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
-      (isOpen ? `<div><small>Retorno</small><b>${money(ret)}</b></div>`
+    // with a selection voided the bet pays less than it was placed at: the odd, the return and the gain say what it pays now
+    const outs = b.legs.map(l => isOpen ? settledOut(l) : l.out), cut = outs.includes('void') && (isOpen || b.status === 'won');
+    const pays = cut ? Core.oddLeft(b, outs).odd : odd;
+    const u = b.unit && b.unit > 0 ? b.unit : 0, ret = Core.r2(b.stake * pays);
+    h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b>${u ? `<span class="un">${fu(b.stake / u)}</span>` : ''}</div><div><small>Odd</small><b class="odd">${fo(pays)}</b>${cut && pays !== odd ? `<span class="un was">era ${fo(odd)}</span>` : ''}</div>` +
+      (isOpen ? `<div><small>Retorno</small><b class="ret">${money(ret)}</b></div>`
         : `<div><small>Resultado</small><b class="${profit > 0 ? 'pos' : profit < 0 ? 'neg' : ''}">${signed(profit)}</b>${u ? `<span class="un res">${signedU(profit / u)}</span>` : ''}</div>`) + '</div>';
     // what an open bet adds to the bankroll if it wins: the return less the stake, in money and in units
     if (isOpen) h += `<div class="gain"><small>Ganho se bater</small><b>${signedBoth(ret - b.stake, u ? (ret - b.stake) / u : null)}</b></div>`;
@@ -271,8 +298,15 @@ function originHtml(done: Bet[]): string {
   return `<div class="tbl" id="origins"><table><thead><tr><th>Origem</th><th>Resultado</th><th>ROI</th><th>Acerto</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(originName(r.k))}<small>${r.n} ${r.n > 1 ? 'apostas' : 'aposta'} · ${money(r.st)}${r.k && r.edge.n ? ` · odd ${signedPct(r.edge.avg)} contra o print` : ''}</small></td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}${r.unitBets ? `<small class="inu">${signedU(r.units)}</small>` : ''}</td><td>${r.st ? signedPct(p / r.st) : '—'}</td><td>${r.dec ? `${r.won}/${r.dec}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 function vCarteira(w: Wallet): string {
-  const ot = Core.openTotals(w.open);
-  let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div><p>${ot.n ? `<span id="atrisk">${money(ot.stake)}${ot.unitBets ? ` (${fu(ot.units)})` : ''} em jogo em ${ot.n} ${ot.n > 1 ? 'apostas abertas' : 'aposta aberta'}</span> · ` : ''}${money(w.dep)} depositados no total</p>${ot.n ? `<p id="heropot">Se ${ot.n > 1 ? 'todas baterem' : 'bater'}: retorno de ${money(ot.ret)}, ganho de ${signedBoth(ot.gain, ot.unitBets ? ot.gainUnits : null)}.</p>` : ''}</section>`;
+  const ot = Core.openTotals(w.open, settledOut);
+  let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div></section>`;
+  // the bankroll at a glance: what it is, what is at stake, what a unit is worth, and where it goes if the open bets all win or all lose
+  const all = ot.n > 1, uOf = (v: number): number | null => ot.unitBets ? v : null;
+  h += `<section class="card bank" id="bank"><span class="label">Gestão da banca</span>
+    <div class="kp3${wideIf(money(w.bank), money(ot.stake), money(w.unit))}"><div><small>Banca</small><b id="bankv">${money(w.bank)}</b><span class="un">saldo + em jogo</span></div><div id="atrisk"><small>Em jogo</small><b>${money(ot.stake)}</b><span class="un">${ot.n ? `${ot.unitBets ? fu(ot.units) + ' · ' : ''}${ot.n} ${all ? 'apostas' : 'aposta'}` : 'nenhuma aposta'}</span></div><div><small>1 unidade</small><b id="unitv">${w.unit > 0 ? money(w.unit) : '—'}</b><span class="un">${pctText(w.unitPct)}% da banca</span></div></div>
+    ${ot.n ? `<div class="scn up" id="ifwin"><small>Se ${all ? 'todas baterem' : 'bater'}</small><b>${signedBoth(ot.gain, uOf(ot.gainUnits))}</b><span>retorno de ${money(ot.ret)} · banca vai a ${money(Core.r2(w.balance + ot.ret))}</span></div>
+    <div class="scn down" id="iflose"><small>Se ${all ? 'todas perderem' : 'perder'}</small><b>${signedBoth(-ot.stake, uOf(-ot.units))}</b><span>banca vai a ${money(w.balance)}</span></div>` : ''}
+    <p class="hint" id="deptotal">${money(w.dep)} depositados no total</p></section>`;
   const cur = S.cur || 'BRL', dc = isCurrency(ui.depCur) ? ui.depCur : cur, other = dc !== cur, conv = other && !bankEmpty(), rate = conv ? Core.fxRate(FX, cur, dc) : null, df = fmtOf(dc);
   h += `<section class="card"><span class="label">Depositar dinheiro de mentira</span>
     <div class="segm cur" role="group" aria-label="Moeda do depósito">${(Object.keys(CUR) as Currency[]).map(c => `<button class="${dc === c ? 'on' : ''}" data-act="depcur" data-c="${c}" aria-pressed="${dc === c}" ${ui.fxBusy ? 'disabled' : ''}>${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div>

@@ -202,9 +202,9 @@ check('the stake rule, the suggestion and the steps have tests', all(w in unit_s
 rend_src = read('src/app/render.ts'); help_src = read('src/app/helpers.ts')
 check('the totals of open bets have tests and are in the spec', 'Core.openTotals' in unit_src and '`Core.openTotals`' in spec and 'openTotals' in read('src/core/index.ts'))
 check('the gain is the return less the stake, each bet by the unit it was placed with', "t.gainUnits += (ret - b.stake) / b.unit" in hist and "t.gain = r2(t.ret - t.stake)" in hist and 'ganho é o retorno menos a stake' in spec)
-check('every event and everything open get the same totals, and an open bet says its gain', rend_src.count('totalsHtml(') == 3 and "totalsHtml(Core.openTotals(open), 'opentot')" in rend_src and '<small>Ganho se bater</small>' in rend_src and '"Tudo em aberto"' in spec and '"Ganho se bater"' in spec)
+check('every event and everything open get the same totals, and an open bet says its gain', rend_src.count('totalsHtml(') == 3 and "totalsHtml(Core.openTotals(open, settledOut), 'opentot')" in rend_src and '<small>Ganho se bater</small>' in rend_src and '"Tudo em aberto"' in spec and '"Ganho se bater"' in spec)
 check('the slip and the copy list say the gain too, priced the way the slip prices', 'id="slipgain"' in rend_src and 'id="impgain"' in imp_src and 'class="impgain"' in imp_src and 'export function payoutOf' in help_src and 'payoutOf(' in imp_src and '`payoutOf`' in spec)
-check('the wallet and the fight card say the units at stake', 'id="heropot"' in rend_src and "ex.unitBets ? ' · ' + fu(ex.units) : ''" in rend_src and '"N apostas · R$ X · Yu"' in spec)
+check('the wallet and the fight card say the units at stake', 'id="ifwin"' in rend_src and 'id="iflose"' in rend_src and "ex.unitBets ? ' · ' + fu(ex.units) : ''" in rend_src and '"N apostas · R$ X · Yu"' in spec)
 
 # 5d1h. the fights screen: the parts of the card and the search by a fighter's name
 ev_src = read('src/app/events.ts'); card_src = read('src/core/card.ts')
@@ -213,6 +213,16 @@ check('early prelims only exist with three hours or more, as the spec says', "i 
 check('typing in the search only repaints the list: it asks the source for nothing', "else if (t.id === 'q') { ui.q = t.value; paintList(); }" in ev_src and 'load' not in rend_src[rend_src.index('export function paintList'):rend_src.index('export function paintList') + 400] and 'Buscar não faz chamada à ESPN' in spec)
 check('with the focus in the search field only the list is repainted', "else if (ae.id === 'q') paintList();" in rend_src and '(`#list`)' in spec)
 check('a tap outside the list lets go of the search field', "!b.closest('#list')) q.blur();" in ev_src and 'qualquer toque fora dela solta o campo' in spec)
+
+# 5d1i. where each selection of a bet stands, what a multiple pays with a selection voided, and the bankroll panel
+sett_src = read('src/core/settlement.ts'); css_src = read('src/styles.css')
+check('the state of a selection and the odd left have tests and are in the spec', all(('Core.' + f) in unit_src and ('`Core.' + f + '`') in spec for f in ('legState', 'oddLeft')) and 'Core.oddNow' in unit_src)
+check('every state of a selection has its word, the ones the spec lists', all(f"tag: '{w}'" in rend_src and f'"{w}"' in spec for w in ('Bateu', 'Perdeu', 'Anulada', 'Ao vivo', 'Vai começar', 'Aguardando', 'Não começou', 'Não contou')))
+check('a bet is paid by the odd that is left, the same one the screen shows', 'const left = oddLeft(bet, outs);' in sett_src and "return { status: 'won', payout: r2(bet.stake * left.odd) };" in sett_src and 'Core.oddLeft(b, outs).odd' in rend_src)
+check('only what is settled for good changes what an open bet pays', 'const settledOut = (l: Leg): Outcome | null => legOut(l, false);' in rend_src and 'sem o `early`' in spec)
+check('a fight with no round yet is about to start, not in round zero', "f.period > 0 ? `AO VIVO · R${f.period} ${esc(f.clock)}` : 'VAI COMEÇAR'" in rend_src and "return fight.period > 0 ? 'live' : 'starting';" in sett_src)
+check('the bankroll panel says both ends, in different colours', 'id="ifwin"' in rend_src and 'id="iflose"' in rend_src and '.scn.up b{color:var(--win)}' in css_src and '.scn.down b{color:var(--loss)}' in css_src and '"Gestão da banca"' in spec)
+check('long figures go two to a row from the length the spec says', 'texts.some(x => x.length > 12)' in rend_src and 'mais de 12 caracteres' in spec)
 
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')

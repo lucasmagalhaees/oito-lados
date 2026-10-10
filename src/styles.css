@@ -231,18 +231,35 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .field select{flex:1;min-width:0;border:0;background:none;color:var(--fg);height:48px;font:inherit;font-size:16px;font-weight:600;outline:none}
 .pill.cashed{color:var(--gold)}
 .pill.open{color:var(--muted)}.pill.won{color:var(--win)}.pill.lost{color:var(--loss)}.pill.void{color:var(--muted)}.pill.live{color:var(--live)}
-.leg{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
-.leg .g{width:20px;height:20px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px;font-weight:700;border:1.5px solid var(--line);color:var(--muted);margin-top:1px}
+.tally{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 2px}
+.tally .won{color:var(--win)}.tally .lost{color:var(--loss)}.tally .live,.tally .starting{color:var(--live)}
+/* each selection is a tile that says where it stands: by the colour of its edge, by its mark and, in words, by its tag */
+.leg{display:flex;gap:10px;padding:9px 10px;margin-top:6px;border:1px solid var(--line);border-left-width:4px;border-radius:8px}
+.leg.s-won{border-color:var(--win);background:color-mix(in srgb,var(--win) 9%,transparent)}
+.leg.s-lost{border-color:var(--loss);background:color-mix(in srgb,var(--loss) 9%,transparent)}
+.leg.s-live,.leg.s-starting{border-color:var(--live)}
+.leg.s-void{border-style:dashed;border-color:var(--muted)}
+.leg.s-unused{opacity:.62}
+.leg .g{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:13px;font-weight:700;border:1.5px solid var(--line);color:var(--muted);margin-top:1px}
 .leg .g.won{background:var(--win);border-color:var(--win);color:var(--surface)}
 .leg .g.lost{background:var(--loss);border-color:var(--loss);color:var(--surface)}
-.leg .g.live{border-color:var(--live);color:var(--live)}
+.leg .g.live,.leg .g.starting{border-color:var(--live);color:var(--live)}
+.leg .g.void{border-color:var(--muted)}
 .leg .t{flex:1;min-width:0}
 .leg .t b{display:block;font-weight:600}
 .leg .t span{display:block;font-size:12px;color:var(--muted)}
 .leg .t .lv{color:var(--live);font-weight:600}
-.leg .o{font-weight:700;white-space:nowrap}
+.leg .t .why{color:var(--fg)}
+.leg > .o{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-weight:700;white-space:nowrap}
+.leg > .o s{color:var(--muted);font-weight:500}
+.ls{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:3px 6px;border:1px solid transparent;color:var(--muted)}
+.ls.won{background:var(--win);color:var(--surface)}
+.ls.lost{background:var(--loss);color:var(--surface)}
+.ls.void{border-color:var(--muted)}
+.ls.live,.ls.starting{border-color:var(--live);color:var(--live)}
+.ls.waiting{border-color:var(--line)}
 .bet .src{font-size:12px;color:var(--muted);margin:2px 0 0}
-.bf{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--line);padding-top:10px;margin-top:2px}
+.bf{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.6fr) minmax(0,1.25fr);gap:8px;border-top:1px solid var(--line);padding-top:10px;margin-top:2px}
 .bf div{min-width:0}
 .bf small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .bf b{font-weight:700;overflow-wrap:anywhere}
@@ -253,6 +270,17 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .hero{padding:6px 0 14px}
 .hero .n{font:800 52px/1 var(--font-display);letter-spacing:.01em;overflow-wrap:anywhere}
 .hero p{color:var(--muted);font-size:13px;margin-top:6px}
+.kp3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kp3.wide,.tot.wide{grid-template-columns:repeat(2,minmax(0,1fr))}
+.kp3 div{min-width:0}
+.kp3 small,.scn small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.kp3 b{font-size:16px;font-weight:700;overflow-wrap:anywhere}
+/* where the bankroll goes with the open bets: all of them in, or all of them out */
+.scn{border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:10px 12px}
+.scn b{display:block;font-size:18px;font-weight:700;overflow-wrap:anywhere}
+.scn span{display:block;font-size:12px;color:var(--muted)}
+.scn.up{border-color:var(--win);background:color-mix(in srgb,var(--win) 9%,transparent)}.scn.up b{color:var(--win)}
+.scn.down{border-color:var(--loss);background:color-mix(in srgb,var(--loss) 9%,transparent)}.scn.down b{color:var(--loss)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 @media (max-width:460px){.kpis{grid-template-columns:repeat(2,1fr)}}
