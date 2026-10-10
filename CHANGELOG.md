@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.1] - 2026-10-10
+
+### Adicionado
+- Atalhos de 10.000, 100.000 e 1.000.000 no cartão de depósito.
+
 ## [0.5.0] - 2026-10-10
 
 ### Adicionado

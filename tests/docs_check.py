@@ -72,6 +72,9 @@ CONSTANTS = [
     (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
     (r'\[10, 50, 100\]\.map\(v => `<button data-act="stq"', '+10, +50, +100,'),
     (r'\[10000, 100000, 1000000\]\.map\(v => `<button data-act="stq"', '+10.000, +100.000 e +1.000.000'),
+    (r'\[100, 500, 1000, 5000\]\.map\(v => `<button data-act="depq"', '100, 500, 1.000 e 5.000'),
+    (r'\[10000, 100000, 1000000\]\.map\(v => `<button data-act="depq"', '10.000, 100.000 e 1.000.000 na segunda'),
+    (r'v > 1e9', 'máximo de 1 bilhão por depósito'),
     (r'FX_TTL = 12 \* 3600e3;', 'depois de 12 h'),
     (r"\.slice\(-20\);\n    setStakeMoney\(0\);", 'as 20 últimas'),
 ]

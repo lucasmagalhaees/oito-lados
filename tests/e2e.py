@@ -60,6 +60,12 @@ with sync_playwright() as p:
     pg.keyboard.type('8'); assert pg.input_value('#dep') == '9.812.345', pg.input_value('#dep')
     pg.fill('#dep', ''); pg.click('[data-act=depq][data-v="1000"]'); pg.click('[data-act=depq][data-v="500"]')
     assert pg.input_value('#dep') == '1.500', pg.input_value('#dep')
+    # the deposit card has the high shortcuts too, and they add up like the others
+    assert [pg.inner_text(f'[data-act=depq][data-v="{v}"]').replace('\xa0', ' ') for v in (10000, 100000, 1000000)] == ['R$ 10.000', 'R$ 100.000', 'R$ 1.000.000']
+    for v, want in [('10000', '11.500'), ('100000', '111.500'), ('1000000', '1.111.500')]:
+        pg.click(f'[data-act=depq][data-v="{v}"]'); assert pg.input_value('#dep') == want, (v, pg.input_value('#dep'))
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, 'the deposit card must not get wider than the phone'
+    shot('s23-deposito-atalhos.png')
     pg.fill('#dep', '')
     assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
     # currency: chosen where the money comes in. With an empty bankroll it is only a symbol and no rate is asked for

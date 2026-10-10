@@ -33,6 +33,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 2. Pedido das 07:45, com um print do mercado "Total de rounds": faltou esquema de cores ali; um jeito de lembrar quem é azul e quem é vermelho sem rolar a tela de volta; dinheiro ou unidades como configuração e não por aposta; ver o que dá para guardar do app para abrir mais rápido, o modo offline, e avisar quando sai versão nova.
 3. Duas perguntas feitas antes de implementar. Cores no total de rounds: criar um mercado por lutador ou dar cores próprias a + e −? Resposta: "quero o 2" (D34). Tema: quer escolher dentro do app? Resposta: "sim, quero dark mode no app" (D38).
 4. Feito num PR só: D34 a D38.
+5. PR #10 mesclado às 09:36; o workflow `Produção` passou no commit `bcbf6c1`. Pedido seguinte, às 10:30: "faltou opções de depósito de milhares, e milhão" (D39).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -275,7 +276,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
   - Os atalhos de 0,5u a 3u já existiam; entendi o pedido como poder **digitar** qualquer quantidade de unidades.
   - Em unidades, os atalhos de dinheiro saem da tela e ficam só os de unidade e o "Tudo".
-  - Os atalhos altos são do cupom. Os do depósito continuam em 100, 500, 1.000 e 5.000.
+  - Os atalhos altos são do cupom. Os do depósito continuam em 100, 500, 1.000 e 5.000. **Interpretação errada, corrigida pela D39:** ele queria os altos no depósito também.
 - **Descartado:** trocar o padrão para unidades sem ele pedir.
 - **Revista pela D36** (10/10/2026): a chave saiu do cupom e virou configuração na Carteira.
 
@@ -361,6 +362,12 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Contexto (10/10/2026):** o app já tinha tema escuro, mas só seguindo o aparelho. Perguntado se queria escolher dentro do app, o Lucas respondeu: "sim, quero dark mode no app".
 - **Decisão:** cartão "Aparência" nas configurações, com Automático, Claro e Escuro. A escolha fica salva (`theme`) e sobrevive a backup, restauração e a zerar a simulação.
 - **Interpretação que precisou ser feita (confirmar com o Lucas):** o padrão continua sendo Automático. Não troquei o padrão para escuro.
+
+## D39. Atalhos altos também no depósito
+
+- **Contexto (10/10/2026):** "faltou opções de depósito de milhares, e milhão". Na D30 eu tinha posto os atalhos altos só no cupom e anotado isso como interpretação a confirmar; a resposta é que faltaram no depósito.
+- **Decisão:** o cartão de depósito ganhou uma segunda linha de atalhos, 10.000, 100.000 e 1.000.000, na moeda escolhida para o depósito. Somam ao que está no campo, como os outros.
+- **Interpretação que precisou ser feita:** usei os mesmos três valores do cupom. A primeira linha (100, 500, 1.000 e 5.000) ficou como estava.
 
 ## Pendências em 10/10/2026
 

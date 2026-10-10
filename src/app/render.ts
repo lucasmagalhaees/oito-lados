@@ -202,7 +202,8 @@ function vCarteira(w: Wallet): string {
   h += `<section class="card"><span class="label">Depositar dinheiro de mentira</span>
     <div class="segm cur" role="group" aria-label="Moeda do depósito">${(Object.keys(CUR) as Currency[]).map(c => `<button class="${dc === c ? 'on' : ''}" data-act="depcur" data-c="${c}" aria-pressed="${dc === c}" ${ui.fxBusy ? 'disabled' : ''}>${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div>
     <div class="field"><span>${esc(symbolOf(dc))}</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
-    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>`;
+    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>
+    <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>`;
   if (conv && ui.fxBusy) h += '<p class="hint" id="fxinfo">Buscando a cotação…</p>';
   else if (conv && rate && FX) h += `<p class="hint" id="fxinfo">Passar para ${CUR[dc]} troca a moeda da banca e converte tudo (depósitos e apostas) por <b>${esc(rateText(cur, dc, rate))}</b>, cotação de ${esc(dateBR(FX.date))}. Seu saldo de ${money(w.balance)} vira ${df.format(Core.r2(w.balance * rate))}.</p>`;
   else if (other && !conv) h += `<p class="hint" id="fxinfo">A banca passa a ser em ${CUR[dc]}.</p>`;
