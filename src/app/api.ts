@@ -52,6 +52,10 @@ export async function fetchTd(f: Fight): Promise<{ a: number; b: number }> {
   if (va == null || vb == null) throw new Error('sem stats');
   return { a: va, b: vb };
 }
+/** How long after its start a fight with no result the app can read is taken as one without a recognised method. */
+export const UNKNOWN_AFTER = DAY;
+/** How long the takedown count of a finished fight is left to stop moving before bets on it are closed. */
+export const TD_FREEZE = 120e3;
 export async function loadResults(): Promise<void> {
   const now = Date.now(), legs = openLegs();
   const betFids = new Set(legs.map(l => l.fid));
@@ -67,13 +71,17 @@ export async function loadResults(): Promise<void> {
     const recent = now - f.date < 5 * DAY;
     if (!D.results[f.id] && (recent || betFids.has(f.id))) jobs.push(async () => {
       const r = Core.normResult(await getJSON(`${CORE}/events/${f.eventId}/competitions/${f.id}/status`));
-      if (r) D.results[f.id] = r;
-      else if (now - f.date > DAY) D.results[f.id] = { method: 'unknown', label: '', desc: '', round: f.period, time: null, clock: f.clock };
+      // A result under a name the app does not know may still be being written, or be one a later version will know.
+      // For a day it is asked for again, and only then taken as final: taking it at once would void every bet on the
+      // method or the rounds of that fight for good. Winner picks do not wait for it.
+      if (r && (r.method !== 'unknown' || now - f.date > UNKNOWN_AFTER)) { D.results[f.id] = r; delete D.unread[f.id]; }
+      else if (r) D.unread[f.id] = r.label || 'sem nome';
+      else if (now - f.date > UNKNOWN_AFTER) D.results[f.id] = { method: 'unknown', label: '', desc: '', round: f.period, time: null, clock: f.clock };
     });
     const t = D.td[f.id];
     if ((!t || !t.final) && (tdFids.has(f.id) || t)) jobs.push(async () => {
       // stats can trail the final bell by a moment, so only freeze them once the fight has been over for a couple of minutes
-      const settled = now - D.finalSeen[f.id] > 120e3 || now - f.date > 6 * H;
+      const settled = now - D.finalSeen[f.id] > TD_FREEZE || now - f.date > 6 * H;
       try { const v = await fetchTd(f); D.td[f.id] = { a: v.a, b: v.b, final: settled, ts: now }; }
       catch (e) { if (now - f.date > 2 * DAY && D.results[f.id]) D.results[f.id].tdUnavailable = true; }
     });

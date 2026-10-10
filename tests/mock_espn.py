@@ -37,8 +37,9 @@ def scoreboard():
             format=dict(regulation=dict(periods=f['rounds']))))
     return dict(events=[dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)])
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
-# knobs for the tests: the source unreachable, and the line of one fighter (Kessler, f2) moving
-ESPN = {'down': False, 'f2b': 170}
+# knobs for the tests: the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
+# is not published yet, and a result published under a name of our own making
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None}
 def odds(fid):
     f = F[fid]
     side = lambda x, ml, ko, sub, dec: dict(moneyLine=ml, current=dict(moneyLine=am(ml), victoryMethod=dict(koTkoDq=am(ko), submission=am(sub), points=am(dec))), athlete={'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/%s?lang=en'%x[0]})
@@ -74,7 +75,7 @@ def handle(route):
     if m:
         fid = m.group(1); st = ST[fid][PHASE['n']]
         o = dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post'))
-        if st[0]=='post': o['result'] = RES[fid]
+        if st[0]=='post' and not ESPN['noresult']: o['result'] = dict(RES[fid], **ESPN['resname']) if ESPN['resname'] else RES[fid]
         return ok(o)
     m = re.search(r'/competitions/(\w+)/competitors/(\w+)/statistics', u)
     if m:

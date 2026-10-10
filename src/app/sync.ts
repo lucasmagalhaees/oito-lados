@@ -1,4 +1,4 @@
-import { loadBoard, loadOdds, loadResults, openBets } from './api';
+import { loadBoard, loadOdds, loadResults, openBets, openLegs } from './api';
 import { DAY, H } from './format';
 import { render } from './render';
 import { settle } from './settle';
@@ -23,15 +23,30 @@ export async function sync(force: boolean): Promise<void> {
   } catch (e) { const err = e as { name?: string; message?: string } | null; D.err = (err && err.name === 'AbortError') ? 'tempo esgotado' : String((err && err.message) || e); }
   finally { busy = false; render(); schedule(); }
 }
+/** Whether an open bet is waiting on a fight that is already over: for its result, or for its takedown count to stop
+ *  moving. Only for half an hour after the fight was first seen over, so a result that never comes does not keep the
+ *  app asking at this pace. */
+export function settling(now: number): boolean {
+  return openLegs().some(l => {
+    const f = D.fights.get(l.fid);
+    if (!f || f.state !== 'post' || f.canceled || now - (D.finalSeen[f.id] || now) > 30 * 60e3) return false;
+    return !D.results[f.id] || (/^td/.test(l.key) && !(D.td[f.id] && D.td[f.id].final));
+  });
+}
 export function schedule(): void {
   clearTimeout(timer);
   if (document.hidden) return;
   const now = Date.now(), fs = [...D.fights.values()];
   const live = fs.some(f => f.state === 'in');
   const night = D.events.some(e => !e.completed && now > e.date - H && now < e.date + 12 * H);
-  timer = setTimeout(() => sync(false), live ? 15e3 : night ? 30e3 : 120e3);
+  timer = setTimeout(() => sync(false), settling(now) ? 8e3 : live ? 15e3 : night ? 30e3 : 120e3);
 }
-export function initSync(): void { document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(false); else clearTimeout(timer); }); }
+export function initSync(): void {
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(false); else clearTimeout(timer); });
+  // coming back to the app does not always arrive as a change of visibility: a page restored from memory, a connection that returns
+  const back = (): void => { if (!document.hidden && Date.now() - D.lastSync > 5e3) sync(false); };
+  window.addEventListener('pageshow', back); window.addEventListener('online', back);
+}
 export function pickEvent(): void {
   const evs = shownEvents();
   if (evs.find(e => e.id === ui.eventId)) return;

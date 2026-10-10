@@ -148,7 +148,7 @@ function vApostas(): string {
         const td = D.td[l.fid];
         if (!out) { cls = 'live'; g = '●'; }
         line2 = `<span class="lv">AO VIVO · R${f.period} ${esc(f.clock)}${td && /^td/.test(l.key) ? ` · quedas ${td.a}–${td.b}` : ''}${out === 'won' ? ' · já bateu' : out === 'lost' ? ' · já perdeu' : ''}</span>`;
-      } else if (f && f.state === 'post') line2 = `<span>${esc(resultText(f, D.results[l.fid]))}</span>`;
+      } else if (f && f.state === 'post') line2 = `<span>${esc(resultText(f, D.results[l.fid]))}${isOpen && !out && /^td/.test(l.key) && !(D.td[l.fid] && D.td[l.fid].final) ? ' · esperando as quedas fecharem (até 2 min)' : ''}</span>`;
       else if (!isOpen && l.res) line2 = `<span>${esc(l.res)}</span>`;
       else line2 = `<span>${esc(dWhen.format(l.date))}</span>`;
       h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${sideDot(l.key, l.weight || D.fights.get(l.fid)?.weight)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;

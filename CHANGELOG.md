@@ -2,6 +2,21 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.11.0] - 2026-10-10
+
+### Alterado
+- A aposta de vencedor fecha assim que a luta aparece como encerrada com o vencedor marcado, sem esperar o método ser publicado.
+- Enquanto uma aposta espera por uma luta que já acabou, o app consulta a ESPN a cada 8 s (antes, 15 s ou 30 s).
+- A aposta aberta diz o que está esperando: o método, ou as quedas fecharem.
+- Voltar ao app também sincroniza quando a página é restaurada da memória ou a conexão volta.
+
+### Corrigido
+- Um resultado publicado com um nome que o app não conhece anulava na hora as apostas de método, round e total daquela luta. Agora fica pendente por um dia, com o nome à vista.
+
+### Adicionado
+- `tests/settle.py`: a liquidação pela interface com a ESPN simulada segurando respostas.
+- A conferência ao vivo da ESPN varre os nomes de resultado de até 160 lutas encerradas.
+
 ## [0.10.0] - 2026-10-10
 
 ### Adicionado

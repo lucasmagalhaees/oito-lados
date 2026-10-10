@@ -9,7 +9,11 @@ import type { Bet, Fight, Leg, Outcome, Result } from '../core';
 const DEC: Record<string, string> = { 'Decision - Unanimous': 'unânime', 'Decision - Split': 'dividida', 'Decision - Majority': 'majoritária' };
 export function resultText(f: Fight, res: Result | null | undefined): string {
   if (f.canceled) return 'Luta cancelada';
-  if (!res) return 'Encerrada · aguardando resultado oficial';
+  if (!res) {
+    // over, with the method still to come: who won is said as soon as the scoreboard says it
+    const won = f.winner ? `${f[f.winner].last} venceu · ` : 'Encerrada · ';
+    return won + (D.unread[f.id] ? `resultado "${D.unread[f.id]}" ainda não reconhecido pelo app` : f.winner ? 'método ainda não publicado' : 'aguardando resultado oficial');
+  }
   const td = D.td[f.id], tds = td ? ` · quedas ${td.a}–${td.b}` : '';
   if (res.method === 'nc') return 'No contest' + tds;
   if (res.method === 'draw') return 'Empate' + tds;

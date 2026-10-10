@@ -76,6 +76,7 @@ scripts/verify.sh           # confere os tipos, faz o build e roda tudo contra a
 | `tests/contract.py` | Os leitores da ESPN e do serviço de câmbio contra respostas reais gravadas em `tests/fixtures/` |
 | `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
+| `tests/settle.py` | A liquidação quando a ESPN não responde tudo de uma vez: resultado que atrasa e resultado com nome desconhecido |
 | `tests/pwa.py` | O service worker, com a página servida por um servidor local: abrir sem conexão, aviso de versão nova e troca pelo botão |
 | `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
 | `tests/contract_live.py` | A API real da ESPN e o serviço de câmbio. Roda toda semana no GitHub Actions e avisa se o formato mudar |
@@ -121,6 +122,7 @@ tests/contract.py                    leitores da ESPN contra respostas reais gra
 tests/contract_live.py               conferência da API real da ESPN
 tests/docs_check.py                  documentação conferida contra o código
 tests/e2e.py                         teste ponta a ponta
+tests/settle.py                      liquidação com a ESPN simulada segurando respostas
 tests/mock_espn.py                   ESPN simulada, com lutadores fictícios
 tests/pwa.py                         abrir sem conexão e trocar de versão
 tests/cov.py                         cobertura de código medida pelo navegador

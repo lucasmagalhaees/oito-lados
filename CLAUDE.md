@@ -45,6 +45,7 @@ O que cada peça do harness cobre:
 | `tests/contract_live.py` (toda semana no GitHub Actions) | A API real mudar e a documentação continuar dizendo o contrário |
 | `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
 | `tests/e2e.py` | Tudo passar isolado e o fluxo real pela interface estar quebrado |
+| `tests/settle.py` | A aposta só fechar certo quando a ESPN responde tudo de uma vez: resultado que atrasa, ou que vem com um nome que o app não conhece |
 | `tests/pwa.py` | Dizer que o app abre sem internet e avisa de versão nova sem nunca ter visto acontecer |
 | `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
 | `scripts/check_production.py` (workflow `Produção`, depois de cada merge) | CI verde e deploy feito, mas a produção servindo outra versão |
@@ -67,6 +68,7 @@ O que cada peça do harness cobre:
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
 - `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
+- `tests/settle.py`: a liquidação pela interface com a ESPN simulada segurando respostas: resultado que atrasa e resultado com nome desconhecido.
 - `tests/pwa.py`: o service worker de ponta a ponta, com a página servida por um servidor local: abrir sem conexão e trocar de versão.
 - `tests/cov.py`: cobertura de código da página gerada, medida pelo próprio navegador durante os testes.
 - `tests/package.json`: cópias locais dos arquivos do leitor de imagem, para o teste de OCR rodar sem internet.
@@ -129,7 +131,8 @@ Detalhes que já morderam:
 - `state`: `pre`, `in`, `post`. O objeto `result` só existe no `status` do CORE, não no placar.
 - O tempo do fim da luta é lido de `displayClock` ("3:26"); o `clock` numérico é só reserva, porque só foi visto em decisão.
 - No nível do evento só o `status.type.name` foi visto. `normEvent` aceita `completed`, `state` ou o nome contendo FINAL.
-- Nomes de resultado vistos: `kotko`, `decision---unanimous`. Classificação por regex em `normResult` (ordem: no contest, draw, sub, dec, ko/dq).
+- Nomes de resultado vistos em 160 lutas encerradas, em 10/10/2026: `kotko` (80), `decision---unanimous` (45), `submission` (25), `decision---split` (8), `dq` (1) e `tko---doctors-stoppage` (1). Empate, no contest e decisão majoritária não apareceram. Classificação por regex em `normResult` (ordem: no contest, draw, sub, dec, ko/dq). O `tests/contract_live.py` refaz essa varredura toda semana e falha se aparecer um nome que o app não classifica.
+- Nas mesmas 160 lutas, toda luta com vencedor tinha o vencedor marcado no placar, e todas tinham o objeto `result`. Quanto tempo a ESPN leva, depois do fim da luta, para marcar o vencedor e para publicar o resultado não foi medido.
 - "Fight To Go The Distance" vem como dois preços **sem rótulo de sim/não**. `attachDistance` decide qual é o "sim" comparando com a probabilidade de decisão implícita nas linhas de método.
 - A linha de total (`overUnder`) é em rounds.
 - `takedownAvg` igual a 0 aparece tanto para trocador puro quanto para estreante sem minutos.
@@ -186,7 +189,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 
 Os módulos de `src/app/` se importam em círculo (a tela chama ações, ações repintam a tela). Funciona porque nada é chamado enquanto os módulos carregam: o que roda na carga fica em `src/app/state.ts` (ler o que está salvo e aplicar o tema) e em `src/main.ts`. Código novo não deve chamar função de outro módulo no nível de cima do arquivo.
 
-`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S, FX}` para teste.
+`window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, settling, S, FX}` para teste.
 
 Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando.
 
@@ -271,10 +274,11 @@ Numa múltipla, cada luta entra uma vez: com a odd da seleção única ou com a 
 
 Regras:
 - Luta cancelada ou no contest: tudo anulado.
+- Vencedor (D64): decide assim que a luta aparece como encerrada com o vencedor marcado no placar, sem esperar o método ser publicado. Um no contest já lido continua anulando. Os outros mercados esperam o resultado.
 - Empate: vencedor anulado, método por lutador perdido, conta como "foi para a decisão".
 - Total de rounds: compara round e tempo do fim com a marca de 2:30; exatamente 2:30 anula.
 - Quedas: só fecham com a estatística congelada, 2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário). Sem estatística por 2 dias: anula.
-- Resultado final sem método reconhecido depois de 1 dia: vencedor liquida pela marcação de vencedor, o resto anula.
+- Resultado com nome que o app não reconhece (D64): não anula nada na hora. Por 1 dia (`UNKNOWN_AFTER`) o resultado é pedido de novo a cada sincronização e o nome aparece na aposta ("ainda não reconhecido pelo app"); só depois disso vale como sem método, e aí o que não é vencedor anula. O mesmo prazo vale para a luta encerrada que nunca publica resultado.
 - Luta que some do placar: anula 36 h depois do horário.
 
 `Core.betResult`: qualquer perna perdida perde a aposta na hora. Perna anulada tira aquela luta da aposta com odd 1,00 (numa combinada, tira a luta inteira). Tudo anulado devolve a stake.
@@ -403,7 +407,7 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 16 dias à frente.
 - `loadOdds`: por evento, só lutas `pre`, no máximo a cada 5 min; forçado no botão Atualizar e antes de aceitar aposta.
-- Intervalo do laço: 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta.
+- Intervalo do laço: 8 s enquanto uma aposta aberta espera por uma luta que já acabou (o resultado, ou as quedas fecharem; `settling`), por até 30 min depois de a luta aparecer como encerrada; 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta. Uma página restaurada da memória (`pageshow`) e a volta da conexão (`online`) também sincronizam, se a última sincronização foi há mais de 5 s.
 - Antes de gravar uma aposta, `place()` recarrega placar e odds das lutas envolvidas. Se a luta começou, recusa; se a odd mudou, mostra a nova e pede confirmação.
 - Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout congela enquanto houver luta da aposta em andamento.
 - Só atualiza com o app aberto; ao reabrir, busca os resultados e liquida o que ficou pendente.
@@ -445,7 +449,7 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 npm ci                       # Vite e TypeScript
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: tipos, build, docs, core, unit, contract, autoteste da checagem de produção, e2e claro e escuro, pwa e cobertura
+scripts/verify.sh            # tudo: tipos, build, docs, core, unit, contract, autoteste da checagem de produção, e2e claro e escuro, settle, pwa e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 node tests/core.mjs          # os casos do núcleo, sem navegador
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
@@ -460,13 +464,15 @@ Os casos do núcleo ficam em `tests/unit.cases.mjs`, uma função de `Core` com 
 
 Os casos são JavaScript, não TypeScript: muitos passam de propósito dados tortos, que o compilador recusaria. A verificação não ficou mais rápida com isso (o `unit.py` leva pouco mais de um segundo); o ganho é o núcleo provado fora da página.
 
-`contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
+`contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio), e varre até 160 lutas encerradas dos últimos 120 dias para conferir que todo nome de resultado é classificado e que toda luta com vencedor tem o vencedor marcado no placar: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código em `src/`, e também a configuração do build (versões exatas, modo `strict`, núcleo sem DOM, módulos documentados).
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%). `cov.stop` para a medição e solta a página: com o medidor ainda preso, uma página fechada continuava contando como aberta para o service worker.
 
 `e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), renomeia origem, filtra as apostas por origem, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+
+`settle.py` aposta pela interface na primeira luta do card (vencedor, o outro lado, método, quedas e uma múltipla) e faz a ESPN simulada segurar respostas: primeiro a luta acaba com o vencedor marcado e sem resultado (as duas de vencedor fecham, o resto espera, e a fonte é consultada de novo em menos de 10 s); depois o resultado vem com um nome inventado (nada anula, o nome aparece); depois vem certo (método e quedas fecham). Confere também a volta ao app e a múltipla perdida na luta principal. O `e2e.py` liquida com tudo chegando de uma vez; este é o que cobre a noite em que não chega.
 
 `pwa.py` é o único teste que serve `dist/` por um servidor local, porque service worker não existe em página aberta do disco. Ele publica o build e depois uma "versão seguinte" (outra página, outro `sw.js`) e confere: a página fica guardada, a primeira instalação não anuncia nada, o app abre com o site fora do ar sem pedir a página à rede, a versão nova é anunciada, o app em uso só troca depois do toque, a cópia antiga é apagada, e publicar de novo sem mudar o app não avisa. O teste não consegue interceptar o que o próprio service worker pede; por isso um segundo servidor local faz o papel dos endereços de fontes e do leitor de imagem, e o `sw.js` servido no teste guarda arquivos só dele (sem isso, o teste iria ao Google de verdade a cada abertura). Quais endereços o `sw.js` de verdade guarda é conferido pelo `docs_check.py`. No fim o teste fecha o app com uma versão esperando e abre de novo, para ver que ela assume.
 

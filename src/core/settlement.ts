@@ -11,6 +11,9 @@ export function legOutcome(key: string, f: FightNow, res: Result | null | undefi
   const [m, p1, p2] = key.split(':');
   const live = !!early && f.state === 'in';
   const end = f.state === 'post' && res ? res : null;       // the result, once the fight is over and it has been read
+  // A winner pick needs no method: once the fight is over and the scoreboard marks who won, it is decided, even while the
+  // official result is still to be published. A no contest marks no winner, and one read as such still voids the pick.
+  if (m === 'ml' && f.state === 'post' && f.winner && !(end && end.method === 'nc')) return f.winner === p1 ? 'won' : 'lost';
   if (!end && !live) return null;
   if (end && end.method === 'nc') return 'void';
   if (end && end.method === 'unknown') return (m === 'ml' && f.winner) ? (f.winner === p1 ? 'won' : 'lost') : 'void';

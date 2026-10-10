@@ -60,7 +60,12 @@ CONSTANTS = [
     (r'D\.oddsAt\[eid\] \|\| 0\) < 5 \* 60e3', 'no máximo a cada 5 min'),
     (r'now - 4 \* DAY', 'placar de 4 dias atrás'),
     (r'now \+ 16 \* DAY', 'até 16 dias à frente'),
-    (r'D\.finalSeen\[f\.id\] > 120e3 \|\| now - f\.date > 6 \* H', '2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário)'),
+    (r'export const TD_FREEZE = 120e3;', '2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário)'),
+    (r'D\.finalSeen\[f\.id\] > TD_FREEZE \|\| now - f\.date > 6 \* H', '2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário)'),
+    (r'settling\(now\) \? 8e3 : live', '8 s enquanto uma aposta aberta espera por uma luta que já acabou'),
+    (r'D\.finalSeen\[f\.id\] \|\| now\) > 30 \* 60e3', 'por até 30 min'),
+    (r'export const UNKNOWN_AFTER = DAY;', 'Por 1 dia'),
+    (r'Date\.now\(\) - D\.lastSync > 5e3', 'há mais de 5 s'),
     (r'now - f\.date > 2 \* DAY && D\.results\[f\.id\]\) D\.results\[f\.id\]\.tdUnavailable = true', 'Sem estatística por 2 dias: anula'),
     (r'Date\.now\(\) > l\.date \+ 36 \* H', 'anula 36 h depois do horário'),
     (r'end\.time === 150\) return \'void\'', 'exatamente 2:30 anula'),
@@ -174,6 +179,14 @@ check('the Node runner builds the core by itself with the tool that builds the a
 check('an item of the copy list starts folded when it is ready or a reference', "if (o.open == null) o.open = !(r.whole || r.ref);" in imp_src and 'o que está pronto, ou é só referência, vem recolhido' in spec)
 check('open bets by event and the units of an origin have tests', 'Core.openByEvent' in unit_src and 'r.units' in unit_src and '`Core.openByEvent`' in spec)
 check('units by origin use the unit each bet was placed with', "r.units += (b.payout - b.stake) / b.unit" in hist)
+
+# 5d1e. settling: a winner pick by the mark on the scoreboard, an unknown result name kept pending, the real names seen
+settle_src = read('src/core/settlement.ts'); api_src = read('src/app/api.ts')
+check('a winner pick is settled by the scoreboard mark, and a no contest that was read still voids it', "if (m === 'ml' && f.state === 'post' && f.winner && !(end && end.method === 'nc')) return f.winner === p1 ? 'won' : 'lost';" in settle_src and 'sem esperar o método' in spec)
+check('a result under an unknown name is not taken as final while it is fresh', "if (r && (r.method !== 'unknown' || now - f.date > UNKNOWN_AFTER))" in api_src and 'não anula nada' in spec)
+check('the settlement test holds answers back, and is part of the full verify', "ESPN['noresult'] = True" in read('tests/settle.py') and "ESPN['resname'] = dict(" in read('tests/settle.py') and 'run settle    python3 tests/settle.py' in read('scripts/verify.sh') and '`tests/settle.py`' in spec)
+check('the live check sweeps the result names of finished fights', 'every result name seen in ${swept} finished fights is one the app classifies' in read('tests/contract_live.py') and 'tko---doctors-stoppage' in spec)
+check('the result names the spec lists as seen are ones the reader classifies', all(re.search(pat, nm) for nm, pat in (('kotko', 'ko'), ('decision---unanimous', 'dec'), ('decision---split', 'dec'), ('submission', 'sub'), ('dq', 'dq'), ('tko---doctors-stoppage', 'ko|stoppage'))) and "/ko|dq|disq|stoppage|retire/" in html)
 
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
