@@ -45,6 +45,7 @@ O que cada peça do harness cobre:
 | `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
 | `tests/e2e.py` | Tudo passar isolado e o fluxo real pela interface estar quebrado |
 | `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
+| `scripts/check_production.py` (workflow `Produção`, depois de cada merge) | CI verde e deploy feito, mas a produção servindo outra versão |
 | Hook de parada (`.claude/hooks/verify-on-stop.sh`) | Encerrar a tarefa com checagem falhando |
 | `docs/verificacao.md` | Tratar suposição como fato |
 | `docs/decisoes.md` | Depender da memória de uma conversa |
@@ -53,6 +54,7 @@ O que cada peça do harness cobre:
 
 - `index.html`: o app inteiro. HTML + CSS + JS num arquivo só, sem build, sem dependências, sem backend. Ícone embutido em base64.
 - `scripts/verify.sh`: o comando único de verificação.
+- `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção serve o `index.html` da `main`.
 - `tests/unit.py`: testes do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação).
 - `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
@@ -81,8 +83,9 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
 10. Campos de valor com máscara de milhares.
 11. Moeda da banca: real, dólar ou euro, escolhida no cartão de depósito. Passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
-12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável.
-13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. O valor segue o original; o que fazer com um valor em dinheiro é configurável.
+12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável. O valor da aposta pode ser digitado em dinheiro ou em unidades.
+13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. Print em unidades copia as unidades; print em dinheiro copia o mesmo valor ou a mesma stake, conforme a configuração.
+14. Mais e menos de uma linha aparecem como + e −, e toda opção ligada a um lutador leva a cor do canto dele.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -146,7 +149,8 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 { v: 1,
   cur: 'BRL'|'USD'|'EUR',        // moeda da banca: todos os valores abaixo estão nela
   conv: [{ t, from, to, rate, date }],   // conversões já feitas (as 20 últimas)
-  tip: { mode: 'same'|'units'|'fixed', srcUnit, fixU },   // o que fazer com o valor em dinheiro de um print copiado
+  tip: { mode: 'same'|'units', srcUnit },   // print em dinheiro: copiar o mesmo valor ou a mesma stake
+  stakeIn: 'money'|'units',       // como o valor é digitado no cupom
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
   bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
@@ -277,6 +281,7 @@ Regra do Lucas em 09/10/2026 (D28): **a moeda se troca no cartão de depósito, 
 - Uma unidade vale `unitPct`% da banca. O padrão é 10% da banca; o valor aceito vai de 0,1% a 100% (`Core.unitPct`, `Core.unitValue`).
 - **Banca** é o saldo disponível mais o que está em jogo nas apostas abertas. Assim a unidade não encolhe só porque há apostas abertas, e muda sozinha quando a banca muda.
 - No cupom há atalhos de 0,5u, 1u, 2u e 3u, que **definem** o valor da aposta (não somam), e o total aparece também em unidades.
+- **Valor em unidades:** a chave "Em R$ / Em unidades" do cupom (`S.stakeIn`, lembrada entre sessões) troca o campo de valor por um campo em unidades (`Core.maskUnits`, `Core.parseUnits`: até duas casas, no máximo 9999,99). O cupom guarda as duas formas em paralelo (`slip.stake`, `slip.units`, `slip.unitsN`), então trocar de modo não perde o valor. Em unidades, o valor em dinheiro acompanha a unidade de agora. Sem banca não há unidade, e a chave fica desabilitada.
 - Cada aposta guarda em `unit` o valor da unidade na hora em que foi feita. A Carteira mostra o resultado em unidades somando `(payout − stake) / unit` das apostas encerradas. Aposta antiga, sem `unit`, fica fora dessa conta.
 
 ## Copiar aposta (print ou texto)
@@ -285,14 +290,13 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 
 - **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` do `index.html`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
 - **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems }`.
-- **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
-- **Valor** (`Core.tipStake`): se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual, sempre. Se não diz nada, considera 1u. Se traz um valor em dinheiro (o primeiro do texto, que no print é a aposta, não o retorno), vale a configuração do cartão "Valor ao copiar um print", na Carteira (`S.tip`, limpo por `Core.tipCfg`):
+- **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas (também escritos como "+2.5" e "−2.5"; um traço seguido de espaço é separador, não sinal) e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
+- **Valor** (`Core.tipStake`): se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual, sempre. Se não diz nada, considera 1u. Se traz um valor em dinheiro (o primeiro do texto, que no print é a aposta, não o retorno), vale a escolha do cartão "Ao copiar um print", na Carteira (`S.tip`, limpo por `Core.tipCfg`). São só duas, por decisão do Lucas (D29): ou copia o mesmo valor, ou copia a mesma stake.
 
   | `mode` | O que faz com um print de R$ 1.750,00 |
   |---|---|
-  | `same` (padrão) | aposta os mesmos R$ 1.750,00 |
-  | `units` | divide pelo valor de 1u de quem fez o print (`srcUnit`) e aposta essa quantidade da sua unidade. Sem `srcUnit` preenchido, age como `same` e a tela avisa |
-  | `fixed` | ignora o valor e aposta `fixU` unidades suas (1 por padrão, de 0,01 a 100) |
+  | `same` ("Mesmo valor", padrão) | aposta os mesmos R$ 1.750,00 |
+  | `units` ("Mesma stake") | divide pelo valor de 1u de quem fez o print (`srcUnit`) e aposta essa quantidade da sua unidade. Sem `srcUnit` não há como saber a stake de um print em dinheiro: age como `same` e a tela avisa |
 
   O leitor não olha o símbolo de moeda do print: o número é lido como está. `srcUnit` é um valor na moeda do print e não é convertido quando a banca muda de moeda.
 - **Odd:** a aposta é feita com a odd de agora. A odd do original aparece só para comparar.
@@ -314,6 +318,10 @@ Uma coluna de até 720 px. Barra superior fixa com saldo, barra de abas embaixo 
 
 Identidade: cantos vermelho e azul para os lutadores, dourado para seleção e ação principal. Títulos em Big Shoulders Display, texto em Barlow (Google Fonts, com fallback). Tema claro e escuro por `prefers-color-scheme`, tudo em variáveis CSS no `:root`. Verde e vermelho de ganho/perda são separados das cores de canto.
 
+Cor de canto nas opções: `Core.sideOf(key)` diz de qual lutador é uma seleção (`ml`, `mov`, `wr` e `tda`; o resto é da luta inteira e devolve `null`). Nos mercados, a opção de um lutador ganha a barra e um fundo leve na cor do canto dele, e o cabeçalho da coluna ganha um traço na mesma cor. No cupom, na tela de copiar aposta e na lista de apostas, a seleção leva um quadradinho da cor. Os botões de vencedor não repetem a marca porque já ficam na linha do lutador.
+
+Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
+
 Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-*)`, campos com fonte de 16 px ou mais (evita zoom), metas `apple-mobile-web-app-*`. O Safari pode limpar o `localStorage` de site sem uso por semanas; por isso a Carteira tem backup e restauração por texto.
 
 ## Testes
@@ -321,7 +329,7 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 ```bash
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: docs, unit, contract, e2e claro e escuro e cobertura
+scripts/verify.sh            # tudo: docs, unit, contract, autoteste da checagem de produção, e2e claro e escuro e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 ```
@@ -344,6 +352,12 @@ Para testar contra a ESPN de verdade, servir a pasta (`python3 -m http.server`) 
 Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. Não há etapa de build: o `vercel.json` fixa o projeto como site estático (`"framework": null`, instalação vazia) e o `.vercelignore` deixa só o `index.html` no site. Sem o `vercel.json`, a Vercel escolheu sozinha o preset "FastHTML" (Python) na importação e o primeiro deploy falhou procurando um `main.py`.
 
 A Vercel publica o que chegar na `main` sem olhar o CI. Quem garante que só entra código testado é a proteção do branch `main` exigindo os checks `checks`, `e2e (dark)` e `e2e (light)`.
+
+**Merges em sequência podem deixar a produção numa versão antiga.** Em 09/10/2026 os PRs #4, #5, #6 e #7 foram mesclados em menos de um minuto. A Vercel fez um deploy por merge, o do #4 terminou por último e ficou com o endereço de produção: CI verde, quatro deploys com sucesso, e o app no ar sem nada dos outros três PRs (D32). Por isso:
+
+- Mesclar um PR por vez e esperar o deploy, ou mesclar só o último quando um PR já contém os anteriores.
+- O workflow `Produção` roda `scripts/check_production.py` depois de cada push na `main`: espera a produção servir exatamente o `index.html` do commit (comparação por sha256) e **continua olhando por 5 min**, porque o deploy errado pode chegar depois do certo. Falhou: na Vercel, promover o deploy do commit mais recente da `main`, ou fazer um novo merge.
+- Em PR o mesmo script só informa qual commit a produção está servindo (`--report`) e nunca falha. `--selftest` testa o script contra um servidor local e roda no `verify.sh`.
 
 No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Início.
 
