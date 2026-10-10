@@ -150,6 +150,33 @@ check('dist/ is built, not committed', 'dist/' in read('.gitignore').split())
 check('every documented source module exists', all((ROOT / 'src' / m).exists() for m in re.findall(r'`src/([\w/.-]+\.ts)`', spec)), [m for m in re.findall(r'`src/([\w/.-]+\.ts)`', spec) if not (ROOT / 'src' / m).exists()])
 check('every source module is documented', all(f'`src/{p.relative_to(ROOT / "src").as_posix()}`' in spec for p in SRC), [p.relative_to(ROOT / 'src').as_posix() for p in SRC if f'`src/{p.relative_to(ROOT / "src").as_posix()}`' not in spec])
 
+# 5f. themes: the dark palette is written twice in the stylesheet (device asks for it / person chose it) and must not drift
+css = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
+auto_dark = re.search(r'@media \(prefers-color-scheme: dark\)\{\s*:root:not\(\[data-theme="light"\]\)\{(.*?)\}\s*\}', css, re.S)
+forced_dark = re.search(r':root\[data-theme="dark"\]\{(.*?)\}', css, re.S)
+norm = lambda m: sorted(x.strip() for x in m.group(1).replace('\n', ' ').split(';') if x.strip()) if m else None
+check('the dark palette is the same whether the device or the person asks for it', norm(auto_dark) is not None and norm(auto_dark) == norm(forced_dark), (norm(auto_dark), norm(forced_dark)))
+light_vars = set(re.findall(r'(--[\w-]+):', re.search(r':root\{(.*?)\}', css, re.S).group(1)))
+dark_vars = set(re.findall(r'(--[\w-]+):', forced_dark.group(1))) if forced_dark else set()
+check('every colour of the dark theme exists in the light one', dark_vars <= light_vars, sorted(dark_vars - light_vars))
+check('the colours the page sets on the browser bars are the theme backgrounds', "'#0e1218'" in html and "'#f2f3f5'" in html and '--bg:#0e1218' in css and '--bg:#f2f3f5' in css)
+
+# 5g. the service worker: what it keeps, what it never keeps, and how the page learns about a new version
+sw = read('src/sw.js')
+kept = re.search(r"const ASSET_HOSTS = \[([^\]]*)\]", sw)
+kept = re.findall(r"'([^']+)'", kept.group(1)) if kept else []
+check('the hosts the worker keeps files from are the ones the spec lists', kept == ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net'] and all(f'`{h}`' in spec for h in kept), kept)
+check('the worker never names ESPN or the exchange-rate service as something to keep', not re.search(r"'[^']*(espn|frankfurter)[^']*'", sw))
+check('every file the page loads from another address comes from a kept host', set(re.findall(r'(?:href|src)="https://([^/"]+)/', read('index.html'))) <= set(kept) and 'https://cdn.jsdelivr.net/' in html)
+check('the cache names in the spec are the ones in the worker', "'oito-lados-page-' + VERSION" in sw and "'oito-lados-assets-v1'" in sw and '`oito-lados-page-<versão>`' in spec and '`oito-lados-assets-v1`' in spec)
+check('the build stamps the worker with a version and emits it next to the page', sw.count("'__OL_APP_VERSION__'") == 1 and "replace('__OL_APP_VERSION__', version)" in vite and "fileName: 'sw.js'" in vite)
+check('the worker version leaves the commit stamp out', "replace(/<meta name=\"ol-commit\"[^>]*>/, '')" in vite and 'sem o carimbo de commit' in spec)
+check('a new version waits for the person', 'skipWaiting' in sw and sw.count('skipWaiting') == 1 and "event.data === 'activate'" in sw and "postMessage('activate')" in html)
+check('how often the page looks for a new version', 'const CHECK_EVERY = 30 * 60e3;' in html and 'a cada 30 min' in spec)
+check('the worker is only registered on the published page', "import.meta.env.PROD" in read('src/app/update.ts') and "register('./sw.js')" in html)
+check('the host publishes the worker too', 'src' not in read('.vercelignore').split() and json.loads(read('vercel.json'))['outputDirectory'] == 'dist')
+check('verify.sh runs the offline test', 'python3 tests/pwa.py' in read('scripts/verify.sh'))
+
 # 6. storage keys and API hosts
 for key in ('oitolados.v1', 'oitolados.cache.v1', 'oitolados.fx.v1'):
     check('storage key in code and spec', f"'{key}'" in html and f'`{key}`' in spec, key)

@@ -234,6 +234,9 @@ JS = r"""
   /* ---- which corner a selection belongs to; over and under shown as + and − ---- */
   eq('side of a selection', ['ml:a', 'ml:b', 'mov:a:ko', 'mov:b:dec', 'wr:a:2', 'wr:b:5', 'tda:a:yes', 'tda:b:no'].map(Core.sideOf), ['a', 'b', 'a', 'b', 'a', 'b', 'a', 'b']);
   eq('selections about the whole fight have no side', ['fm:ko', 'dist:yes', 'tot:o:2.5', 'tot:u:2.5', 'rnd:1', 'td:o:1.5', 'td:u:0.5', 'x', ''].map(Core.sideOf), [null, null, null, null, null, null, null, null, null]);
+  eq('which way an over/under goes', ['tot:o:2.5', 'tot:u:2.5', 'td:o:1.5', 'td:u:0.5'].map(Core.overUnder), ['o', 'u', 'o', 'u']);
+  eq('every other selection is neither over nor under', ['ml:a', 'mov:b:ko', 'fm:dec', 'dist:yes', 'rnd:1', 'wr:a:2', 'tda:a:yes', 'tot:x:1', 'x', ''].map(Core.overUnder), [null, null, null, null, null, null, null, null, null, null]);
+  eq('no selection is both a fighter\'s and an over/under', Object.keys(M).some(k => Core.sideOf(k) && Core.overUnder(k)), false);
   eq('every priced selection either has a side or is about the fight', Object.keys(M).every(k => [null, 'a', 'b'].includes(Core.sideOf(k))), true);
   eq('over and under rounds read as + and −', [M['tot:o:3.5'].sel, M['tot:u:3.5'].sel, M['tot:o:1.5'].sel], ['+3.5 rounds', '−3.5 rounds', '+1.5 rounds']);
   eq('over and under takedowns read as + and −', Object.keys(M).filter(k => k.startsWith('td:')).every(k => M[k].sel === (k.split(':')[1] === 'o' ? '+' : '−') + k.split(':')[2] + ' quedas na luta'), true);

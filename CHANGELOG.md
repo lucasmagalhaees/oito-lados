@@ -2,6 +2,21 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] - 2026-10-10
+
+### Adicionado
+- O app fica guardado no aparelho por um service worker: abre na hora e também sem internet, com os últimos dados que carregou.
+- Aviso "Saiu uma versão nova do app." com o botão "Atualizar agora", e um cartão "Versão do app" na Carteira com "Procurar versão nova".
+- Tema automático, claro ou escuro, escolhido nas configurações.
+- Legenda com o nome e a cor de cada canto, presa na tela enquanto os mercados de uma luta rolam.
+- Cores e setas próprias para + e − no total de rounds e de quedas.
+- `tests/pwa.py`: abrir sem conexão e trocar de versão, testados com a página servida por um servidor local.
+
+### Alterado
+- Dinheiro ou unidades deixou de ser uma chave no cupom e virou configuração na Carteira, valendo para todas as apostas.
+- A Carteira ganhou o título "Configurações" acima dos cartões de ajuste.
+- Publicar não troca mais na hora o app de quem já abriu: o aparelho avisa e espera o toque.
+
 ## [0.4.0] - 2026-10-09
 
 ### Alterado

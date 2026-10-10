@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # One command that answers "is this still correct?".
-#   scripts/verify.sh           types + build + docs + unit + contract + production-check self-test + end-to-end (both themes) + code coverage minimums
+#   scripts/verify.sh           types + build + docs + unit + contract + production-check self-test + end-to-end (both themes) + offline and update (service worker) + code coverage minimums
 #   scripts/verify.sh --quick   types + build + docs + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
-# Every test runs against dist/index.html, the page the build produces and the one that ships.
+# Every test runs against dist/, what the build produces and what ships.
 # Exit: 0 all passed, 1 something failed, 3 test dependencies missing.
 set -u
 cd "$(dirname "$0")/.."
@@ -59,6 +59,7 @@ run prod     python3 scripts/check_production.py --selftest
 if [ "$full" -eq 1 ]; then
   run e2e-dark  python3 tests/e2e.py dark
   run e2e-light python3 tests/e2e.py light
+  run pwa       python3 tests/pwa.py
   run coverage  python3 tests/cov.py --min-functions 95 --min-chars 90
 fi
 

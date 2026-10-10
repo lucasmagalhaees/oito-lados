@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // What the page gets from outside TypeScript's view.
 import type { Core } from './core';
 import type { AppState, FxRates } from './core';

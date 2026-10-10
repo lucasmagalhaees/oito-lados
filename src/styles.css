@@ -3,21 +3,34 @@
   --bg:#f2f3f5; --surface:#ffffff; --surface2:#e8ebf0; --line:#d3d8e0; --fg:#141922; --muted:#5b6474;
   --gold:#855a00; --gold-bg:#f0c24f; --on-gold:#1b1400;
   --red:#cf2f36; --blue:#2463d6;
+  --over:#096480; --under:#6b3fc4;
   --win:#0b7a4c; --loss:#c22a2a; --live:#d92d20;
   --shade:rgba(10,14,20,.5);
   --font-display:"Big Shoulders Display","Arial Narrow","Helvetica Neue",Arial,sans-serif;
   --font-body:"Barlow","Helvetica Neue",Helvetica,Arial,sans-serif;
   color-scheme:light;
 }
+/* Dark: when the device asks for it and the person has not chosen light, or when the person chose dark in the settings.
+   The two blocks must carry the same values (tests/docs_check.py compares them). */
 @media (prefers-color-scheme: dark){
-  :root{
+  :root:not([data-theme="light"]){
     --bg:#0e1218; --surface:#171c25; --surface2:#222a37; --line:#2d3646; --fg:#eef1f6; --muted:#9aa4b5;
     --gold:#f0c24f; --gold-bg:#f0c24f; --on-gold:#1b1400;
     --red:#f0555b; --blue:#5b9bff;
+    --over:#56c8e6; --under:#bba4ff;
     --win:#3fd08f; --loss:#ff7a7a; --live:#ff5a4d;
     --shade:rgba(3,5,8,.66);
     color-scheme:dark;
   }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1218; --surface:#171c25; --surface2:#222a37; --line:#2d3646; --fg:#eef1f6; --muted:#9aa4b5;
+  --gold:#f0c24f; --gold-bg:#f0c24f; --on-gold:#1b1400;
+  --red:#f0555b; --blue:#5b9bff;
+  --over:#56c8e6; --under:#bba4ff;
+  --win:#3fd08f; --loss:#ff7a7a; --live:#ff5a4d;
+  --shade:rgba(3,5,8,.66);
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -32,6 +45,9 @@ h1,h2,h3,h4,p{margin:0}
 /* top bar */
 .top{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
 .top .wrap{display:flex;align-items:center;gap:10px;height:56px}
+.update{position:sticky;top:calc(57px + env(safe-area-inset-top,0px));z-index:19;background:var(--gold-bg);color:var(--on-gold);font-weight:600;font-size:14px}
+.update .wrap{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:8px}
+.update .btn{min-height:36px;padding:0 14px;background:var(--surface);color:var(--fg);flex:none}
 .brand{display:flex;align-items:center;gap:8px;font:800 24px/1 var(--font-display);letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;flex:none}
 .brand svg{width:26px;height:26px;color:var(--gold);flex:none}
 .fake{font:600 10px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:4px 5px;white-space:nowrap}
@@ -66,7 +82,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 
 /* fight card */
 .seg{margin:20px 0 8px}
-.fight{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.fight{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;overflow:clip}
 .fh{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:10px 12px 2px;font-size:12px;color:var(--muted)}
 .tag{font-weight:700;color:var(--gold);letter-spacing:.07em;text-transform:uppercase;font-size:11px}
 .chip{margin-left:auto;font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:6px}
@@ -96,11 +112,26 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .opt.sa{background:color-mix(in srgb,var(--red) 10%,var(--surface2))}
 .opt.sb{background:color-mix(in srgb,var(--blue) 10%,var(--surface2))}
 .opt.on.sa,.opt.on.sb{background:var(--gold-bg)}
+/* over and under: their own two colours and an arrow, never the corner colours (those mean a fighter) */
+.opt.xo{background:color-mix(in srgb,var(--over) 10%,var(--surface2))}
+.opt.xu{background:color-mix(in srgb,var(--under) 10%,var(--surface2))}
+.opt.xo .ol,.opt.xu .ol{font-weight:700;font-size:14px;color:var(--over)}
+.opt.xu .ol{color:var(--under)}
+.opt.xo .ol::before,.opt.xu .ol::before,.ou::before{content:"▲";font-size:9px;margin-right:5px;vertical-align:2px}
+.opt.xu .ol::before,.ou.u::before{content:"▼"}
+.opt.on.xo,.opt.on.xu{background:var(--gold-bg)}
+.opt.on.xo .ol,.opt.on.xu .ol{color:inherit}
+.ou{font-style:normal;color:var(--over)}
+.ou.u{color:var(--under)}
 .sd{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--red);margin-right:6px;vertical-align:1px}
 .sd.b{background:var(--blue)}
 .noodds{font-size:12px;color:var(--muted);flex:none}
 .more{display:flex;width:100%;justify-content:space-between;align-items:center;padding:11px 12px;border-top:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted);margin-top:4px}
 .mk{padding:0 12px 14px;border-top:1px solid var(--line)}
+.corners{position:sticky;top:calc(57px + env(safe-area-inset-top,0px));z-index:5;display:flex;flex-wrap:wrap;gap:4px 16px;margin:0 -12px;padding:7px 12px;background:var(--surface);border-bottom:1px solid var(--line);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.corners span{display:flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere}
+.corners i{width:10px;height:10px;border-radius:2px;background:var(--red);flex:none}
+.corners .b i{background:var(--blue)}
 .mk h4{margin:14px 0 7px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:400}
 .mk h4 em{font-style:normal;font-size:12px;color:var(--muted)}
 .grid{display:grid;gap:6px}

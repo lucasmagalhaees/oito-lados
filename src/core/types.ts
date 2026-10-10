@@ -59,6 +59,8 @@ export interface TipCfg { mode: 'same' | 'units'; srcUnit: number }
 /** Everything the person owns: what is saved under `oitolados.v1`. The balance is never stored, it is derived. */
 export interface AppState {
   v: number; cur?: Currency; unitPct?: number; conv?: Conversion[]; tip?: TipCfg; stakeIn?: 'money' | 'units';
+  /** light or dark when the person chose one; absent means "follow the device" */
+  theme?: 'light' | 'dark';
   deposits: Deposit[]; bets: Bet[];
 }
 

@@ -1,7 +1,9 @@
 // Build: TypeScript in src/ -> one self-contained dist/index.html (script and style inline, no other files).
-// One file keeps what the project relies on: it opens from disk in the tests, it deploys as a static page, and the
-// page keeps working from the browser cache when the network is gone.
+// One file keeps what the project relies on: it opens from disk in the tests and it deploys as a static page.
+// The only other file is sw.js, the service worker that keeps that page on the device.
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 
 // which commit this build is: the host's variable on Vercel, git anywhere else
@@ -21,7 +23,7 @@ function singleFile() {
       if (!page) this.error('single-file: the build produced no index.html');
       let html = String(page.source);
       for (const [name, file] of Object.entries(bundle)) {
-        if (file === page) continue;
+        if (file === page || name === 'sw.js') continue;
         const ref = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         if (file.type === 'chunk') {
           const tag = new RegExp(`<script[^>]*\\ssrc="[^"]*${ref}"[^>]*></script>`);
@@ -39,10 +41,26 @@ function singleFile() {
   };
 }
 
+/** Emits sw.js next to the page. Its version is a hash of the app itself, with the commit stamp left out, so a
+ *  publication that does not change the app (documentation, tests) does not make every device ask for an update. */
+function serviceWorker() {
+  return {
+    name: 'oito-lados:service-worker',
+    enforce: 'post',
+    generateBundle(_options, bundle) {
+      const page = Object.values(bundle).find(f => f.type === 'asset' && f.fileName.endsWith('index.html'));
+      const app = String(page.source).replace(/<meta name="ol-commit"[^>]*>/, '');
+      const version = createHash('sha256').update(app).digest('hex').slice(0, 12);
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: readFileSync('src/sw.js', 'utf8').replace('__OL_APP_VERSION__', version) });
+    }
+  };
+}
+
 export default defineConfig({
   plugins: [
     { name: 'oito-lados:commit', transformIndexHtml: html => html.replace('__OL_COMMIT__', commit()) },
-    singleFile()
+    singleFile(),
+    serviceWorker()
   ],
   build: {
     // not minified on purpose: what the tests measure (coverage by function name and line) is the file that ships

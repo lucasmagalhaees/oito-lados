@@ -23,6 +23,12 @@ def start(page):
 _kept = {}
 _ours = lambda result: [s for s in result if s['url'].endswith('/index.html')]
 
+def keep(page):
+    """Read out the counters now. For a page that is about to reload by itself (see reload below for why)."""
+    cdp = _sessions.get(id(page))
+    if cdp:
+        _kept.setdefault(id(page), []).extend(_ours(cdp.send('Profiler.takePreciseCoverage')['result']))
+
 def reload(page):
     """Reload the page without losing what was measured before the reload.
 
@@ -30,9 +36,7 @@ def reload(page):
     it did: everything exercised before the last reload came back as "never called" and coverage read 91.7% for code
     that measures 97.2% here. It could not be reproduced on this machine (an older Chromium), so the cause is inferred
     from which functions went missing. Reading the counters out before each reload does not depend on that guess."""
-    cdp = _sessions.get(id(page))
-    if cdp:
-        _kept.setdefault(id(page), []).extend(_ours(cdp.send('Profiler.takePreciseCoverage')['result']))
+    keep(page)
     page.reload()
 
 def stop(page, name):
@@ -40,6 +44,10 @@ def stop(page, name):
     if not cdp:
         return
     scripts = _kept.pop(id(page), []) + _ours(cdp.send('Profiler.takePreciseCoverage')['result'])
+    # Stop measuring and let go of the page. A page closed with the profiler still attached lingered as a client of the
+    # service worker: reopening the app right after found the old version, or never finished loading, in 7 of 140 tries,
+    # against 0 of 240 without the profiler or with it detached first (tests/pwa.py closes and reopens the app).
+    cdp.send('Profiler.stopPreciseCoverage'); cdp.detach()
     OUT.mkdir(exist_ok=True)
     (OUT / f'{name}.json').write_text(json.dumps(scripts))
 

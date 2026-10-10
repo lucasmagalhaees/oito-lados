@@ -17,6 +17,17 @@ export function setS(next: AppState): void { S = next; }
 export const curNow = (): Currency => S.cur || 'BRL';
 export function setCurrency(code: unknown): void { S.cur = isCurrency(code) ? code : 'BRL'; setFmt(S.cur); }
 setCurrency(S.cur);
+/** Light, dark, or whatever the device asks for (no attribute): the stylesheet does the rest. */
+export function applyTheme(): void {
+  const forced = S.theme === 'light' || S.theme === 'dark' ? S.theme : null, root = document.documentElement;
+  if (forced) root.dataset.theme = forced; else delete root.dataset.theme;
+  // the colour of the browser bars follows: each tag keeps the value it came with for when the choice goes back to automatic
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach(m => {
+    if (!m.dataset.auto) m.dataset.auto = m.content;
+    m.content = forced === 'dark' ? '#0e1218' : forced === 'light' ? '#f2f3f5' : m.dataset.auto;
+  });
+}
+applyTheme();
 
 /** What was last read from ESPN: the card, the prices, the results and the statistics. Kept under `oitolados.cache.v1`. */
 export interface Data {

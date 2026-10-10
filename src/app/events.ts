@@ -6,8 +6,9 @@ import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './help
 import { closeImport, importImage, importToSlip, renderImport, runImport } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
-import { S, bankEmpty, curNow, imp, saveCache, saveS, setCurrency, setS, slip, ui, validState } from './state';
+import { S, applyTheme, bankEmpty, curNow, imp, saveCache, saveS, setCurrency, setS, slip, ui, validState } from './state';
 import { sync } from './sync';
+import { applyUpdate, checkNow } from './update';
 import type { Currency, TipCfg } from '../core';
 import type { Slip, Ui } from './state';
 
@@ -100,7 +101,7 @@ document.addEventListener('click', e => {
   else if (a === 'mode') { slip.mode = d.m as Slip['mode']; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = d.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(d.v); setStakeMoney(v); showStake(); ui.msg = ''; slipSummary(); }
   else if (a === 'stu') { if (wallet().unit > 0) { setStakeUnits(Number(d.u)); showStake(); ui.msg = ''; slipSummary(); } }
-  else if (a === 'stakein') { S.stakeIn = d.m === 'units' ? 'units' : 'money'; saveS(); if (inUnits()) setStakeUnits(Core.parseUnits(slip.units)); ui.msg = ''; blurField(); renderSheet(); }
+  else if (a === 'stakein') { S.stakeIn = d.m === 'units' ? 'units' : 'money'; saveS(); if (inUnits()) setStakeUnits(Core.parseUnits(slip.units)); ui.msg = ''; blurField(); renderSheet(); render(); toast(S.stakeIn === 'units' ? 'O cupom passa a pedir o valor em unidades.' : 'O cupom passa a pedir o valor em dinheiro.'); }
   else if (a === 'unit') {
     const raw = valOf('#unitpct'), n = parseFloat(String(raw).replace(',', '.'));
     if (!(n > 0)) { toast('Digita a porcentagem da banca que vale uma unidade.'); return; }
@@ -121,6 +122,9 @@ document.addEventListener('click', e => {
     S.tip = Core.tipCfg(c); saveS(); blurField(); render();
     toast(`Mesma stake do print: 1u de quem fez = ${money(S.tip.srcUnit)}.`);
   }
+  else if (a === 'theme') { if (d.m === 'light' || d.m === 'dark') S.theme = d.m; else delete S.theme; saveS(); applyTheme(); render(); }
+  else if (a === 'update') applyUpdate();
+  else if (a === 'checkupdate') checkNow();
   else if (a === 'depcur') pickDepCur(d.c);
   else if (a === 'deposit') deposit();
   else if (a === 'convonly') convertOnly();
@@ -134,10 +138,10 @@ document.addEventListener('click', e => {
     let s: unknown = null; try { s = JSON.parse(valOf('#rs') || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
     setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) });
-    S.unitPct = Core.unitPct(s.unitPct); if (s.tip) S.tip = Core.tipCfg(s.tip); if (s.stakeIn === 'units') S.stakeIn = 'units'; if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
+    S.unitPct = Core.unitPct(s.unitPct); if (s.tip) S.tip = Core.tipCfg(s.tip); if (s.stakeIn === 'units') S.stakeIn = 'units'; if (s.theme === 'light' || s.theme === 'dark') S.theme = s.theme; if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); applyTheme(); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct, ...(S.tip ? { tip: S.tip } : {}), ...(S.stakeIn ? { stakeIn: S.stakeIn } : {}) }); saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct, ...(S.tip ? { tip: S.tip } : {}), ...(S.stakeIn ? { stakeIn: S.stakeIn } : {}), ...(S.theme ? { theme: S.theme } : {}) }); saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 document.addEventListener('input', e => {
   const t = e.target as HTMLInputElement, typed = (e as InputEvent).data;

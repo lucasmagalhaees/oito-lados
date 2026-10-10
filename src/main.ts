@@ -7,8 +7,10 @@ import { render } from './app/render';
 import { settle } from './app/settle';
 import { D, S, imp, slip, ui } from './app/state';
 import { initSync, pickEvent, sync } from './app/sync';
+import { initUpdates } from './app/update';
 
 initSync();
 initEvents();
 window.__OL = { Core, D, ui, slip, imp, sync, settle, get S() { return S; }, get FX() { return FX; } };
 pickEvent(); render(); sync(false);
+initUpdates();
