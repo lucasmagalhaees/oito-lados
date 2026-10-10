@@ -124,6 +124,20 @@ if lib.exists() and sri:
 # 5d. copied bets follow the one setting for stakes; nothing asks what a unit is worth to whoever made the print
 check('the stake of a copied bet is decided by the money-or-units setting', "Core.tipStake(st, S.stakeIn, w.unit)" in html and "mode === 'units'" in html and '`Core.tipStake(stake, S.stakeIn, unidade)`' in spec)
 check('the unit of whoever made the print is not asked for or stored', not re.search(r'srcUnit|tipCfg|TIP_MODES|tipsrc', html) and 'não é perguntado' in spec)
+# 5d1. copying bets: what the reader calls a multiple, what it reports as unread, and the care the batch takes
+legs = re.search(r"const LEGS[^=]*= \{([^}]*)\}", html)
+legs = dict((k, int(v)) for k, v in re.findall(r"(\w+): (\d)", legs.group(1))) if legs else {}
+check('the words for a multiple of N are the ones the spec lists', legs == {'dupla': 2, 'tripla': 3, 'quadrupla': 4, 'quintupla': 5, 'sextupla': 6} and '"Dupla", "tripla", "quádrupla", "quíntupla" e "sêxtupla" são múltiplas de 2 a 6' in spec, legs)
+why = re.search(r"const TIP_WHY[^\n]*= \{\n(.*?)\n\};", html, re.S)
+why_codes = re.findall(r"^  (\w+): ", why.group(1), re.M) if why else []
+spec_codes = re.findall(r'`(\w+)`', spec[spec.index('**O que não foi lido**'):spec.index('**Cupom de múltipla costuma')])
+check('the reasons a tip was not read are the same in the code, the types and the spec', why_codes == ['empty', 'nofight', 'ambiguous', 'nomarket', 'short'] and spec_codes[1:] == why_codes and "code: 'empty' | 'nofight' | 'ambiguous' | 'nomarket' | 'short'" in html, (why_codes, spec_codes))
+imp_src = read('src/app/import.ts'); batch = imp_src[imp_src.index('export async function placeAll'):imp_src.index('export function dropOp')]
+check('several pictures can be chosen at once', 'id="impfile" accept="image/*" multiple' in imp_src)
+check('the batch re-reads the source before writing, and writes nothing if it cannot or if something moved', batch.index('await recheck(') < batch.index('writeBets(') and batch.index("stamp(now) !== stamp(before)") < batch.index('writeBets(') and 'Sem conexão com a ESPN' in batch)
+check('the batch prices each bet with the arithmetic of the slip', 'slipCalc()' in batch and '`slipCalc`' in spec)
+check('the slip and the batch write bets through the same function', read('src/app/render.ts').count('writeBets(') == 2 and batch.count('writeBets(') == 1)
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

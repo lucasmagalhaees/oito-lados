@@ -306,7 +306,72 @@ JS = r"""
   eq('tip: half a unit next to an amount', tip("Almeida x Dunne\nAlmeida para vencer\nmeia unidade\nR$ 75,50").stake, { kind: 'units', units: 0.5, money: 75.5 });
   eq('tip: the odd is not mistaken for the stake or the line', tip("Almeida x Dunne\nMais de 2.5 rounds 1.54\nR$ 30,00"), { items: one('f3', 'tot:o:2.5', 1.54), stake: { kind: 'money', money: 30 }, problems: [] });
   eq('tip: fight not on the card', tip("Fulano x Beltrano\nFulano para vencer"), { items: [], stake: DEF, problems: [{ code: 'nofight' }] });
-  eq('tip: one fighter of each of two fights', tip("Dunne e Teles").problems, [{ code: 'ambiguous' }]);
+  /* one fighter named from each of several fights is a multiple by fighter (a channel's "dupla"); it used to be refused as ambiguous */
+  const tipBet = text => { const r = Core.parseTip(text, card); return { items: r.items.map(i => [i.fid, i.key, i.printedOdd, i.assumed]), odd: r.odd, stake: r.stake, problems: r.problems }; };
+  const DUPLA = [['f1', 'ml:a', null, false], ['f3', 'ml:b', null, false]];
+  eq('tip: a channel "dupla", one fighter per line joined by a plus', tipBet("🔥 *DUPLA* 🔥 \n\n🎰 *Marina Teles*\n               +\n*Connor Lee Dunne* - Para vencer a luta \n\n💰 Odd - 1.61\n💎 Stake - 1 unidade"),
+     { items: DUPLA, odd: 1.61, stake: U(1), problems: [] });
+  eq('tip: the same on one line', tipBet("Marina Teles + Connor Lee Dunne - Para vencer a luta\nOdd 1.61"), { items: DUPLA, odd: 1.61, stake: DEF, problems: [] });
+  eq('tip: joined by "e", surnames only', tipBet("Teles e Dunne para vencer\n2u"), { items: DUPLA, odd: null, stake: U(2), problems: [] });
+  eq('tip: bare names of two fights are two winners, flagged as presumed', tipBet("Dunne e Teles"), { items: [['f1', 'ml:a', null, true], ['f3', 'ml:b', null, true]], odd: null, stake: DEF, problems: [] });
+  eq('tip: only the winner market is shared across a plus', tipBet("Marina Teles\n+\nConnor Lee Dunne por KO/TKO").items, [['f1', 'ml:a', null, true], ['f3', 'mov:b:ko', null, false]]);
+  eq('tip: something other than a joiner between the names keeps the first one presumed', tipBet("Marina Teles (em grande fase)\nConnor Lee Dunne - Para vencer a luta").items, [['f1', 'ml:a', null, true], ['f3', 'ml:b', null, false]]);
+  eq('tip: an odd of its own on each line stays with its selection', tipBet("Marina Teles x Joana Prado Jr.\nMarina Teles ML 1.67\n\nRafael Almeida x Connor Lee Dunne\nRafael Almeida por KO/TKO 9.00"), { items: [['f1', 'ml:a', 1.67, false], ['f3', 'mov:a:ko', 9, false]], odd: null, stake: DEF, problems: [] });
+  eq('tip: a single bet has no odd of the whole bet', tipBet("Almeida x Dunne\nDunne para vencer 2.05").odd, null);
+  const card3 = card.concat([{ id: 'f2', rounds: 3, a: { name: 'Caio Brandt', last: 'Brandt' }, b: { name: 'Dario Kessler', last: 'Kessler' } }]);
+  eq('tip: three fighters joined', Core.parseTip("TRIPLA\nTeles\n+\nBrandt\n+\nDunne - para vencer a luta\nOdd - 2.90", card3).items.map(i => [i.fid, i.key, i.printedOdd, i.assumed]), [['f1', 'ml:a', null, false], ['f3', 'ml:b', null, false], ['f2', 'ml:a', null, false]]);
+  eq('tip: three fighters joined, the odd is of the whole bet', Core.parseTip("TRIPLA\nTeles\n+\nBrandt\n+\nDunne - para vencer a luta\nOdd - 2.90", card3).odd, 2.9);
+  const twins = card.concat([{ id: 'f9', rounds: 3, a: { name: 'Bruno Teles', last: 'Teles' }, b: { name: 'Ivo Rocha', last: 'Rocha' } }]);
+  eq('tip: a name that could be two fighters is still ambiguous', Core.parseTip("Teles para vencer", twins).problems, [{ code: 'ambiguous' }]);
+  eq('tip: and stays ambiguous inside a multiple', Core.parseTip("Teles + Dunne para vencer", twins).problems, [{ code: 'ambiguous' }]);
+
+  /* a betting slip that names the market as "1X2: V1" and the stake as "1756 BRL" (text as the OCR read it off a real print, with invented names) */
+  const SLIP = "Cupom de apostas Nº 88576601161 º\n10/10/2026 (14:14)\n& Eventos: 1 v\nTipo de aposta Aposta simples\n1X2: V1: Rafael Almeida - Connor Lee Dunne 1.68\nAposta 1756 BRL\nO Possíveis ganhos 2950.08 BRL";
+  eq('tip: slip with "1X2: V1" and the stake in BRL', tipBet(SLIP), { items: one('f3', 'ml:a', 1.68), odd: null, stake: { kind: 'money', money: 1756 }, problems: [] });
+  eq('tip: V2 is the second name on the line', tipBet(SLIP.replace('V1', 'V2')).items, one('f3', 'ml:b', 1.68));
+  eq('tip: V1 is the first name on the line, whatever the order on the card', tipBet(SLIP.replace('Rafael Almeida - Connor Lee Dunne', 'Connor Lee Dunne - Rafael Almeida')).items, one('f3', 'ml:b', 1.68));
+  eq('tip: W1, as the same slip is written in English', tipBet(SLIP.replace('V1', 'W1')).items, one('f3', 'ml:a', 1.68));
+  eq('tip: without V1 or V2 the slip line still names no bet', tipBet(SLIP.replace('V1: ', '')).problems, [{ code: 'nomarket', fid: 'f3' }]);
+  for (const [txt, v] of [['Aposta 1756 BRL', 1756], ['Aposta 1756.5 BRL', 1756.5], ['Aposta 1.756,50 BRL', 1756.5], ['Aposta 2,500.00 USD', 2500], ['Stake 80 EUR', 80], ['50 reais', 50]])
+    eq(`tip: amount written as "${txt}"`, tip("Almeida x Dunne\nDunne para vencer\n" + txt).stake, { kind: 'money', money: v });
+  eq('tip: the first amount is the stake, with the currency before or after', [tip("Almeida x Dunne\nDunne para vencer\nR$ 30,00\nRetorno 61.50 BRL").stake, tip("Almeida x Dunne\nDunne para vencer\nAposta 30 BRL\nRetorno R$ 61,50").stake], [{ kind: 'money', money: 30 }, { kind: 'money', money: 30 }]);
+  eq('tip: an amount in BRL is not read as the odd', tipBet("Almeida x Dunne\nDunne para vencer\nAposta 12.50 BRL").items, one('f3', 'ml:b', null));
+
+  /* slips of the same family as the OCR read them off real prints (invented names): an accumulator that only shows its first
+     selection, names stacked on two lines, a market line with or without the names, a wrapped line, odds with three decimals */
+  const read = (text, c) => { const r = Core.parseTip(text, c || card3); return { items: r.items.map(i => [i.fid, i.key, i.printedOdd, i.assumed]), odd: r.odd, kind: r.kind, legs: r.legs, problems: r.problems }; };
+  eq('tip: accumulator slip that shows only its first selection', read("Cupom de apostas Nº 88578456279 º\n10/10/2026 (14:42) '\n€& Eventos: 2 (finalizado O) A\nuc Rafael Almeida - Connor Lee Dunne\nsc Caio Brandt - Dario Kessler\nTipo de aposta Acumulador\n1X2: V1: Rafael Almeida - Connor Lee Dunne 1.614\nAposta 1850 BRL\nO Possíveis ganhos 2985.75 BRL"),
+     { items: [['f3', 'ml:a', null, false]], odd: 1.614, kind: 'multi', legs: 2, problems: [{ code: 'nomarket', fid: 'f2' }] });
+  eq('tip: accumulator slip with a total on a wrapped line', read("Eventos: 2 (finalizado O) NA\nur. Rafael Almeida - Connor Lee Dunne\nur Caio Brandt - Dario Kessler\nTipo de aposta Acumulador\nTotal Acima de (1.5): Rafael Almeida - Connor Lee\nD 1.424\nunne\nAposta 2250 BRL\nO Possíveis ganhos 3203.55 BRL"),
+     { items: [['f3', 'tot:o:1.5', null, false]], odd: 1.424, kind: 'multi', legs: 2, problems: [{ code: 'nomarket', fid: 'f2' }] });
+  eq('tip: names stacked, then the market line with the names again', read("urc UFC Fight Night. 10.10.26\n10/10/2026 (18:00)\nMarina Teles\nJoana Prado Jr.\n1X2: V2: Marina Teles - Joana Prado Ir. 1.98\nStatus O Não processado\nPlacar atual v\nusc UFC Fight Night. 10.10.26\n10/10/2026 (18:30)\nCaio Brandt\nDario Kessler\n1X2: V1: Caio Brandt - Dario Kessler 1.71\nStatus O Não processado\nPlacar atual v\nurc UFC Fight Night. 10.10.26\n10/10/2026 (21:40)\nConnor Lee Dunne\nRafael Almeida\n1X2: V1: Connor Lee Dunne - Rafael Almeida 1.66\nStatus O Não processado"),
+     { items: [['f1', 'ml:b', 1.98, false], ['f3', 'ml:b', 1.66, false], ['f2', 'ml:a', 1.71, false]], odd: null, kind: null, legs: null, problems: [] });
+  eq('tip: names stacked, then a market line without them', read("216740. UFC Fight Night. 10.10.26\nRafael Almeida\nConnor Lee Dunne\n1X2:V1 1.232\nO Não processado\n216771. UFC Fight Night. 10.10.26\nDario Kessler\nCaio Brandt\n1X2:V2 1.26\nO Não processado\n216730. UFC Fight Night. 10.10.26\nMarina Teles\nJoana Prado Jr.\nTotal Acima de (1.5) 1:13\nO Não processado"),
+     { items: [['f1', 'tot:o:1.5', null, false], ['f3', 'ml:a', 1.232, false], ['f2', 'ml:a', 1.26, false]], odd: null, kind: null, legs: null, problems: [] });
+  eq('tip: a total stays a total when only one name is whole on its line', read("Almeida x Dunne\nTotal Abaixo de (2.5): Rafael Almeida - Connor Lee").items, [['f3', 'tot:u:2.5', null, false]]);
+  eq('tip: a fighter and a rounds line said together is still the fighter', read("Almeida x Dunne\nAlmeida vence e mais de 1.5 rounds").items, [['f3', 'ml:a', null, false]]);
+  eq('tip: an odd with three decimals', read("Almeida x Dunne\nDunne para vencer 1.875").items, [['f3', 'ml:b', 1.875, false]]);
+  eq('tip: a suffix the OCR mangled does not hide the fighter', read("Teles x Prado Ir.\nPrado para vencer").items, [['f1', 'ml:b', null, false]]);
+  eq('tip: the full name settles which of two fighters with the same surname', read("Marina Teles para vencer", twins).items, [['f1', 'ml:a', null, false]]);
+
+  /* single or multiple: the original says so in words, and how many selections a multiple should have */
+  const kindOf = t => { const r = Core.parseTip(t, card3); return [r.kind, r.legs]; };
+  for (const [word, n] of [['DUPLA', 2], ['Tripla', 3], ['QUÁDRUPLA', 4], ['quíntupla', 5], ['Sêxtupla', 6]])
+    eq(`tip: "${word}" is a multiple of ${n}`, kindOf(`🔥 ${word} 🔥\nTeles + Dunne para vencer`), ['multi', n]);
+  for (const word of ['Múltipla', 'Tipo de aposta Acumulador', 'acumulada', 'Combinada', 'parlay'])
+    eq(`tip: "${word}" is a multiple, of however many`, kindOf(`${word}\nTeles + Dunne para vencer`), ['multi', null]);
+  eq('tip: the number of events of a slip says the same', [kindOf("Eventos: 3 (finalizado 0)\nTeles + Dunne para vencer"), kindOf("Eventos: 1\nAlmeida x Dunne\nDunne vence")], [['multi', 3], ['single', 1]]);
+  for (const word of ['R$250,00 Simples', 'Tipo de aposta Aposta simples', 'single'])
+    eq(`tip: "${word}" is a single`, kindOf(`${word}\nAlmeida x Dunne\nDunne para vencer`), ['single', 1]);
+  eq('tip: nothing said about the kind', kindOf("Almeida x Dunne\nDunne para vencer"), [null, null]);
+  eq('tip: "dupla chance" is a market of other sports, not a multiple', kindOf("Dupla chance\nAlmeida x Dunne\nDunne para vencer"), [null, null]);
+  const card5 = card3.concat([{ id: 'f4', rounds: 3, a: { name: 'Igor Sampaio', last: 'Sampaio' }, b: { name: 'Leo Vance', last: 'Vance' } }, { id: 'f5', rounds: 3, a: { name: 'Nina Kovac', last: 'Kovac' }, b: { name: 'Bia Rangel', last: 'Rangel' } }]);
+  const joined = (word, names) => read(`🔥 *${word}* 🔥\n\n🎰 *${names.slice(0, -1).join('*\n               +\n*')}*\n               +\n*${names[names.length - 1]}* - Para vencer a luta\n\n💰 Odd - 4.20\n💎 Stake - 1 unidade`, card5);
+  eq('tip: a channel "tripla"', joined('TRIPLA', ['Marina Teles', 'Caio Brandt', 'Connor Lee Dunne']), { items: [['f1', 'ml:a', null, false], ['f3', 'ml:b', null, false], ['f2', 'ml:a', null, false]], odd: 4.2, kind: 'multi', legs: 3, problems: [] });
+  eq('tip: a channel "quádrupla"', joined('QUÁDRUPLA', ['Marina Teles', 'Caio Brandt', 'Connor Lee Dunne', 'Leo Vance']).items.map(i => i[0] + ' ' + i[1] + ' ' + i[3]).sort(), ['f1 ml:a false', 'f2 ml:a false', 'f3 ml:b false', 'f4 ml:b false']);
+  eq('tip: a channel "quíntupla"', (r => [r.items.length, r.items.every(i => /^ml:/.test(i[1]) && !i[3] && i[2] === null), r.odd, r.kind, r.legs, r.problems])(joined('QUÍNTUPLA', ['Marina Teles', 'Caio Brandt', 'Connor Lee Dunne', 'Leo Vance', 'Nina Kovac'])), [5, true, 4.2, 'multi', 5, []]);
+  eq('tip: a "tripla" with only two selections found says one is missing', joined('TRIPLA', ['Marina Teles', 'Fulano de Tal', 'Connor Lee Dunne']).problems, [{ code: 'short', want: 3, got: 2 }]);
+  eq('tip: a multiple that names as many as it should has nothing to report', joined('DUPLA', ['Marina Teles', 'Connor Lee Dunne']).problems, []);
   eq('tip: fight found but no bet described', tip("Almeida x Dunne").problems, [{ code: 'nomarket', fid: 'f3' }]);
   eq('tip: over written with a plus', tip("Almeida x Dunne\n+2.5 rounds").items, one('f3', 'tot:o:2.5', null));
   eq('tip: under written with a minus sign', tip("Almeida x Dunne\n−2.5 rounds").items, one('f3', 'tot:u:2.5', null));

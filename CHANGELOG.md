@@ -2,6 +2,19 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.0] - 2026-10-10
+
+### Adicionado
+- Copiar aposta aceita várias fotos de uma vez. Cada foto vira uma aposta numa lista, e "Apostar as N de uma vez" faz todas as que estão inteiras, depois de conferir placar e odds.
+- Botão "Limpar" na tela de copiar.
+- O leitor entende simples e múltipla pelas palavras do original (dupla, tripla, quádrupla, quíntupla, múltipla, acumulador, "Eventos: N") e avisa quando faltam seleções.
+- Formatos novos: múltipla por lutador ("Fulano + Beltrano - Para vencer a luta"), cupom "1X2: V1: A - B", nomes em linhas separadas, total "Acima de (1.5)", valor "1756 BRL" e odd com três casas.
+- A odd única de uma múltipla aparece como odd da aposta inteira, ao lado do que as seleções pagam agora.
+
+### Alterado
+- Um lutador de cada luta no mesmo texto deixou de ser erro e virou múltipla. Ambíguo é só o nome que serve a dois lutadores do card.
+- Fechar a tela de copiar não apaga mais o texto nem a lista.
+
 ## [0.6.0] - 2026-10-10
 
 ### Adicionado

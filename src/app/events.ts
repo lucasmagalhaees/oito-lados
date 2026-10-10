@@ -3,7 +3,7 @@ import { loadOdds } from './api';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
-import { closeImport, importImage, importToSlip, renderImport, runImport } from './import';
+import { clearImport, closeImport, dropOp, importImages, importToSlip, placeAll, renderImport, runImport } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
 import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
@@ -79,7 +79,7 @@ function applyMask(el: HTMLInputElement, typed: string | null): string {
 export function initEvents(): void {
 document.addEventListener('click', e => {
   const t = e.target as HTMLElement;
-  const b = t.closest<HTMLElement>('[data-act]'); if (!b) { if (t.id === 'sheet' && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); } return; }
+  const b = t.closest<HTMLElement>('[data-act]'); if (!b) { if (t.id === 'sheet' && !imp.busy) { ui.sheet = false; if (imp.open) closeImport(); else { renderSheet(); render(); } } return; }
   const a = b.dataset.act, d = b.dataset;
   if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
   else if (a === 'event') { ui.eventId = d.id ?? null; render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
@@ -94,10 +94,13 @@ document.addEventListener('click', e => {
   }
   else if (a === 'unpick') { slip.sels = slip.sels.filter(s => !(s.fid === d.fid && s.key === d.key)); ui.msg = ''; if (!slip.sels.length) ui.sheet = false; renderSheet(); render(); }
   else if (a === 'sheet') { ui.sheet = !ui.sheet; ui.msg = ''; renderSheet(); }
-  else if (a === 'imp') { imp.open = true; imp.res = null; imp.err = ''; ui.sheet = false; renderImport(); }
+  else if (a === 'imp') { imp.open = true; imp.err = ''; imp.msg = ''; ui.sheet = false; renderImport(); }
   else if (a === 'impclose') { if (!imp.busy) closeImport(); }
   else if (a === 'impread') { if (!imp.busy) runImport(valOf('#imptext') || ''); }
-  else if (a === 'impgo') importToSlip();
+  else if (a === 'impgo') importToSlip(Number(d.op));
+  else if (a === 'impall') placeAll();
+  else if (a === 'impdrop') { if (!imp.busy && !imp.placing) dropOp(Number(d.op)); }
+  else if (a === 'impclear') { if (!imp.busy && !imp.placing) clearImport(); }
   else if (a === 'mode') { slip.mode = d.m as Slip['mode']; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = d.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(d.v); setStakeMoney(v); showStake(); ui.msg = ''; slipSummary(); }
   else if (a === 'stu') { if (wallet().unit > 0) { setStakeUnits(Number(d.u)); showStake(); ui.msg = ''; slipSummary(); } }
@@ -143,15 +146,15 @@ document.addEventListener('input', e => {
   else if (t.id === 'dep') ui.dep = applyMask(t, typed);
   else if (t.id === 'imptext') imp.text = t.value;
 });
-document.addEventListener('change', e => { const t = e.target as HTMLInputElement; if (t.id === 'impfile') importImage(t.files && t.files[0]); });
+document.addEventListener('change', e => { const t = e.target as HTMLInputElement; if (t.id === 'impfile') importImages([...(t.files || [])]); });
 document.addEventListener('paste', e => {
   if (!imp.open || imp.busy) return;
   const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type));
-  if (f) { e.preventDefault(); importImage(f); }
+  if (f) { e.preventDefault(); importImages([f]); }
 });
 document.addEventListener('keydown', e => {
   const id = (e.target as HTMLElement).id, press = (act: string): void => { const b = document.querySelector<HTMLElement>(`[data-act="${act}"]`); if (b) b.click(); };
-  if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); }
+  if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; if (imp.open) closeImport(); else { renderSheet(); render(); } }
   if (e.key === 'Enter' && id === 'unitpct') press('unit');
   if (e.key === 'Enter' && id === 'dep') press('deposit');
 });

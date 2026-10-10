@@ -6,7 +6,7 @@ and prints prices, settlements and the final balance (expected: R$ 1.609,59).
 """
 import json, re, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from mock_espn import PHASE, FX, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, TIP_TEXT
+from mock_espn import PHASE, FX, ESPN, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, SLIP_HTML, ACCA_HTML, TIP_TEXT
 import base64
 import cov
 from playwright.sync_api import sync_playwright
@@ -246,6 +246,64 @@ with sync_playwright() as p:
     assert pg.input_value('#stakeu') == '2' and 'R$ 200,00 · 2u' in txt('#slipsum'), (pg.input_value('#stakeu'), txt('#slipsum'))
     pg.click('#panel [data-act=unpick]')
     pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=money]'); pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
+    # "Limpar" empties the copy screen; closing it does not
+    assert pg.is_disabled('[data-act=impclear]'), 'nothing to clear yet'
+    pg.fill('#imptext', MONEY_TIP); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    pg.click('[data-act=impclose]'); pg.click('[data-act=imp]')
+    assert pg.input_value('#imptext') == MONEY_TIP and pg.locator('.impop').count() == 1, 'closing keeps the text and what was read'
+    pg.click('[data-act=impclear]')
+    assert pg.input_value('#imptext') == '' and pg.locator('.impop').count() == 0 and pg.is_disabled('[data-act=impclear]'), 'cleared'
+    # one fighter from each of two fights joined by a plus is a multiple, and the odd it prints is of the whole bet
+    DUPLA = '🔥 *DUPLA* 🔥\n\n🎰 *Marina Teles*\n               +\n*Connor Lee Dunne* - Para vencer a luta\n\n💰 Odd - 1.61\n💎 Stake - 1 unidade'
+    pg.fill('#imptext', DUPLA); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert pg.locator('#impres .sel').count() == 2 and txt('.impkind') == 'Múltipla de 2 seleções' and 'considerei vencedor' not in txt('#impres'), txt('#panel')
+    assert txt('.impodd') == '1.61 · agora 3.42' and txt('#impvalue') == 'R$ 100,00 · 1u', (txt('.impodd'), txt('#impvalue'))            # 1.67 x 2.05
+    shot('s25-dupla.png'); pg.click('[data-act=impgo]'); pg.wait_for_selector('#stake')
+    assert pg.evaluate('[window.__OL.slip.mode, window.__OL.slip.sels.length]') == ['multi', 2] and pg.input_value('#stake') == '100' and 'R$ 342,00' in txt('#slipsum'), txt('#slipsum')
+    pg.click('#panel [data-act=unpick] >> nth=0'); pg.click('#panel [data-act=unpick] >> nth=0'); pg.click('[data-act=imp]')
+    pg.fill('#imptext', 'TRIPLA\nTeles + Dunne + Fulano de Tal - para vencer a luta'); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert 'O original é uma múltipla de 3 seleções e só achei 2' in txt('#panel'), txt('#panel')
+    pg.fill('#imptext', 'Dunne e Teles'); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert txt('#impres').count('considerei vencedor') == 2 and txt('.impkind') == 'Múltipla de 2 seleções', 'two bare names are two presumed winners: ' + txt('#impres')
+    pg.fill('#imptext', 'Aposta simples\nDunne e Teles para vencer\nR$ 30,00'); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert txt('.impkind') == '2 apostas simples' and 'Valor de cada uma' in txt('#panel') and txt('#impvalue') == 'R$ 30,00 · 0,3u', txt('#panel')
+    pg.click('[data-act=impgo]'); pg.wait_for_selector('#stake'); assert pg.evaluate('[window.__OL.slip.mode, window.__OL.slip.sels.length]') == ['single', 2]
+    pg.click('#panel [data-act=unpick] >> nth=0'); pg.click('#panel [data-act=unpick] >> nth=0'); pg.click('[data-act=imp]')
+    # several prints at once: each picture is a bet of its own, and the ones that are whole are made together
+    art = ctx.new_page()
+    for name, html in (('simples.png', SLIP_HTML), ('acumulada.png', ACCA_HTML)): art.set_content(html); art.locator('#print').screenshot(path=str(SHOTS / name))
+    art.close()
+    kept = pg.evaluate('localStorage.getItem("oitolados.v1")'); had = pg.evaluate('window.__OL.S.bets.length')
+    pg.set_input_files('#impfile', [str(SHOTS / n) for n in ('print.png', 'simples.png', 'acumulada.png')])
+    pg.wait_for_function('document.querySelectorAll(".impop").length === 3 && !document.querySelector("#impfile").disabled', timeout=240000)
+    assert [t.lower() for t in pg.locator('.impop .oph .label').all_inner_texts()] == ['foto · print.png', 'foto · simples.png', 'foto · acumulada.png']
+    assert pg.locator('.impkind').all_inner_texts() == ['Simples', 'Simples', 'Múltipla (só uma seleção lida)'], pg.locator('.impkind').all_inner_texts()
+    assert [v.replace('\xa0', ' ') for v in pg.locator('.impvalue').all_inner_texts()] == ['R$ 250,00 · 2,5u', 'R$ 100,00 · 1u', 'R$ 80,00 · 0,8u'], pg.locator('.impvalue').all_inner_texts()
+    assert 'Dario Kessler vence' in txt('#panel') and 'Odd do print 2.70 · odd agora 2.70' in txt('#panel'), 'V2 is the second name on the slip line: ' + txt('#panel')
+    assert 'Achei Almeida x Dunne, mas não entendi qual é a aposta' in txt('#panel') and 'costuma mostrar só a primeira seleção' in txt('#panel') and '3.42' in txt('.impodd'), txt('#panel')
+    assert txt('#imptotal') == 'R$ 350,00' and '1 da lista fica de fora' in txt('#impout') and txt('[data-act=impall]') == 'Apostar as 2 de uma vez', txt('.impall')
+    pg.locator('.impall').scroll_into_view_if_needed(); shot('s26-varias-fotos.png')
+    # a pasted text joins the list next to the pictures, and any of them can be taken out
+    pg.fill('#imptext', MONEY_TIP); pg.click('[data-act=impread]'); pg.wait_for_function('document.querySelectorAll(".impop").length === 4')
+    assert pg.locator('.impop .oph .label').first.inner_text().lower() == 'texto' and txt('#imptotal') == 'R$ 600,00' and txt('[data-act=impall]') == 'Apostar as 3 de uma vez', txt('.impall')
+    pg.click('.impop >> nth=0 >> [data-act=impdrop]'); assert pg.locator('.impop').count() == 3 and txt('#imptotal') == 'R$ 350,00', txt('.impall')
+    ESPN['down'] = True; pg.click('[data-act=impall]'); pg.wait_for_selector('#impmsg')                 # the source cannot be reached: nothing is written
+    assert 'Sem conexão com a ESPN' in txt('#impmsg') and pg.evaluate('window.__OL.S.bets.length') == had, txt('#impmsg')
+    ESPN['down'] = False; ESPN['f2b'] = 150                                                             # the line moved since the list was shown: nothing is written either
+    pg.click('[data-act=impall]'); pg.wait_for_function('(document.getElementById("impmsg") || {}).textContent && document.getElementById("impmsg").textContent.includes("mudou")')
+    assert pg.evaluate('window.__OL.S.bets.length') == had and 'odd agora 2.50' in txt('#panel'), 'the new odd is on the screen to be confirmed: ' + txt('#panel')
+    pg.click('[data-act=impall]'); pg.wait_for_function(f'window.__OL.S.bets.length === {had + 2}')
+    made = pg.evaluate('window.__OL.S.bets.slice(-2).map(b => [b.type, b.stake, b.legs.length, b.legs[0].key, b.legs[0].odd, b.status])')
+    assert made == [['single', 250, 1, 'ml:b', 2.05, 'open'], ['single', 100, 1, 'ml:b', 2.5, 'open']], made
+    assert '2 apostas feitas' in pg.inner_text('#toast') and bal().replace('\xa0', ' ') == 'R$ 650,00', (pg.inner_text('#toast'), bal())
+    assert pg.locator('.impop').count() == 1 and not pg.evaluate('document.getElementById("sheet").hidden'), 'what was left out stays in the list'
+    assert txt('.impop [data-act=impgo]') == 'Levar pro cupom' and pg.locator('[data-act=impall]').count() == 0, 'one bet left: it goes through the slip, as a single one always did'
+    pg.click('[data-act=impclear]'); assert pg.locator('.impop').count() == 0
+    # back to the bankroll and the lines from before this detour, so the rest of the walk-through keeps its numbers
+    ESPN['f2b'] = 170; pg.evaluate('s => localStorage.setItem("oitolados.v1", s)', kept)
+    cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S'); sync()
+    assert pg.evaluate('window.__OL.S.bets.length') == had and bal().replace('\xa0', ' ') == 'R$ 1.000,00' and pg.inner_text('[data-fid="f2"][data-key="ml:b"] .ov') == '2.70', bal()
+    pg.click('[data-act=imp]')
     # appearance: automatic follows the device; light and dark hold whatever the device says
     pg.click('[data-act=impclose]'); pg.click('.tabbar [data-tab=carteira]')
     DARK, LIGHT = 'rgb(14, 18, 24)', 'rgb(242, 243, 245)'
@@ -271,7 +329,7 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=lutas]'); pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     pg.click('[data-act=imp]')
-    for text, expect in [('Fulano x Beltrano\nFulano para vencer a luta', 'Não achei nenhuma luta'), ('', 'Cola um texto'), ('Almeida x Dunne', 'não entendi qual é a aposta'), ('Dunne e Teles', 'mais de uma luta possível')]:
+    for text, expect in [('Fulano x Beltrano\nFulano para vencer a luta', 'Não achei nenhuma luta'), ('', 'Cola um texto'), ('Almeida x Dunne', 'não entendi qual é a aposta')]:
         pg.fill('#imptext', text); pg.click('[data-act=impread]'); pg.wait_for_selector('#panel .msg')
         assert expect in pg.inner_text('#panel .msg'), (text, pg.inner_text('#panel .msg'))
     # a print pasted from the clipboard goes through the same reader

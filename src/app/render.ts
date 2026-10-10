@@ -11,7 +11,8 @@ import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp,
 import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
 import type { Bet, Currency, Fight, FightEvent, Leg, Option, Outcome, Side } from '../core';
-import type { Resolved, Wallet } from './helpers';
+import type { Resolved, SlipCalc, Wallet } from './helpers';
+import type { Slip } from './state';
 
 /* ================= rendering ================= */
 let toastT: ReturnType<typeof setTimeout> | undefined;
@@ -301,39 +302,45 @@ export function slipSummary(): void {
     <button class="btn block" style="margin-top:12px" data-act="place" ${why || ui.placing ? 'disabled' : ''}>${ui.placing ? 'Confirmando odds na ESPN…' : why && why !== 'Saldo insuficiente.' ? esc(why) : 'Apostar ' + money(c.total)}</button>`;
 }
 
+/** Re-checks with the source right before a bet is taken: the fight may have started or the line may have moved.
+ *  Reloads the card and the odds of these fights; false when the source cannot be reached. */
+export async function recheck(fids: string[]): Promise<boolean> {
+  try {
+    await loadBoard();
+    const byEv = new Map<string, string[]>();
+    for (const fid of fids) { const f = D.fights.get(fid); if (f) byEv.set(f.eventId, [...(byEv.get(f.eventId) || []), f.id]); }
+    for (const [eid, ids] of byEv) await loadOdds(eid, true, ids);
+    D.lastSync = Date.now(); D.err = null; return true;
+  } catch (e) { return false; }
+}
+/** Writes the bets of a slip that has already been validated (`c.ok`: every selection has its fight and its price) and
+ *  returns how many were made: one for a multiple, one per selection otherwise. Saving is left to the caller. */
+export function writeBets(c: SlipCalc, mode: Slip['mode'], now: number, salt: string): number {
+  const leg = (r: Resolved): Leg => { const f = r.f!, x = r.x!; return { fid: f.id, eid: f.eventId, key: r.s.key, market: x.market, sel: x.sel, cat: x.cat, weight: f.weight, fight: `${f.a.last} x ${f.b.last}`, event: f.eventName, date: f.date, odd: x.odd, src: x.src, out: null }; };
+  const unit = c.unit;                              // the unit in force when the bet is placed; the history is measured with it
+  const mk = (type: Bet['type'], legs: Leg[], i: number, odd: number, sgp: Record<string, number> | null): Bet => ({ id: 'b' + now.toString(36) + salt + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, unit, odd, sgp, legs, status: 'open', payout: 0, settledAt: null });
+  if (mode === 'multi') {
+    const sgp: Record<string, number> = {}; for (const g of c.groups) if (g.combo) sgp[g.fid] = g.odd!;      // price of each same-fight combo, fixed at placement
+    S.bets.push(mk('multi', c.rs.map(leg), 0, c.odd, sgp)); return 1;
+  }
+  c.rs.forEach((r, i) => S.bets.push(mk('single', [leg(r)], i, r.x!.odd, null))); return c.n;
+}
 export async function place(): Promise<void> {
   if (ui.placing) return;
   const before = slipCalc();
   if (!before.ok || before.stake < 1 || before.total > before.balance + 0.004) return;
   const shown = new Map(before.rs.map(r => [r.s.fid + '|' + r.s.key, r.x!.odd] as const)), mode = slip.mode;
   ui.placing = true; ui.msg = ''; slipSummary();
-  try {
-    // re-check with the source right before taking the bet: the fight may have started or the line may have moved
-    await loadBoard();
-    const byEv = new Map<string, string[]>();
-    for (const s of slip.sels) { const f = D.fights.get(s.fid); if (f) byEv.set(f.eventId, [...(byEv.get(f.eventId) || []), f.id]); }
-    for (const [eid, fids] of byEv) await loadOdds(eid, true, fids);
-    D.lastSync = Date.now(); D.err = null;
-  } catch (e) {
-    ui.placing = false; ui.msg = 'Sem conexão com a ESPN. Não deu pra confirmar as odds, tenta de novo.'; renderSheet(); return;
-  }
+  const reached = await recheck(slip.sels.map(s => s.fid));
   ui.placing = false;
+  if (!reached) { ui.msg = 'Sem conexão com a ESPN. Não deu pra confirmar as odds, tenta de novo.'; renderSheet(); return; }
   const c = slipCalc();
   if (!c.ok) { ui.msg = 'Uma das lutas já começou ou saiu do card.'; renderSheet(); render(); return; }
   if (slip.mode !== mode) { ui.msg = 'Essa combinação não está mais disponível com as odds novas.'; renderSheet(); render(); return; }
   if (c.rs.some(r => Math.abs(r.x!.odd - shown.get(r.s.fid + '|' + r.s.key)!) > 0.001) || (mode === 'multi' && Math.abs(c.odd - before.odd) > 0.001)) { ui.msg = 'As odds mudaram. Confere os valores novos e confirma de novo.'; renderSheet(); render(); return; }
   if (c.total > c.balance + 0.004) { renderSheet(); return; }
-  const now = Date.now();
-  // c.ok above means every selection has its fight and its price
-  const leg = (r: Resolved): Leg => { const f = r.f!, x = r.x!; return { fid: f.id, eid: f.eventId, key: r.s.key, market: x.market, sel: x.sel, cat: x.cat, weight: f.weight, fight: `${f.a.last} x ${f.b.last}`, event: f.eventName, date: f.date, odd: x.odd, src: x.src, out: null }; };
-  const unit = c.unit;                              // the unit in force when the bet is placed; the history is measured with it
-  const mk = (type: Bet['type'], legs: Leg[], i: number, odd: number, sgp: Record<string, number> | null): Bet => ({ id: 'b' + now.toString(36) + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, unit, odd, sgp, legs, status: 'open', payout: 0, settledAt: null });
-  if (slip.mode === 'multi') {
-    const sgp: Record<string, number> = {}; for (const g of c.groups) if (g.combo) sgp[g.fid] = g.odd!;      // price of each same-fight combo, fixed at placement
-    S.bets.push(mk('multi', c.rs.map(leg), 0, c.odd, sgp));
-  } else c.rs.forEach((r, i) => S.bets.push(mk('single', [leg(r)], i, r.x!.odd, null)));
+  const made = writeBets(c, slip.mode, Date.now(), '');
   saveS(); saveCache();
-  const made = slip.mode === 'multi' ? 1 : c.n;
   slip.sels = []; setStakeMoney(0); slip.mode = 'single'; ui.sheet = false; ui.msg = ''; ui.tab = 'apostas'; ui.filter = 'open';
   renderSheet(); render(); window.scrollTo(0, 0);
   toast(made > 1 ? `${made} apostas feitas. Boa sorte.` : 'Aposta feita. Boa sorte.');

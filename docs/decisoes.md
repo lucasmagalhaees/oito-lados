@@ -36,6 +36,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 5. PR #10 mesclado às 09:36; o workflow `Produção` passou no commit `bcbf6c1`. Pedido seguinte, às 10:30: "faltou opções de depósito de milhares, e milhão" (D39).
 6. Entre 10:31 e 10:38, com o app já publicado na mão: as cores de + e − nas quedas "não ficaram boas, estão destoando do tom de vermelho e azul" (D41); "quero opções de temas de cores para os corners, pode ser azul × vermelho, verde × rosa, roxo × laranja", com padrão separado para lutas femininas e masculinas (D40); "a mesma stake não precisa desse campo para inserir valor" e "sempre que eu escolher mesmo valor, fixa a opção acima para reais; se escolher mesma stake, fica a opção acima para unidades" (D42).
 7. O Lucas pediu para revisar se as alterações faziam sentido e um code review "como se fosse análise de negócio e como se fosse tech lead". A revisão está no PR; dois achados viraram código (a tela de copiar diz o que ficou de fora quando o original traz unidades e dinheiro; a lista de configurações passou a existir num lugar só).
+8. PR #11 mesclado às 11:06; o workflow `Produção` passou no commit `3331e05`. Às 14:54, usando o app com apostas de verdade para copiar: a "dupla" de um canal não foi reconhecida como múltipla, a foto de um cupom não foi reconhecida, e os pedidos de mandar várias fotos e fazer várias operações de uma vez, de um botão para limpar a tela de copiar, e de o leitor entender dupla, tripla, quádrupla e quíntupla, e simples contra múltipla (D43, D44). O Lucas mandou cinco prints reais para testar.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -232,6 +233,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Descartado:** ler a imagem com um serviço de IA de visão. Seria mais tolerante a formatos diferentes, mas exige servidor e chave paga, o que contraria a D11 (MVP sem backend), e mandaria a imagem para fora do aparelho.
 - **Consequência:** é a primeira dependência de terceiros em tempo de execução (uma biblioteca baixada de CDN, com versão fixa e hash de integridade no script principal). O leitor só conhece os formatos que foram testados; formato novo pode não ser entendido, e a tela diz o que não entendeu.
 - **Interpretação a confirmar com o Lucas:** num print com valor em dinheiro (R$ 1.750,00), o app copia o mesmo valor em dinheiro, não converte para unidades. **Resolvida pela D29:** virou configuração.
+- **Revista pela D44** (10/10/2026): com várias apostas lidas de uma vez, elas podem ser feitas direto da tela de copiar, sem passar pelo cupom. Com uma só, continua indo para o cupom.
 
 ## D27. Cashout dinâmico em múltipla
 
@@ -404,6 +406,36 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Acréscimo da revisão:** quando o original traz os dois, a tela de copiar diz qual ficou de fora ("o original também fala em 2u"). Em R$, um texto de canal que cite um valor qualquer junto da stake em unidades copiaria esse valor; a linha deixa isso à vista antes de ir para o cupom.
 - **Consequência:** o `tip` salvo por versão antiga é descartado na carga, e a escolha de dinheiro ou unidades fica como estava. Quem tinha "Mesma stake" com a unidade de origem preenchida perde a conversão.
 
+## D43. O leitor de apostas aprende com prints reais: múltipla por lutador, cupom "1X2", simples ou múltipla
+
+- **Contexto (10/10/2026):** três falhas no uso real. A mensagem "DUPLA / Fulano + Beltrano - Para vencer a luta" era recusada como ambígua; a foto de um cupom "1X2: V1: A - B ... Aposta 1756 BRL" não virava aposta; e o pedido: "ele tem que entender o conceito de dupla e tripla, quádrupla, quíntupla; ele tem que entender quando é uma aposta simples e quando é uma múltipla".
+- **Como foi feito:** o mesmo leitor de imagem do app (Tesseract.js 7.0.0) foi rodado em Node sobre os cinco prints que o Lucas mandou, e o texto que saiu virou caso de teste com nomes inventados. O leitor de imagem leu os cinco direito; quem não conhecia os formatos era o leitor de texto.
+- **Decisão:**
+  - Um lutador de cada luta, juntos por "+" ou "e", é uma **múltipla por lutador**. Antes era erro ("ambíguo"). Ambíguo ficou só o caso em que o mesmo nome serve a dois lutadores do card.
+  - "1X2: V1" e "V2" são o primeiro e o segundo nome da linha do cupom, não o lutador `a` e `b` do card.
+  - Nomes em linhas seguidas e o mercado embaixo, total "Acima de (1.5)", valor "1756 BRL", odd com três casas e sufixo "Jr."/"III" comido pelo leitor de imagem passam a ser entendidos.
+  - O leitor diz se o original é **simples ou múltipla** e de quantas seleções, pelas palavras do original ("dupla" a "sêxtupla", "múltipla", "acumulador", "Eventos: N", "simples"). Se diz tripla e só duas foram achadas, avisa em vez de montar uma dupla calado.
+  - Uma odd só para várias seleções é a odd da aposta inteira, mostrada ao lado do que as mesmas seleções pagam agora.
+- **O que o leitor não faz, de propósito:** inventar seleção. Os dois cupons de acumulador mandados imprimem os dois eventos e o mercado só do primeiro; a aposta da segunda luta não está na imagem. O app mostra a primeira, avisa que falta, e deixa esse cupom fora do "apostar todas".
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Sem nada dito no original, várias seleções continuam virando **uma múltipla** (regra antiga). É o caso das duas listas de seleções mandadas, que não dizem o tipo nem o valor.
+  - Original que diz "simples" e traz várias seleções vira várias simples, cada uma com o mesmo valor.
+  - "A + B por KO": só o vencedor é herdado pelo nome de trás. O A fica como vencedor presumido, com aviso.
+- **Teste que mudou de propósito:** "Dunne e Teles" esperava o erro de ambíguo. Agora espera duas seleções de vencedor presumidas.
+- **Não verificado:** os cinco prints contra o card de verdade da ESPN (daqui não dá para alcançá-la; o teste usou um card montado com esses nomes). Ver `verificacao.md`.
+
+## D44. Várias fotos de uma vez, várias apostas de uma vez, e o botão Limpar
+
+- **Contexto (10/10/2026):** "permita mandar várias fotos e fazer várias operações de uma vez" e "faz um botão pra limpar tudo do texto de input ali do campo de texto / imagem".
+- **Decisão:** a tela de copiar passa a guardar uma lista. Cada foto é uma aposta, com o tipo, o valor e a origem; o texto colado é mais uma. Com duas ou mais, o botão "Apostar as N de uma vez" faz todas as que estão inteiras. "Limpar" apaga texto, lista e mensagem.
+- **O que muda na D26:** lá, nada era apostado fora do cupom. O lote é a exceção, porque o cupom tem um valor só e cada foto traz o seu. Com uma aposta só, continua "Levar pro cupom".
+- **Cuidados mantidos:** antes de gravar, placar e odds são lidos de novo; sem conexão, odd diferente ou luta começada, nada é gravado e a lista aparece com os valores novos para confirmar. Tudo ou nada: se uma das prontas não fecha, nenhuma é gravada. O preço de cada aposta sai da conta do próprio cupom.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Só entra no lote a aposta **inteira**: tudo que o original diz foi lido, tem odd agora e valor de pelo menos 1. As outras ficam na lista, com o motivo, e podem ir para o cupom uma a uma.
+  - Uma foto sozinha, com a lista vazia, continua passando pelo campo de texto, para dar para corrigir o que o leitor leu.
+  - Fechar a tela não apaga a lista nem o texto; "Limpar" apaga. Antes, fechar apagava o resultado.
+- **Descartado:** fila que carrega uma aposta por vez no cupom (seriam N toques em "Apostar", e o pedido foi "de uma vez").
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -411,7 +443,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
-| Testar o copiar aposta no iPhone com prints reais | Lucas |
+| Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |
+| Confirmar as interpretações do leitor (várias seleções sem tipo dito viram múltipla; "simples" com várias vira várias simples) e do lote (D43, D44) | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
 | Confirmar o padrão Automático do tema (D38) | Lucas |
 | Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |
