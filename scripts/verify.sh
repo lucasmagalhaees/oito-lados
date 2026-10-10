@@ -36,6 +36,10 @@ run() {
     fail=1
     printf 'FALHA  %-10s\n' "$name"
     printf '%s\n' "$out" | tail -n 25 | sed 's/^/         /'
+    # on GitHub Actions the tail of the failing output also becomes an annotation, readable without opening the log
+    if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+      printf '::error title=verify %s::%s\n' "$name" "$(printf '%s\n' "$out" | tail -n 12 | tr '\n' '|' | cut -c1-1800)"
+    fi
   fi
 }
 
