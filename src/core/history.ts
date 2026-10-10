@@ -17,33 +17,50 @@ export function dupBets(bets: Bet[], sels: Sel[], mode: 'single' | 'multi'): Bet
 }
 
 /** What is already at stake on a fight: the open bets with a selection in it, and what each of them holds there.
- *  The stake of a multiple counts whole, since all of it rides on that fight too. */
-export function exposure(bets: Bet[], fid: string): { n: number; stake: number; held: { id: string; stake: number; keys: string[]; sel: string }[] } {
-  const held = bets.filter(b => b.status === 'open' && b.legs.some(l => l.fid === fid))
-    .map(b => { const ls = b.legs.filter(l => l.fid === fid); return { id: b.id, stake: b.stake, keys: ls.map(l => l.key), sel: ls.map(l => l.sel).join(' + ') }; });
-  return { n: held.length, stake: r2(held.reduce((a, h) => a + h.stake, 0)), held };
+ *  The stake of a multiple counts whole, since all of it rides on that fight too. `units` is the same stake with each
+ *  bet measured by the unit it was placed with (`unitBets` of them have one). */
+export function exposure(bets: Bet[], fid: string): { n: number; stake: number; units: number; unitBets: number; held: { id: string; stake: number; keys: string[]; sel: string }[] } {
+  const on = bets.filter(b => b.status === 'open' && b.legs.some(l => l.fid === fid)), t = openTotals(on);
+  const held = on.map(b => { const ls = b.legs.filter(l => l.fid === fid); return { id: b.id, stake: b.stake, keys: ls.map(l => l.key), sel: ls.map(l => l.sel).join(' + ') }; });
+  return { n: held.length, stake: t.stake, units: t.units, unitBets: t.unitBets, held };
+}
+
+/** What a set of open bets has at stake and what it can pay: `ret` is what comes back if every one of them wins, and
+ *  `gain` is that less the stakes. `units` and `gainUnits` are the stake and the gain with each bet measured by the
+ *  unit it was placed with; a bet with no unit (`unitBets` counts the ones that have it) is left out of those two.
+ *  Bets that are not open are ignored. */
+export interface OpenTotals { n: number; stake: number; ret: number; gain: number; units: number; gainUnits: number; unitBets: number }
+export function openTotals(bets: Bet[]): OpenTotals {
+  const t: OpenTotals = { n: 0, stake: 0, ret: 0, gain: 0, units: 0, gainUnits: 0, unitBets: 0 };
+  for (const b of bets) {
+    if (b.status !== 'open') continue;
+    const ret = r2(b.stake * b.odd);
+    t.n++; t.stake += b.stake; t.ret += ret;
+    if (b.unit && b.unit > 0) { t.unitBets++; t.units += b.stake / b.unit; t.gainUnits += (ret - b.stake) / b.unit; }
+  }
+  t.stake = r2(t.stake); t.ret = r2(t.ret); t.gain = r2(t.ret - t.stake);
+  t.units = Math.round(t.units * 1e4) / 1e4; t.gainUnits = Math.round(t.gainUnits * 1e4) / 1e4;
+  return t;
 }
 
 /** The open bets grouped by event, in the order the fights happen: the event that starts first, and inside it the bet
  *  whose first fight comes first (`order` breaks ties between fights of the same hour: the place of the fight on the
- *  card). A multiple across events goes in a group of its own, with no event. `ret` is what the group pays if every
- *  bet in it wins, which bets against each other cannot all do. */
-export interface OpenGroup { eid: string; event: string; date: number; bets: Bet[]; stake: number; ret: number }
+ *  card). A multiple across events goes in a group of its own, with no event. Each group carries its totals: `ret` is
+ *  what it pays if every bet in it wins, which bets against each other cannot all do. */
+export interface OpenGroup extends OpenTotals { eid: string; event: string; date: number; bets: Bet[] }
 export function openByEvent(bets: Bet[], order?: (fid: string) => number): OpenGroup[] {
   const first = (b: Bet): [number, number] => b.legs.map(l => [l.date, order ? order(l.fid) : 0] as [number, number]).sort((x, y) => x[0] - y[0] || x[1] - y[1])[0] || [0, 0];
-  const m = new Map<string, OpenGroup>();
+  const m = new Map<string, { eid: string; event: string; date: number; bets: Bet[] }>();
   for (const b of bets.filter(x => x.status === 'open')) {
     const eids = [...new Set(b.legs.map(l => l.eid))], eid = eids.length === 1 ? eids[0] : '';
-    const g = m.get(eid) || { eid, event: eid && b.legs[0] ? b.legs[0].event : '', date: Infinity, bets: [], stake: 0, ret: 0 };
-    g.bets.push(b); g.stake += b.stake; g.ret += r2(b.stake * b.odd); g.date = Math.min(g.date, first(b)[0]);
+    const g = m.get(eid) || { eid, event: eid && b.legs[0] ? b.legs[0].event : '', date: Infinity, bets: [] };
+    g.bets.push(b); g.date = Math.min(g.date, first(b)[0]);
     m.set(eid, g);
   }
-  const groups = [...m.values()].sort((x, y) => x.date - y.date || x.eid.localeCompare(y.eid));
-  for (const g of groups) {
-    g.stake = r2(g.stake); g.ret = r2(g.ret);
+  return [...m.values()].sort((x, y) => x.date - y.date || x.eid.localeCompare(y.eid)).map(g => {
     g.bets.sort((x, y) => { const fx = first(x), fy = first(y); return fx[0] - fy[0] || fx[1] - fy[1] || x.t - y.t; });
-  }
-  return groups;
+    return { ...g, ...openTotals(g.bets) };
+  });
 }
 
 /** How far the odds of now are from the ones the original printed, as a share (-0.074 is 7.4% lower). The whole bet is
@@ -100,12 +117,13 @@ export function periodBets(done: Bet[], period: unknown, now: number): { bets: B
   return { bets: done, event: null };
 }
 
-/** What closed by itself after a moment: how many bets, the result, and the same by origin. A cashout is left out:
- *  the person did that one and saw it. */
-export function sinceSummary(bets: Bet[], since: unknown): { n: number; pnl: number; by: { k: string; n: number; pnl: number }[] } {
+/** What closed by itself after a moment: how many bets, the result (in money, and in units for the `unitBets` of them
+ *  that have a unit), and the same by origin. A cashout is left out: the person did that one and saw it. */
+export function sinceSummary(bets: Bet[], since: unknown): { n: number; pnl: number; units: number; unitBets: number; by: { k: string; n: number; pnl: number }[] } {
   const t = Number(since) || 0, closed = bets.filter(b => (b.status === 'won' || b.status === 'lost' || b.status === 'void') && (b.settledAt || 0) > t);
   const m = new Map<string, { k: string; n: number; pnl: number }>();
   for (const b of closed) { const k = b.from || '', r = m.get(k) || { k, n: 0, pnl: 0 }; r.n++; r.pnl += b.payout - b.stake; m.set(k, r); }
   const by = [...m.values()].map(r => ({ ...r, pnl: r2(r.pnl) })).sort((a, b) => b.n - a.n || a.k.localeCompare(b.k));
-  return { n: closed.length, pnl: r2(closed.reduce((a, b) => a + b.payout - b.stake, 0)), by };
+  const withUnit = closed.filter(b => (b.unit || 0) > 0);
+  return { n: closed.length, pnl: r2(closed.reduce((a, b) => a + b.payout - b.stake, 0)), units: Math.round(withUnit.reduce((a, b) => a + (b.payout - b.stake) / b.unit!, 0) * 1e4) / 1e4, unitBets: withUnit.length, by };
 }

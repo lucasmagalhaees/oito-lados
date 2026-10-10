@@ -9,8 +9,8 @@ import { cashout, CASHOUT_MARGIN } from './cashout';
 import { balanceOf, convertState, fxRate, normFx } from './fx';
 import { LONG_MULTI, maskMoney, maskUnits, moneyText, parseMoney, parseUnits, stepUnits, suggestedUnits, unitPct, unitsText, unitValue } from './money';
 import { completeTip, edgeSummary, parseTip, printedEdge, tipStake } from './tip';
-import { byOrigin, copyDrop, dupBets, exposure, openByEvent, periodBets, renameOrigin, selSig, sinceSummary } from './history';
+import { byOrigin, copyDrop, dupBets, exposure, openByEvent, openTotals, periodBets, renameOrigin, selSig, sinceSummary } from './history';
 
-export const Core = { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, sideOf, overUnder, isWomens, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipStake, completeTip, printedEdge, edgeSummary, selSig, dupBets, exposure, openByEvent, copyDrop, byOrigin, renameOrigin, periodBets, sinceSummary, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, suggestedUnits, stepUnits, LONG_MULTI, parseTip, ML };
+export const Core = { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, sideOf, overUnder, isWomens, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipStake, completeTip, printedEdge, edgeSummary, selSig, dupBets, exposure, openByEvent, openTotals, copyDrop, byOrigin, renameOrigin, periodBets, sinceSummary, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, suggestedUnits, stepUnits, LONG_MULTI, parseTip, ML };
 export type * from './types';
-export type { OpenGroup, OriginRow, Period } from './history';
+export type { OpenGroup, OpenTotals, OriginRow, Period } from './history';

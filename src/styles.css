@@ -281,7 +281,14 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .impop .st.ref{color:var(--muted)}
 .impop .brief{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)}
 .impop .amt{flex:none;font-size:13px;font-weight:600}
-.grp + .grpsum{margin:-2px 0 10px}
+.tot{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 8px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;padding:10px 12px;margin:0 0 10px}
+.tot .hint{grid-column:1 / -1}
+.tot div{min-width:0}
+.tot small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tot b{font-weight:700;overflow-wrap:anywhere}
+.gain{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px}
+.gain small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.gain b{font-weight:700;text-align:right;overflow-wrap:anywhere}
 .impop .via{font-size:12px;color:var(--gold)}
 .impop .via button{text-decoration:underline;color:inherit}
 .impop .fix,.impop .fixed,.impgone button,.impforced button{font-size:12px}

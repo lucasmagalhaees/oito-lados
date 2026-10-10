@@ -29,6 +29,8 @@ export const signed = (v: number): string => (v > 0.004 ? '+' : v < -0.004 ? '�
 export const fo = (o: unknown): string => Number(o).toFixed(2);
 export const fu = (x: number): string => (Math.round(x * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'u';
 export const signedU = (x: number): string => (x > 0.004 ? '+' : x < -0.004 ? '−' : '') + fu(Math.abs(x));
+/** A gain or a result in money and, when there are units behind it, in units too: "+R$ 150,00 · +1,5u". */
+export const signedBoth = (v: number, units: number | null): string => signed(v) + (units == null ? '' : ' · ' + signedU(units));
 export const pctText = (v: unknown): string => String(v).replace('.', ',');
 /** A share as a signed percentage with one decimal: 0.0119 is "+1,2%". */
 export const signedPct = (d: number): string => { const v = Math.round(d * 1000) / 10; return (v > 0 ? '+' : v < 0 ? '−' : '') + pctText(Math.abs(v).toFixed(1)) + '%'; };

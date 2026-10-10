@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.13.0] - 2026-10-10
+
+### Adicionado
+- Ganho possível (retorno menos a stake), em dinheiro e em unidades: em cada aposta aberta, no quadro de cada evento, no total em aberto, na Carteira, no cupom e na lista de copiar (por item e no lote).
+- Quadro "Tudo em aberto" na aba Apostas quando há apostas em mais de um evento.
+- Unidades na marca do card da luta, no aviso de quanto já está em jogo numa luta, no resultado de cada aposta encerrada, nas tabelas por mercado e por evento e na faixa "Desde a última vez".
+
+### Alterado
+- O total de cada evento na aba Apostas deixou de ser uma linha de texto e virou um quadro com em jogo, retorno e ganho.
+
 ## [0.12.0] - 2026-10-10
 
 ### Adicionado

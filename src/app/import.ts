@@ -1,7 +1,7 @@
 import { Core } from '../core';
 import { loadOdds } from './api';
-import { $, dWhen, esc, fo, fu, money, parseMoney, part, pctText, sym } from './format';
-import { canBet, exposureNotes, priceOf, setStakeMoney, setStakeUnits, slipCalc, sum, wallet } from './helpers';
+import { $, dWhen, esc, fo, fu, money, parseMoney, part, pctText, signedBoth, sym } from './format';
+import { canBet, exposureNotes, payoutOf, priceOf, setStakeMoney, setStakeUnits, slipCalc, sum, wallet } from './helpers';
 import { recheck, render, renderSheet, sideDot, toast, writeBets } from './render';
 import { D, S, imp, saveCache, saveS, slip, ui } from './state';
 import type { Bet, Fight, Priced, Pricing, Tip, TipItem, TipPick, TipProblem, TipStake } from '../core';
@@ -132,6 +132,8 @@ function impResolve(o: ImportOp): Resolved {
 export const TIP_HINT = { money: 'o valor é o mesmo do print.', units: 'a stake é a do print, na sua unidade; print que não diz unidades entra com 1u.' };
 /** A stake said both ways, the way the setting asks for it first: units and money, or money and units. */
 const stakeBoth = (value: number, unit: number): string => !(unit > 0) ? money(value) : S.stakeIn === 'units' ? `${fu(value / unit)} · ${money(value)}` : `${money(value)} · ${fu(value / unit)}`;
+/** What an item of the list comes back as if it wins, at the odds of now and at its stake; null while it has no price. */
+const payOf = (r: Resolved): number | null => r.value > 0 ? payoutOf(r.ok.map(k => ({ s: { fid: k.f.id, key: k.it.key }, f: k.f, x: k.x, ok: true })), r.mode, r.value) : null;
 let opSeq = 0, photoSeq = 0;
 const newOp = (src: ImportOp['src'], name: string, res: Tip, text: string): ImportOp => ({ id: ++opSeq, src, name, res, text, picks: [], noauto: [], stake: null, mode: null, edits: {}, swap: null, force: false, open: null });
 const opOf = (id: number): ImportOp | undefined => imp.ops.find(o => o.id === id);
@@ -208,6 +210,7 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
       const pr = via === 'read' && o.swap === at ? priceOf(f) : null;
       if (pr) h += `<select class="impedit" ${mine} aria-label="Trocar a seleção em ${esc(f.a.last)} x ${esc(f.b.last)}"><option value="">Trocar por…</option>${marketOptions(pr)}<option value="__drop">Tirar esta seleção</option></select>`;
     }
+    const spent = r.mode === 'single' ? Core.r2(r.value * r.ok.length) : r.value, pay = payOf(r);
     const src = { units: `${fu(r.units || 0)} do print`, same: 'mesmo valor do print', default: 'o print não diz o valor, considerei 1u', one: `1u, pela sua configuração${r.shown ? `: o print só traz ${money(r.shown)}, que não é copiado` : ''}` }[r.how];
     // the odd the original gives for the whole multiple, next to what the same selections pay now (different fights multiply)
     const fights = new Set(r.ok.map(k => k.f.id)), all = r.ok.length === r.tip.items.length && !r.tip.problems.length && fights.size === r.ok.length;
@@ -215,7 +218,7 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
     // when the original gives the odd of the bet and every selection has its own, they should multiply to it
     const each = r.ok.map(k => k.it.printedOdd), prod = each.every(Boolean) ? Math.round(each.reduce((p: number, v) => p * (v as number), 1) * 1000) / 1000 : 0;
     const check = r.tip.odd && all && prod && r.ok.length > 1 ? `<p class="hint impcheck">Conferência: ${each.map(v => String(v)).join(' × ')} = ${prod}${Math.abs(prod / r.tip.odd - 1) <= 0.006 ? ', bate com o cupom.' : `, não bate com o cupom (${r.tip.odd}).`}</p>` : '';
-    h += `</div><dl class="sum" style="margin-top:10px"><dt>Tipo</dt><dd class="impkind">${KIND(r)}</dd><dt>${r.mode === 'single' && r.ok.length > 1 ? 'Valor de cada uma' : 'Valor'}</dt><dd class="impvalue"${i ? '' : ' id="impvalue"'}>${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${o.stake ? 'valor que você escreveu' : src}${r.also ? ` · ${r.also}` : ''}</dd>${betOdd}</dl>${check}`;
+    h += `</div><dl class="sum" style="margin-top:10px"><dt>Tipo</dt><dd class="impkind">${KIND(r)}</dd><dt>${r.mode === 'single' && r.ok.length > 1 ? 'Valor de cada uma' : 'Valor'}</dt><dd class="impvalue"${i ? '' : ' id="impvalue"'}>${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${o.stake ? 'valor que você escreveu' : src}${r.also ? ` · ${r.also}` : ''}</dd>${betOdd}${pay != null && r.value > 0 ? `<dt>Ganho se ${r.mode === 'single' && r.ok.length > 1 ? 'todas baterem' : 'bater'}</dt><dd class="impgain">${signedBoth(pay - spent, r.unit > 0 ? (pay - spent) / r.unit : null)}</dd>` : ''}</dl>${check}`;
     if (!(r.value > 0)) h += '<p class="msg">Sem banca não dá pra calcular a unidade. Deposita primeiro; as seleções vão pro cupom sem valor.</p>';
     // what can be changed here, without going through the slip: the value, and single or multiple
     const inU = r.unit > 0 ? (r.units != null && r.how !== 'same' ? r.units : r.value / r.unit) : 0, step = (d: number, t: string): string => `<button class="step" data-act="impstep" data-op="${o.id}" data-d="${d}" aria-label="${d > 0 ? 'Meia unidade a mais' : 'Meia unidade a menos'}">${t}</button>`;
@@ -269,7 +272,8 @@ export function renderImport(): void {
       if (out) h += `<p class="hint" id="impout">${out === 1 ? '1 da lista fica de fora' : `${out} da lista ficam de fora`} do "apostar todas": falta alguma seleção, odd ou valor, já está apostada, a odd caiu, ou é só uma lista de referência. Dá pra levar pro cupom uma a uma.</p>`;
       if (ready.length) {
         const u = wallet().unit;
-        h += `<dl class="sum"><dt>${bets} ${bets > 1 ? 'apostas' : 'aposta'}</dt><dd class="big"><span id="imptotal">${money(total)}</span>${u > 0 ? ` <small id="imptotalu">${fu(total / u)}</small>` : ''}</dd></dl>`;
+        const pays = ready.map(x => payOf(x.r)), back = pays.every(v => v != null) ? Core.r2(sum(pays, v => v as number)) : null;
+        h += `<dl class="sum"><dt>${bets} ${bets > 1 ? 'apostas' : 'aposta'}</dt><dd class="big"><span id="imptotal">${money(total)}</span>${u > 0 ? ` <small id="imptotalu">${fu(total / u)}</small>` : ''}</dd>${back != null ? `<dt>Retorno se ${bets > 1 ? 'todas baterem' : 'bater'}</dt><dd id="impret">${money(back)}</dd><dt>Ganho</dt><dd id="impgain">${signedBoth(back - total, u > 0 ? (back - total) / u : null)}</dd>` : ''}</dl>`;
         if (total > bal + 0.004) h += `<p class="msg" id="impshort">Saldo insuficiente: você tem ${money(bal)}.</p>`;
         if (imp.msg) h += `<p class="msg" id="impmsg">${esc(imp.msg)}</p>`;
         h += `<button class="btn block" data-act="impall" ${imp.placing || total > bal + 0.004 ? 'disabled' : ''}>${imp.placing ? 'Conferindo odds…' : ready.length > 1 ? `Apostar as ${ready.length} de uma vez` : 'Apostar a que está pronta'}</button>`;

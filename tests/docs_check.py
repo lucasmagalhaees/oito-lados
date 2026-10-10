@@ -198,6 +198,14 @@ check('the units field steps by half a unit, in the slip and in the copy list', 
 check('the paste button reads text only, and says so when it cannot', 'navigator.clipboard.readText()' in imp_src and 'data-act="imppaste"' in imp_src and '`navigator.clipboard.readText`' in spec)
 check('the stake rule, the suggestion and the steps have tests', all(w in unit_src for w in ("how: 'one'", 'Core.suggestedUnits', 'Core.stepUnits')))
 
+# 5d1g. return and gain: what comes back and what is won, said in money and in units wherever money at stake is shown
+rend_src = read('src/app/render.ts'); help_src = read('src/app/helpers.ts')
+check('the totals of open bets have tests and are in the spec', 'Core.openTotals' in unit_src and '`Core.openTotals`' in spec and 'openTotals' in read('src/core/index.ts'))
+check('the gain is the return less the stake, each bet by the unit it was placed with', "t.gainUnits += (ret - b.stake) / b.unit" in hist and "t.gain = r2(t.ret - t.stake)" in hist and 'ganho é o retorno menos a stake' in spec)
+check('every event and everything open get the same totals, and an open bet says its gain', rend_src.count('totalsHtml(') == 3 and "totalsHtml(Core.openTotals(open), 'opentot')" in rend_src and '<small>Ganho se bater</small>' in rend_src and '"Tudo em aberto"' in spec and '"Ganho se bater"' in spec)
+check('the slip and the copy list say the gain too, priced the way the slip prices', 'id="slipgain"' in rend_src and 'id="impgain"' in imp_src and 'class="impgain"' in imp_src and 'export function payoutOf' in help_src and 'payoutOf(' in imp_src and '`payoutOf`' in spec)
+check('the wallet and the fight card say the units at stake', 'id="heropot"' in rend_src and "ex.unitBets ? ' · ' + fu(ex.units) : ''" in rend_src and '"N apostas · R$ X · Yu"' in spec)
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

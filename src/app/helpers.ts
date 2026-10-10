@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { openBets } from './api';
-import { $, H, money, parseMoney } from './format';
+import { $, H, fu, money, parseMoney } from './format';
 import { D, S, slip } from './state';
 import type { Bet, Fight, FightStats, Priced, Pricing } from '../core';
 
@@ -55,8 +55,8 @@ export interface SlipCalc {
   rs: Resolved[]; ok: boolean; groups: SlipGroup[]; multiOk: boolean; sameFight: boolean; stake: number; n: number; odd: number;
   total: number; ret: number; balance: number; unit: number; unitPct: number;
 }
-export function slipCalc(): SlipCalc {
-  const rs = resolveSlip(), ok = rs.length > 0 && rs.every(r => r.ok), n = rs.length;
+/** Selections by fight, each fight with its price: the odd of a lone selection, or the one of the same-fight combo. */
+export function groupsOf(rs: Resolved[]): SlipGroup[] {
   const groups: SlipGroup[] = [];                      // one per fight; two or more selections in a fight are priced together
   for (const r of rs) { let g = groups.find(x => x.fid === r.s.fid); if (!g) groups.push(g = { fid: r.s.fid, f: r.f, rs: [] }); g.rs.push(r); }
   for (const g of groups) {
@@ -66,6 +66,19 @@ export function slipCalc(): SlipCalc {
     g.combo = true; g.ok = c.ok;
     if (c.ok) { g.odd = c.odd; g.same = c.same; } else g.why = c.why;
   }
+  return groups;
+}
+/** What a stake on these selections comes back as if it wins, priced the way the slip prices it: one multiple (each
+ *  fight once, a same-fight combo at its own price), or one single per selection. Null when it has no price as asked. */
+export function payoutOf(rs: Resolved[], mode: 'single' | 'multi', stake: number): number | null {
+  if (!rs.length || !rs.every(r => r.ok)) return null;
+  if (mode === 'single' || rs.length === 1) return Core.r2(sum(rs, r => Core.r2(stake * r.x!.odd)));
+  const groups = groupsOf(rs);
+  return groups.every(g => g.ok) ? Core.r2(stake * Core.r2(groups.reduce((p, g) => p * g.odd!, 1))) : null;
+}
+export function slipCalc(): SlipCalc {
+  const rs = resolveSlip(), ok = rs.length > 0 && rs.every(r => r.ok), n = rs.length;
+  const groups = groupsOf(rs);
   const multiOk = ok && n >= 2 && groups.every(g => g.ok);
   if (slip.mode === 'multi' && !multiOk) slip.mode = 'single';
   const w = wallet();
@@ -84,7 +97,7 @@ export function exposureNotes(sels: { fid: string; key: string }[]): string[] {
     const f = D.fights.get(fid), ex = Core.exposure(S.bets, fid); if (!f || !ex.n) continue;
     const mine = sels.filter(s => s.fid === fid).map(s => s.key), p = priceOf(f), names = `${f.a.last} x ${f.b.last}`;
     const against = p ? ex.held.filter(h => p.J.prob([...mine, ...h.keys]) < 1e-9) : [];
-    notes.push(`Você já tem ${money(ex.stake)} em jogo em ${names}, em ${ex.n} ${ex.n > 1 ? 'apostas abertas' : 'aposta aberta'}.` +
+    notes.push(`Você já tem ${money(ex.stake)}${ex.unitBets ? ` (${fu(ex.units)})` : ''} em jogo em ${names}, em ${ex.n} ${ex.n > 1 ? 'apostas abertas' : 'aposta aberta'}.` +
       (against.length ? ` Esta vai contra ${against.length > 1 ? 'algumas delas' : 'ela'}: ${against.map(h => h.sel).join('; ')}.` : ''));
   }
   return notes;
