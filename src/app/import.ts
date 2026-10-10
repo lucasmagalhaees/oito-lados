@@ -128,7 +128,7 @@ function impResolve(o: ImportOp): Resolved {
 // what is copied from the original follows the one setting for stakes (money: the same amount; units: the same stake)
 export const TIP_HINT = { money: 'o valor é o mesmo do print.', units: 'a stake é a mesma do print, na sua unidade.' };
 let opSeq = 0, photoSeq = 0;
-const newOp = (src: ImportOp['src'], name: string, res: Tip, text: string): ImportOp => ({ id: ++opSeq, src, name, res, text, picks: [], noauto: [], stake: null, mode: null, edits: {}, swap: null, force: false });
+const newOp = (src: ImportOp['src'], name: string, res: Tip, text: string): ImportOp => ({ id: ++opSeq, src, name, res, text, picks: [], noauto: [], stake: null, mode: null, edits: {}, swap: null, force: false, open: null });
 const opOf = (id: number): ImportOp | undefined => imp.ops.find(o => o.id === id);
 const label = (o: ImportOp): string => o.src === 'image' ? o.name : 'Texto';
 /** Every market of a fight as the choices of a select, with the odd of now. */
@@ -172,10 +172,25 @@ export async function importImages(files: File[]): Promise<void> {
 /** The bets of the list that can be made as they stand, each with what it resolves to right now. */
 const readyOps = (): { o: ImportOp; r: Resolved }[] => imp.ops.map(o => ({ o, r: impResolve(o) })).filter(x => x.r.whole);
 const KIND = (r: Resolved): string => r.mode === 'multi' ? `Múltipla de ${r.ok.length} seleções` : r.ok.length > 1 ? `${r.ok.length} apostas simples` : r.tip.kind === 'multi' ? 'Múltipla (só uma seleção lida)' : 'Simples';
+/** Where one item of the list stands, in a word or two: what its folded line says. */
+function standing(r: Resolved): { text: string; cls: 'ok' | 'ref' | 'wait' } {
+  if (r.ref) return { text: 'referência', cls: 'ref' };
+  if (r.whole) return { text: 'pronta', cls: 'ok' };
+  if (r.missing.length) return { text: 'falta seleção', cls: 'wait' };
+  if (!r.ok.length || r.notes.length) return { text: 'conferir', cls: 'wait' };
+  if (r.dups.length) return { text: 'já apostada', cls: 'wait' };
+  if (r.twin) return { text: 'repetida', cls: 'wait' };
+  if (r.low) return { text: 'odd caiu', cls: 'wait' };
+  return { text: r.how === 'default' ? 'sem valor' : 'conferir', cls: 'wait' };
+}
 function opBlock(o: ImportOp, i: number, many: boolean): string {
   const r = impResolve(o), iu = S.stakeIn === 'units' && r.unit > 0;
-  let h = `<div class="impop" data-op="${o.id}">`;
-  if (many) h += `<div class="oph"><span class="label">${esc(label(o))}</span><button class="x" data-act="impdrop" data-op="${o.id}" aria-label="Tirar da lista">×</button></div>`;
+  // in a list of several each item is one line that unfolds: what needs a look starts unfolded, the rest folded
+  if (o.open == null) o.open = !(r.whole || r.ref);
+  const open = !many || o.open, st = standing(r);
+  let h = `<div class="impop${open ? '' : ' folded'}" data-op="${o.id}">`;
+  if (many) h += `<div class="oph"><button class="fold" data-act="impopen" data-op="${o.id}" aria-expanded="${open}"><span class="label">${esc(label(o))}</span><span class="st ${st.cls}">${st.text}</span>${open ? '' : `<span class="brief">${esc(r.ok.map(k => k.x.sel).join(' + ') || 'nada lido')}</span>${r.ok.length && r.value > 0 && r.how !== 'default' ? `<span class="amt">${money(r.mode === 'single' ? r.value * r.ok.length : r.value)}</span>` : ''}`}</button><button class="x" data-act="impdrop" data-op="${o.id}" aria-label="Tirar da lista">×</button></div>`;
+  if (!open) return h + '</div>';
   if (r.ok.length) {
     h += `<div class="impres"${i ? '' : ' id="impres"'}>`;
     for (const { it, f, x, via, i: at } of r.ok) {
@@ -344,6 +359,8 @@ export function forceFor(id: number): void { const o = opOf(id); if (!o) return;
 export function fixText(id: number): void { const o = opOf(id); if (!o) return; imp.text = o.text; imp.ops = imp.ops.filter(x => x !== o); imp.msg = ''; renderImport(); const el = $<HTMLTextAreaElement>('#imptext'); if (el) el.focus(); }
 /** An origin used before, chosen with a tap; a second tap takes it off. */
 export function setFrom(v: string): void { imp.from = imp.from.trim() === v ? '' : v; renderImport(); }
+/** Unfolds or folds one item of the list. */
+export function openFor(id: number): void { const o = opOf(id); if (!o) return; o.open = !o.open; renderImport(); }
 export function modeFor(id: number, mode: string | undefined): void { const o = opOf(id); if (!o) return; o.mode = mode === 'single' ? 'single' : 'multi'; imp.msg = ''; renderImport(); }
 /** Empties the copy screen: the text, the list, who it is from and any message. */
 export function clearImport(): void { imp.text = ''; imp.ops = []; imp.err = ''; imp.msg = ''; imp.from = ''; photoSeq = 0; renderImport(); }

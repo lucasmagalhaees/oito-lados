@@ -279,6 +279,17 @@ with sync_playwright() as p:
     pg.set_input_files('#impfile', [str(SHOTS / n) for n in ('print.png', 'simples.png', 'acumulada.png', 'lista.png')])
     pg.wait_for_function('document.querySelectorAll(".impop").length === 4 && !document.querySelector("#impfile").disabled', timeout=240000)
     assert [t.lower() for t in pg.locator('.impop .oph .label').all_inner_texts()] == ['foto 1', 'foto 2', 'foto 3', 'foto 4'], 'pictures are numbered; a phone gives them names nobody can read'
+    # each item of a list is one line: what is ready, or only a reference, starts folded, with what it is and where it stands
+    assert pg.locator('.impop.folded').count() == 4 and pg.locator('.impres').count() == 0 and [t.lower() for t in pg.locator('.impop .st').all_inner_texts()] == ['pronta', 'pronta', 'pronta', 'referência'], pg.locator('.impop .st').all_inner_texts()
+    assert pg.locator('.impop .brief').all_inner_texts() == ['Connor Lee Dunne vence', 'Dario Kessler vence', 'Marina Teles vence + Connor Lee Dunne vence', 'Marina Teles vence + Connor Lee Dunne vence'], pg.locator('.impop .brief').all_inner_texts()
+    assert [t.replace('\xa0', ' ') for t in pg.locator('.impop .amt').all_inner_texts()] == ['R$ 250,00', 'R$ 100,00', 'R$ 80,00'], 'the value is on the line whole; the list with no value has none'
+    assert all(pg.evaluate('e => e.getBoundingClientRect().right <= e.closest(".oph").getBoundingClientRect().right', e) for e in pg.locator('.impop .amt').element_handles()), 'and it is never pushed off the line by a long selection'
+    assert txt('#imptotal') == 'R$ 430,00' and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; shot('s33-lista-recolhida.png')
+    opn(1).locator('[data-act=impopen]').click(); assert opn(1).locator('.impres').count() == 1 and pg.locator('.impop.folded').count() == 3 and opn(1).locator('.brief').count() == 0
+    opn(1).locator('[data-act=impopen]').click(); assert pg.locator('.impop.folded').count() == 4
+    def unfold():                                                   # the rest of this walk-through looks inside every item
+        while pg.locator('[data-act=impopen][aria-expanded=false]').count(): pg.locator('[data-act=impopen][aria-expanded=false]').first.click()
+    unfold()
     assert pg.locator('.impkind').all_inner_texts() == ['Simples', 'Simples', 'Múltipla de 2 seleções', 'Múltipla de 2 seleções'], pg.locator('.impkind').all_inner_texts()
     assert [v.replace('\xa0', ' ') for v in pg.locator('.impvalue').all_inner_texts()] == ['R$ 250,00 · 2,5u', 'R$ 100,00 · 1u', 'R$ 80,00 · 0,8u', 'R$ 100,00 · 1u'], pg.locator('.impvalue').all_inner_texts()
     assert 'Dario Kessler vence' in ot(1, '.impres') and 'Odd do print 2.70 · odd agora 2.70' in ot(1, '.impres'), 'V2 is the second name on the slip line: ' + ot(1, '.impres')
@@ -357,6 +368,14 @@ with sync_playwright() as p:
     assert made == [['single', 250, 2.05, 'Canal do Zé', None, [['ml:b', 2.05, 2.05]]], ['single', 150, 2.5, 'Canal do Zé', None, [['ml:b', 2.5, 2.7]]],
                     ['multi', 80, 3.42, 'Canal do Zé', 3.424, [['ml:a', 1.67, 1.67], ['ml:b', 2.05, 2.05]]]], made
     assert '3 apostas feitas' in pg.inner_text('#toast') and bal().replace('\xa0', ' ') == 'R$ 520,00', (pg.inner_text('#toast'), bal())
+    # open bets go by event, in the order the fights happen, with what is at stake and what the event can pay
+    assert pg.locator('.grp').count() == 1 and 'almeida vs. dunne' in txt('.grp').lower() and txt('.grpsum') == '3 apostas · R$ 480,00 em jogo · R$ 1.161,10 se todas baterem', (txt('.grp'), txt('.grpsum'))    # 512,50 + 375,00 + 273,60
+    assert [b.locator('.leg b').first.inner_text() for b in pg.locator('.bet').all()] == ['Marina Teles vence', 'Dario Kessler vence', 'Connor Lee Dunne vence'], 'the bet whose first fight comes first is on top'
+    # and each fight on the card says what is already riding on it, a tap away from the bets
+    pg.click('.tabbar [data-tab=lutas]')
+    assert {f: txt(f'.chip.mine[data-fid="{f}"]') for f in ('f1', 'f2', 'f3')} == {'f1': '1 aposta · R$ 80,00', 'f2': '1 aposta · R$ 150,00', 'f3': '2 apostas · R$ 330,00'}, 'the multiple counts whole on each of its fights'
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; shot('s34-apostas-na-luta.png')
+    pg.click('.chip.mine[data-fid="f3"]'); assert pg.evaluate('window.__OL.ui.tab') == 'apostas' and pg.locator('.grp').count() == 1
     assert pg.evaluate('document.getElementById("sheet").hidden') and pg.evaluate('window.__OL.ui.tab') == 'apostas', 'everything was bet and the reference list went with it: the list is empty and closes'
     # the bets say where they came from and how the odd taken compares with the printed one
     notes = [t.replace('\xa0', ' ') for t in pg.locator('.bet .src').all_inner_texts()]
@@ -367,7 +386,7 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=carteira]')
     assert 'em 3 apostas copiadas com odd no original, você pegou em média −2,5% em relação ao print (0 acima)' in txt('#edge'), txt('#edge')
     cells = lambda tr: [' | '.join(x.strip() for x in c.replace('\xa0', ' ').split('\n') if x.strip()) for c in tr.locator('td').all_inner_texts()]
-    assert cells(pg.locator('#origins tbody tr').first) == ['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00', '0,0%', '—'], pg.locator('#origins').inner_text()
+    assert cells(pg.locator('#origins tbody tr').first) == ['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00 | 0u', '0,0%', '—'], pg.locator('#origins').inner_text()
     assert pg.evaluate('(e => e.scrollWidth - e.clientWidth)(document.getElementById("origins"))') == 0, 'the table by origin fits the phone, with no column hidden to the side'
     # an origin can be given another name; without a new name nothing changes
     froms = lambda: pg.evaluate('[...new Set(window.__OL.S.bets.map(b => b.from).filter(Boolean))]')
@@ -404,7 +423,7 @@ with sync_playwright() as p:
     pg.click(f'[data-act=cash][data-id="{hid}"]'); pg.click(f'[data-act=docash][data-id="{hid}"]'); pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{hid}").status === "cashed"')
     pg.click('.tabbar [data-tab=carteira]')
     rows = [cells(tr) for tr in pg.locator('#origins tbody tr').all()]
-    assert rows == [['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00', '0,0%', '—'], ['Sem origem | 1 aposta · R$ 40,00', 'R$ 0,00', '0,0%', '—']], rows
+    assert rows == [['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00 | 0u', '0,0%', '—'], ['Sem origem | 1 aposta · R$ 40,00', 'R$ 0,00 | 0u', '0,0%', '—']], rows
     assert pg.evaluate('(e => e.scrollWidth - e.clientWidth)(document.getElementById("origins"))') == 0
     pg.locator('#origins').scroll_into_view_if_needed(); shot('s28-por-origem.png'); pg.click('.tabbar [data-tab=lutas]')
     # the slip can change between the copy and the bet: the odd of the whole bet is kept only while the selections are still the ones of the print
@@ -421,7 +440,10 @@ with sync_playwright() as p:
     pg.wait_for_function('document.querySelectorAll(".impop").length === 3 && !document.querySelector("#impfile").disabled', timeout=240000)
     assert [t.lower() for t in pg.locator('.impop .oph .label').all_inner_texts()] == ['foto 1', 'foto 2', 'foto 3'], 'an emptied list counts its pictures from one again'
     assert 'Você já tem esta aposta aberta: R$ 150,00, feita em' in ot(0, '.impdup') and 'A odd caiu 7,4%' in ot(0, '.implow'), ot(0, '.impdup')
-    assert ot(1, '.impdup') == 'Você já tem 2 apostas abertas iguais a esta.' and opn(1).locator('.impexpo').count() == 0 and 'serviu pra completar' in ot(2, '.impref'), ot(1, '.impdup')
+    assert ot(1, '.impdup') == 'Você já tem 2 apostas abertas iguais a esta.' and opn(1).locator('.impexpo').count() == 0, ot(1, '.impdup')
+    # what needs a look starts unfolded and says why on its line; the list that only completes another one stays folded
+    assert [t.lower() for t in pg.locator('.impop .st').all_inner_texts()] == ['já apostada', 'já apostada', 'referência'] and pg.locator('.impop.folded').count() == 1 and opn(2).locator('.impref').count() == 0, pg.locator('.impop .st').all_inner_texts()
+    opn(2).locator('[data-act=impopen]').click(); assert 'serviu pra completar' in ot(2, '.impref'); opn(2).locator('[data-act=impopen]').click()
     assert '3 da lista ficam de fora' in txt('#impout') and pg.locator('[data-act=impall]').count() == 0, txt('.impall')
     opn(1).scroll_into_view_if_needed(); shot('s31-ja-apostada.png')
     opn(0).locator('[data-act=impforce]').click(); assert txt('[data-act=impall]') == 'Apostar a que está pronta' and txt('#imptotal') == 'R$ 100,00', txt('.impall')
@@ -606,6 +628,10 @@ with sync_playwright() as p:
     assert units.startswith('+6,1u'), units                   # R$ 609,59 of profit with every bet placed at a R$ 100,00 unit
     # the figures can cover a period; every bet here closed today, on one event, so the numbers are the same in all three
     whole = txt('.pnl'); assert pg.locator('#periodev').count() == 0 and [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()] == ['Sem origem', 'Canal do Zé']
+    # each origin also has its result in units, every bet by the unit it was placed with: the two add up to the whole
+    inu = [float(t.replace('u', '').replace('−', '-').replace('+', '').replace(',', '.')) for t in pg.locator('#origins .inu').all_inner_texts()]
+    byjs = pg.evaluate('["", "Canal do Zé"].map(k => window.__OL.S.bets.filter(b => (b.from || "") === k).reduce((a, b) => a + (b.payout - b.stake) / b.unit, 0))')
+    assert len(inu) == 2 and all(abs(a - b) < 0.006 for a, b in zip(inu, byjs)) and abs(sum(inu) - 6.1) < 0.02 and inu[1] != 0, (inu, byjs)
     pg.click('[data-act=period][data-m="30d"]'); assert 'últimos 30 dias' in txt('#periodev') and txt('.pnl') == whole and pg.locator('#chart svg').count() == 1
     pg.click('[data-act=period][data-m=event]'); assert 'o evento da aposta que fechou por último' in txt('#periodev') and txt('.pnl') == whole, txt('#periodev')
     pg.click('[data-act=period][data-m=all]'); assert pg.locator('#periodev').count() == 0

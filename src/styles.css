@@ -97,6 +97,8 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .tag{font-weight:700;color:var(--gold);letter-spacing:.07em;text-transform:uppercase;font-size:11px}
 .chip{margin-left:auto;font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:6px}
 .chip.live{color:var(--live)}
+.chip.mine{color:var(--gold);border:1px solid var(--line);border-radius:999px;padding:3px 9px;min-height:24px}
+.chip + .chip{margin-left:0}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--live);animation:pulse 1.2s infinite;flex:none}
 @keyframes pulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -266,6 +268,14 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .impop{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
 .impop .oph{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .impop .oph .x{width:32px;height:32px;font-size:20px}
+.impop .oph .fold{flex:1;min-width:0;min-height:36px;display:flex;align-items:center;gap:8px;text-align:left}
+.impop .oph .fold .label{flex:none}
+.impop .st{flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--fg)}
+.impop .st.wait{color:var(--gold);border-color:var(--gold)}
+.impop .st.ref{color:var(--muted)}
+.impop .brief{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)}
+.impop .amt{flex:none;font-size:13px;font-weight:600}
+.grp + .grpsum{margin:-2px 0 10px}
 .impop .via{font-size:12px;color:var(--gold)}
 .impop .via button{text-decoration:underline;color:inherit}
 .impop .fix,.impop .fixed,.impgone button,.impforced button{font-size:12px}

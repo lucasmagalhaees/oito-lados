@@ -3,7 +3,7 @@ import { loadOdds } from './api';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
-import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, swapFor, uneditFor, unpickFor } from './import';
+import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, swapFor, uneditFor, unpickFor } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
 import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
@@ -107,6 +107,7 @@ document.addEventListener('click', e => {
   else if (a === 'impunpick') unpickFor(Number(d.op), d.fid as string);
   else if (a === 'impmode') modeFor(Number(d.op), d.m);
   else if (a === 'impswap') swapFor(Number(d.op), Number(d.i));
+  else if (a === 'impopen') openFor(Number(d.op));
   else if (a === 'impunedit') uneditFor(Number(d.op), Number(d.i));
   else if (a === 'impforce') forceFor(Number(d.op));
   else if (a === 'impfixtext') { if (!imp.busy && !imp.placing) fixText(Number(d.op)); }

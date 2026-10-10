@@ -2,6 +2,18 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.10.0] - 2026-10-10
+
+### Adicionado
+- Na lista de copiar, cada item é uma linha com a situação, as seleções e o valor, e abre ao toque. O que precisa de atenção já vem aberto.
+- No card da luta, quantas apostas abertas você tem nela e quanto está em jogo.
+- Resultado em unidades por origem, na tabela da Carteira.
+- `tests/core.mjs`: os casos do núcleo rodando no Node, sem navegador, contra o núcleo construído sozinho.
+
+### Alterado
+- As apostas abertas aparecem agrupadas por evento, na ordem das lutas, com o total em jogo e o que o evento paga se todas baterem. Antes vinham da mais recente para a mais antiga.
+- Os casos do núcleo saíram de dentro do `tests/unit.py` para `tests/unit.cases.mjs`.
+
 ## [0.9.0] - 2026-10-10
 
 ### Adicionado

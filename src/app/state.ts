@@ -105,6 +105,9 @@ export interface ImportOp {
   edits: Record<number, string | null>; swap: number | null;
   /** "Bet it anyway": the person saw the warning (already bet, or the odd fell) and wants it in the batch. */
   force: boolean;
+  /** In a list of several, whether the item is unfolded. Null until it is first shown: then the ones that need a look
+   *  start unfolded and the ones that are ready, or only a reference, start as one line. */
+  open: boolean | null;
 }
 /** The copy screen. `ops` is the list of bets read so far; `at` and `of` count the pictures while they are being read. */
 export interface ImportState { open: boolean; text: string; busy: boolean; pct: number; at: number; of: number; ops: ImportOp[]; err: string; msg: string; placing: boolean; from: string }

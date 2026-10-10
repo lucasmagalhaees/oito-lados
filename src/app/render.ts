@@ -97,7 +97,9 @@ function fightCard(f: Fight, isMain: boolean): string {
     const right = can && ml ? optBtn(f, ml, 'ml') : ml ? `<button class="opt ml" disabled><span class="ov">${fo(ml.odd)}</span></button>` : f.state === 'pre' ? '<span class="noodds">sem odds ainda</span>' : '';
     return `<div class="row ${k}"><i class="corner"></i><div class="who"><b>${esc(x.last)}</b><span>${esc(first)}${x.record ? ' · ' + esc(x.record) : ''}${f.state === 'post' && f.winner === k ? ' · <span class="w">venceu</span>' : ''}</span></div>${right}</div>`;
   };
-  let h = `<article class="fight"${cornersAttr(f.weight)}><div class="fh">${isMain ? '<span class="tag">Luta principal</span>' : ''}<span>${esc(WEIGHT[f.weight] || f.weight)} · ${f.rounds} rounds</span>${state}</div>${side('a')}${side('b')}`;
+  // what is already riding on this fight, a tap away from the bets themselves
+  const ex = Core.exposure(S.bets, f.id), mine = ex.n ? `<button class="chip mine" data-act="tab" data-tab="apostas" data-fid="${esc(f.id)}" aria-label="Ver suas apostas nesta luta">${ex.n} ${ex.n > 1 ? 'apostas' : 'aposta'} · ${money(ex.stake)}</button>` : '';
+  let h = `<article class="fight"${cornersAttr(f.weight)}><div class="fh">${isMain ? '<span class="tag">Luta principal</span>' : ''}<span>${esc(WEIGHT[f.weight] || f.weight)} · ${f.rounds} rounds</span>${state}${mine}</div>${side('a')}${side('b')}`;
   if (f.state === 'post') h += `<div class="result">${esc(resultText(f, res))}</div>`;
   else if (f.state === 'in' && D.td[f.id]) h += `<div class="result">Quedas até agora: ${esc(f.a.last)} ${D.td[f.id].a} · ${esc(f.b.last)} ${D.td[f.id].b}</div>`;
   if (can && p) {
@@ -130,8 +132,12 @@ function vApostas(): string {
   let h = `<div class="filter"><button class="${ui.filter === 'open' ? 'on' : ''}" data-act="filter" data-f="open">Abertas (${open.length})</button><button class="${ui.filter === 'done' ? 'on' : ''}" data-act="filter" data-f="done">Encerradas (${done.length})</button></div>`;
   if (origins.some(Boolean)) h += `<div class="quick froms" id="byorigin" role="group" aria-label="Mostrar apostas de uma origem"><button class="${ui.origin == null ? 'on' : ''}" data-act="origin" aria-pressed="${ui.origin == null}">Todas</button>${origins.map(k => `<button class="${ui.origin === k ? 'on' : ''}" data-act="origin" data-v="${esc(k)}" aria-pressed="${ui.origin === k}">${esc(originName(k))}</button>`).join('')}</div>`;
   if (!list.length) return h + `<p class="empty">${ui.origin != null ? `Nenhuma aposta ${ui.filter === 'open' ? 'aberta' : 'encerrada'} ${ui.origin ? 'de ' + esc(ui.origin) : 'sem origem'}.` : ui.filter === 'open' ? 'Nenhuma aposta aberta. Escolhe uma odd em Lutas pra montar o cupom.' : 'Nada encerrado ainda. As apostas fecham sozinhas quando sai o resultado oficial.'}</p>`;
-  for (const b of list) {
-    const isOpen = b.status === 'open';
+  // open bets go by event, in the order the fights happen, each event with what is at stake and what it can pay
+  const groups = ui.filter === 'open' ? Core.openByEvent(open, fid => D.fights.get(fid)?.idx ?? 0) : [];
+  const head = new Map(groups.map(g => [g.bets[0].id, g] as const));
+  for (const b of ui.filter === 'open' ? groups.flatMap(g => g.bets) : list) {
+    const isOpen = b.status === 'open', g = head.get(b.id);
+    if (g) h += `<div class="seg label grp" data-eid="${esc(g.eid)}">${g.eid ? esc(evLabel({ name: g.event }).main) : 'Vários eventos'} · ${esc(dDay.format(g.date))}</div><p class="hint grpsum">${g.bets.length} ${g.bets.length > 1 ? 'apostas' : 'aposta'} · ${money(g.stake)} em jogo · ${money(g.ret)} se ${g.bets.length > 1 ? 'todas baterem' : 'bater'}</p>`;
     const anyLive = isOpen && b.legs.some(l => { const f = D.fights.get(l.fid); return f && f.state === 'in'; });
     const odd = b.odd || Core.r2(b.legs.reduce((p, l) => p * l.odd, 1)), same = isCombo(b);
     h += `<article class="bet"><div class="bh"><b>${b.type === 'multi' ? `${same ? 'Combinada' : 'Múltipla'} · ${b.legs.length} seleções` : 'Simples'}</b><span class="pill ${anyLive ? 'live' : b.status}">${anyLive ? 'Ao vivo' : PILL[b.status]}</span></div>`;
@@ -216,7 +222,7 @@ function tblHtml(title: string, rows: Row[]): string {
 function originHtml(done: Bet[]): string {
   const rows = Core.byOrigin(done, S.bets);
   // four columns are what a phone holds: how many bets, how much was staked and the odd against the print go under the name
-  return `<div class="tbl" id="origins"><table><thead><tr><th>Origem</th><th>Resultado</th><th>ROI</th><th>Acerto</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(originName(r.k))}<small>${r.n} ${r.n > 1 ? 'apostas' : 'aposta'} · ${money(r.st)}${r.k && r.edge.n ? ` · odd ${signedPct(r.edge.avg)} contra o print` : ''}</small></td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}</td><td>${r.st ? signedPct(p / r.st) : '—'}</td><td>${r.dec ? `${r.won}/${r.dec}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
+  return `<div class="tbl" id="origins"><table><thead><tr><th>Origem</th><th>Resultado</th><th>ROI</th><th>Acerto</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(originName(r.k))}<small>${r.n} ${r.n > 1 ? 'apostas' : 'aposta'} · ${money(r.st)}${r.k && r.edge.n ? ` · odd ${signedPct(r.edge.avg)} contra o print` : ''}</small></td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}${r.unitBets ? `<small class="inu">${signedU(r.units)}</small>` : ''}</td><td>${r.st ? signedPct(p / r.st) : '—'}</td><td>${r.dec ? `${r.won}/${r.dec}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 function vCarteira(w: Wallet): string {
   let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div><p>${w.open.length ? `${money(w.atRisk)} em jogo em ${w.open.length} ${w.open.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ` : ''}${money(w.dep)} depositados no total</p></section>`;

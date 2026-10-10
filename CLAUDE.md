@@ -39,7 +39,8 @@ O que cada peça do harness cobre:
 | Peça | Protege contra |
 |---|---|
 | `scripts/verify.sh` | Afirmar que está certo sem ter rodado nada |
-| `tests/unit.py` | Mexer em preço ou liquidação e quebrar uma regra sem notar |
+| `tests/unit.cases.mjs`, rodado por `tests/unit.py` e por `tests/core.mjs` | Mexer em preço ou liquidação e quebrar uma regra sem notar |
+| `tests/core.mjs` (os mesmos casos, no Node, sem página) | O núcleo passar a depender de página, rede ou armazenamento sem ninguém notar |
 | `tests/contract.py` + `tests/fixtures/espn/` | Escrever leitor para um formato de API imaginado |
 | `tests/contract_live.py` (toda semana no GitHub Actions) | A API real mudar e a documentação continuar dizendo o contrário |
 | `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
@@ -61,7 +62,7 @@ O que cada peça do harness cobre:
 - `package.json`, `package-lock.json`, `vite.config.js`, `tsconfig.json`: o build. Sem framework e sem dependência em tempo de execução.
 - `scripts/verify.sh`: o comando único de verificação.
 - `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção está no commit da `main`.
-- `tests/unit.py`: testes do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação).
+- `tests/unit.cases.mjs`: os casos do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação, leitor de apostas, histórico), num arquivo só. Dois executores rodam os mesmos casos: `tests/unit.py`, no navegador, contra a página gerada, e `tests/core.mjs`, no Node, contra o núcleo construído sozinho.
 - `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
@@ -84,7 +85,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 3. Mercados: vencedor, método (KO/TKO, finalização, decisão), rounds, quedas.
 4. Aposta simples, múltipla entre lutas e combinada na mesma luta (com preço coerente, não multiplicação).
 5. Apostas acompanham a luta ao vivo e fecham sozinhas com o resultado oficial.
-6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado, por evento e por origem (de quem a aposta foi copiada), para tudo, para os últimos 30 dias ou para o último evento. A lista de apostas pode mostrar uma origem só.
+6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado, por evento e por origem (de quem a aposta foi copiada, com o resultado em dinheiro e em unidades), para tudo, para os últimos 30 dias ou para o último evento. A lista de apostas pode mostrar uma origem só.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
 8. Cashout: devolve o valor integral enquanto nenhuma luta da aposta foi decidida; com parte da múltipla já batida, oferece um valor de mercado para encerrar. Congela com luta em andamento.
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
@@ -96,7 +97,8 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 15. Tema automático (segue o aparelho), claro ou escuro, escolhido na Carteira. As cores dos cantos têm três pares (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
 16. O app fica guardado no aparelho: abre na hora e também sem internet, com os últimos dados que carregou. Quando uma versão nova é publicada, avisa e troca com um toque.
 17. Ao reabrir o app, um resumo do que fechou sozinho desde a última vez: quantas apostas, o resultado e a quebra por origem.
-18. Antes de apostar numa luta que já tem aposta aberta, o app diz quanto já está em jogo nela e se a aposta nova vai contra a que existe.
+18. Antes de apostar numa luta que já tem aposta aberta, o app diz quanto já está em jogo nela e se a aposta nova vai contra a que existe. No card, a luta mostra quantas apostas abertas tem e quanto está em jogo.
+19. As apostas abertas aparecem agrupadas por evento, na ordem das lutas, com o total em jogo e o que o evento paga se todas baterem.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -157,7 +159,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/core/money.ts` | Máscara e leitura de valores, unidade (`unitPct`, `unitValue`), valor em unidades |
 | `src/core/fx.ts` | `normFx`, `fxRate`, `convertState`, `balanceOf` |
 | `src/core/tip.ts` | `parseTip`, `tipStake`, `completeTip` (preenche a seleção que o original não mostra), `printedEdge` e `edgeSummary` (a odd do original contra a odd pega) |
-| `src/core/history.ts` | Perguntas feitas ao histórico de apostas: `selSig`, `dupBets` (a aposta já está aberta?), `exposure` (quanto já está em jogo numa luta), `copyDrop` (quanto a odd caiu em relação ao print), `byOrigin`, `renameOrigin`, `periodBets` e `sinceSummary` |
+| `src/core/history.ts` | Perguntas feitas ao histórico de apostas: `selSig`, `dupBets` (a aposta já está aberta?), `exposure` (quanto já está em jogo numa luta), `openByEvent` (as abertas por evento, na ordem das lutas), `copyDrop` (quanto a odd caiu em relação ao print), `byOrigin`, `renameOrigin`, `periodBets` e `sinceSummary` |
 | `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
 
 ### `src/app/`: a página
@@ -343,7 +345,7 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 
 - **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` de `src/app/import.ts`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
 - **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa, com ou sem o sufixo "Jr." ou "III", que o OCR costuma errar), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems, odd, kind, legs }`.
-- **Formatos de origem** (D43), todos com caso em `tests/unit.py`:
+- **Formatos de origem** (D43), todos com caso em `tests/unit.cases.mjs`:
   - Mensagem de canal com a luta e a seleção em linhas separadas, e print de casa com o nome do lutador e o mercado ("Para Ganhar a Luta"). São os dois formatos originais.
   - **Múltipla por lutador:** um lutador de cada luta, juntos por "+" ou "e" ("Fulano + Beltrano - Para vencer a luta"). Cada nome vira uma seleção de vencedor. O nome sozinho, seguido só do "+", herda o mercado de vencedor do último. Só o vencedor é herdado: em "A + B por KO" o A fica como vencedor presumido, com aviso.
   - **Cupom "1X2: V1: A - B"** (também "V2", "W1", "W2"): V1 é o primeiro nome da linha e V2 o segundo, qualquer que seja a ordem no card.
@@ -381,15 +383,21 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - **A odd do original fica com a aposta** (D48): `printed` em cada perna e, quando o original dá uma odd para a aposta inteira, `printed` na aposta. `Core.printedEdge(bet)` compara com a odd pega: usa a odd da aposta inteira se houver; senão a das seleções, multiplicadas quando são de lutas diferentes. A lista de apostas mostra "odd do print X, você pegou Y", e a Carteira a média (`Core.edgeSummary`), geral e por origem (`Core.byOrigin`); essa média conta todas as apostas copiadas, abertas ou não, e não segue o período. O cupom leva isso em `slip.copy`, que é apagado quando o cupom esvazia, quando uma aposta é repetida e quando o cupom é começado à mão. A odd da aposta inteira só é gravada se as seleções do cupom ainda são exatamente as do original.
 - **Fluxo, com uma aposta:** a tela mostra o que foi entendido e o que não foi, o tipo (simples ou múltipla), o valor e de onde ele veio. "Levar pro cupom" enche o cupom; a aposta é feita pelo botão de sempre.
 - **Várias de uma vez** (D44): a tela guarda uma lista (`imp.ops`). Cada foto escolhida é uma aposta da lista; o texto colado é mais uma. Uma foto sozinha, com a lista vazia, passa pelo campo de texto, para dar para corrigir o que o leitor leu. As fotos aparecem numeradas ("Foto 1", "Foto 2"), porque o nome de arquivo que o celular dá não serve para ninguém; a contagem recomeça quando a lista fica sem foto. Com duas ou mais na lista aparece "Apostar as N de uma vez" (`placeAll`): só entram as que estão inteiras (tudo que o original diz foi lido ou completado, tem odd agora, e o valor, de pelo menos 1, veio do original ou foi digitado) e sem aviso pendente. Lista de seleções sem valor não entra sozinha: o "1u" presumido vale no cupom, não no lote. As outras ficam de fora, com o motivo, e podem ir para o cupom uma a uma.
+- **Uma linha por item** (D58): numa lista de várias, cada item é uma linha com o rótulo, a situação ("pronta", "referência", "falta seleção", "já apostada", "repetida", "odd caiu", "sem valor", "conferir"), as seleções e o valor, e abre ao toque (`ImportOp.open`). Na primeira vez que aparece, o item que precisa de atenção vem aberto e o que está pronto, ou é só referência, vem recolhido; depois disso só o toque muda. Com um item só não há linha: ele aparece inteiro.
 - **O lote tem o mesmo cuidado do cupom:** antes de gravar, `recheck` recarrega placar e odds das lutas envolvidas. Sem conexão não faz; se uma odd mudou ou uma luta começou, não grava nada, mostra a lista com os valores novos e pede de novo. Cada aposta passa pela conta do próprio cupom (`slipCalc`), então múltipla e combinada na mesma luta têm o mesmo preço que teriam lá. Ou todas as que estavam prontas são gravadas, ou nenhuma.
 - **Limpar:** o botão "Limpar" apaga o texto, a lista e a mensagem. Fechar a tela não apaga: o que foi lido continua lá até limpar, ir para o cupom ou ser apostado.
-- **Limite conhecido:** o leitor de texto foi feito em cima de formatos reais: uma mensagem de canal, um print de casa de apostas, a "dupla" de canal e cinco prints de cupom de outra casa. Formato novo que ele não entender: acrescentar o caso em `tests/unit.py` primeiro, com nomes inventados.
+- **Limite conhecido:** o leitor de texto foi feito em cima de formatos reais: uma mensagem de canal, um print de casa de apostas, a "dupla" de canal e cinco prints de cupom de outra casa. Formato novo que ele não entender: acrescentar o caso em `tests/unit.cases.mjs` primeiro, com nomes inventados.
 
 ## Carteira: período, origem e o que fechou
 
 - **Período** (D55): os números de ganhos e perdas (resultado, unidades, apostado, retornado, ROI, acerto, gráfico e as tabelas por mercado, evento e origem) cobrem "Tudo", "30 dias" ou "Último evento" (`ui.period`, `Core.periodBets`, `statsOf`). 30 dias conta pela data em que a aposta fechou. Último evento é o evento da aposta que fechou por último (a luta mais tardia dela, numa múltipla entre eventos), e uma aposta conta se tem seleção nele. Saldo e depósitos nunca seguem o período. A escolha não é guardada: o app abre em "Tudo".
-- **Por origem:** a tabela tem quatro colunas, que é o que cabe em 393 px; o número de apostas, o valor apostado e a odd contra o print ficam embaixo do nome.
+- **Por origem:** a tabela tem quatro colunas, que é o que cabe em 393 px; o número de apostas, o valor apostado e a odd contra o print ficam embaixo do nome. Embaixo do resultado em dinheiro vai o resultado em unidades (D61), cada aposta medida pela unidade do dia em que foi feita: uma aposta grande decide o resultado em dinheiro de uma origem, e não o em unidades.
 - **Desde a última vez** (D56): `Core.sinceSummary(S.bets, S.seen)` soma as apostas que fecharam sozinhas (ganhas, perdidas e anuladas) depois de `S.seen`, com a quebra por origem quando alguma tem origem. A faixa aparece no topo de qualquer aba e fica até o toque em "Ok" ou em "Ver" (que abre as encerradas); os dois gravam `S.seen`. Cashout fica de fora, porque foi a própria pessoa que fez.
+
+## Apostas abertas e o card da luta
+
+- **Abertas por evento** (D60): `Core.openByEvent` agrupa as apostas abertas pelo evento, o que começa primeiro em cima, e dentro dele põe na frente a aposta cuja primeira luta vem antes (o desempate entre lutas do mesmo horário é o lugar da luta no card). Cada grupo diz quantas apostas tem, quanto está em jogo e quanto paga se todas baterem, o que apostas uma contra a outra não conseguem fazer. Múltipla entre eventos vai num grupo "Vários eventos". As encerradas continuam em lista, da mais recente para a mais antiga.
+- **No card da luta** (D59): a luta com aposta aberta mostra "N apostas · R$ X" (`Core.exposure`, a múltipla contando inteira), e o toque leva à aba Apostas.
 
 ## Sincronização
 
@@ -437,14 +445,20 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 npm ci                       # Vite e TypeScript
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: tipos, build, docs, unit, contract, autoteste da checagem de produção, e2e claro e escuro, pwa e cobertura
+scripts/verify.sh            # tudo: tipos, build, docs, core, unit, contract, autoteste da checagem de produção, e2e claro e escuro, pwa e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
+node tests/core.mjs          # os casos do núcleo, sem navegador
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 npm run dev                  # servidor de desenvolvimento do Vite
 ```
-O `verify.sh` começa pelo `tsc` e pelo build; se um dos dois falha, os testes nem rodam. **Todo teste usa `dist/`**, o que o build gerou, e não o código-fonte: o que é testado é o que é publicado. Todos abrem `dist/index.html` do disco, menos o `pwa.py`.
+O `verify.sh` começa pelo `tsc` e pelo build; se um dos dois falha, os testes nem rodam. **Todo teste usa `dist/`**, o que o build gerou, e não o código-fonte: o que é testado é o que é publicado. Todos abrem `dist/index.html` do disco, menos o `pwa.py`. A única exceção é o `core.mjs`, descrito abaixo.
 
-`unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro. Os mesmos casos ainda rodam pelo navegador; passá-los para um executor de testes de TypeScript, sem navegador, é o próximo passo natural e não foi feito (ver `docs/escala.md`).
+Os casos do núcleo ficam em `tests/unit.cases.mjs`, uma função de `Core` com tabelas de casos. Regra nova de preço, de liquidação, do leitor ou do histórico entra ali primeiro. Dois executores rodam os mesmos casos (D62):
+
+- `unit.py` carrega a página com a rede bloqueada e roda os casos contra `window.__OL.Core`: é o que testa o que vai para o ar, e o que conta para a cobertura.
+- `core.mjs` constrói `src/core` sozinho, com o mesmo Vite, importa o resultado no Node e roda os casos sem página nem navegador. Antes de carregar o núcleo ele arma `window`, `document`, `localStorage` e `fetch` para estourarem se forem tocados: é isso que mostra que o núcleo se sustenta sozinho. O que ele constrói fica em `tests/.build/`, fora do repositório.
+
+Os casos são JavaScript, não TypeScript: muitos passam de propósito dados tortos, que o compilador recusaria. A verificação não ficou mais rápida com isso (o `unit.py` leva pouco mais de um segundo); o ganho é o núcleo provado fora da página.
 
 `contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
@@ -481,7 +495,6 @@ No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Iníc
 ## Ideias para depois
 
 - O resto da PWA: `manifest.json` e ícone em arquivo. O service worker e a abertura sem internet já existem (D37).
-- Rodar os casos de `tests/unit.py` num executor de testes de TypeScript, sem navegador.
 - Linhas alternativas de quedas por lutador (hoje só "pelo menos 1").
 - Notificação quando uma aposta fecha (exige permissão e um servidor para enviar; o service worker já existe).
 - Mostrar quedas no resultado de todas as lutas, não só das que têm aposta.

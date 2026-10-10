@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One command that answers "is this still correct?".
-#   scripts/verify.sh           types + build + docs + unit + contract + production-check self-test + end-to-end (both themes) + offline and update (service worker) + code coverage minimums
-#   scripts/verify.sh --quick   types + build + docs + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
-# Every test runs against dist/, what the build produces and what ships.
+#   scripts/verify.sh           types + build + docs + core + unit + contract + production-check self-test + end-to-end (both themes) + offline and update (service worker) + code coverage minimums
+#   scripts/verify.sh --quick   types + build + docs + core + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
+# Every test runs against dist/, what the build produces and what ships. The one exception is `core`: the same cases as
+# `unit`, run in Node against src/core built by itself, to show the core stands without a page.
 # Exit: 0 all passed, 1 something failed, 3 test dependencies missing.
 set -u
 cd "$(dirname "$0")/.."
@@ -53,6 +54,7 @@ run types    npm run --silent typecheck
 run build    npm run --silent build
 if [ "$fail" -ne 0 ]; then echo "verify: HÁ FALHAS no código ou no build; os testes não rodaram. Não declare que funciona."; exit 1; fi
 run docs     python3 tests/docs_check.py
+run core     node tests/core.mjs
 run unit     python3 tests/unit.py
 run contract python3 tests/contract.py
 run prod     python3 scripts/check_production.py --selftest
