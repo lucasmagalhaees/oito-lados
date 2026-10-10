@@ -44,6 +44,7 @@ O que cada peça do harness cobre:
 | `tests/contract_live.py` (toda semana no GitHub Actions) | A API real mudar e a documentação continuar dizendo o contrário |
 | `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
 | `tests/e2e.py` | Tudo passar isolado e o fluxo real pela interface estar quebrado |
+| `tests/pwa.py` | Dizer que o app abre sem internet e avisa de versão nova sem nunca ter visto acontecer |
 | `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
 | `scripts/check_production.py` (workflow `Produção`, depois de cada merge) | CI verde e deploy feito, mas a produção servindo outra versão |
 | `tsc` em modo `strict` (primeiro passo do `verify.sh`) | Chamar função com o dado errado, ou ler um campo que pode não existir |
@@ -55,7 +56,8 @@ O que cada peça do harness cobre:
 
 - `src/`: o app, em TypeScript. `src/core/` é a lógica pura; `src/app/` é a página (estado, rede, telas, eventos). Detalhes em "Arquitetura".
 - `index.html`: o esqueleto da página que o build usa como entrada (cabeçalho, ícone embutido em base64, as partes fixas da tela).
-- `dist/index.html`: o que o build gera e o que vai para o ar. Um arquivo só, com script e estilo dentro. Não é versionado.
+- `dist/index.html`: o que o build gera e o que vai para o ar: a página inteira num arquivo, com script e estilo dentro. Não é versionado.
+- `dist/sw.js`: o service worker, gerado pelo build a partir de `src/sw.js`. É o único outro arquivo publicado; guarda a página no aparelho.
 - `package.json`, `package-lock.json`, `vite.config.js`, `tsconfig.json`: o build. Sem framework e sem dependência em tempo de execução.
 - `scripts/verify.sh`: o comando único de verificação.
 - `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção está no commit da `main`.
@@ -64,6 +66,7 @@ O que cada peça do harness cobre:
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
 - `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
+- `tests/pwa.py`: o service worker de ponta a ponta, com a página servida por um servidor local: abrir sem conexão e trocar de versão.
 - `tests/cov.py`: cobertura de código da página gerada, medida pelo próprio navegador durante os testes.
 - `tests/package.json`: cópias locais dos arquivos do leitor de imagem, para o teste de OCR rodar sem internet.
 - CI em `.github/workflows/ci.yml`: roda tudo isso (menos o ao vivo) em cada PR e em cada push na `main`.
@@ -72,7 +75,7 @@ O que cada peça do harness cobre:
 - `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE` (MIT, Lucas Magalhães).
 - Publicado em https://oito-lados.vercel.app. A Vercel está ligada ao repositório e publica em produção a cada merge na `main`.
 
-O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md`](docs/verificacao.md). Em resumo: lógica e fluxo cobertos por testes, leitura da ESPN conferida contra respostas reais, CI e deploy de produção funcionando; **não** verificados ainda um evento ao vivo de verdade e a instalação no iPhone.
+O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md`](docs/verificacao.md). Em resumo: lógica e fluxo cobertos por testes, leitura da ESPN conferida contra respostas reais, CI e deploy de produção funcionando; **não** verificados ainda um evento ao vivo de verdade, a instalação no iPhone e o service worker fora do Chromium dos testes.
 
 ## Requisitos do produto
 
@@ -87,9 +90,11 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 9. Repetir uma aposta com um toque, enquanto as seleções dela ainda estiverem abertas.
 10. Campos de valor com máscara de milhares.
 11. Moeda da banca: real, dólar ou euro, escolhida no cartão de depósito. Passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
-12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável. O valor da aposta pode ser digitado em dinheiro ou em unidades.
+12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável. O valor da aposta é digitado em dinheiro ou em unidades, conforme a configuração escolhida na Carteira.
 13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. Print em unidades copia as unidades; print em dinheiro copia o mesmo valor ou a mesma stake, conforme a configuração.
-14. Mais e menos de uma linha aparecem como + e −, e toda opção ligada a um lutador leva a cor do canto dele.
+14. Mais e menos de uma linha aparecem como + e −, com um par de cores só deles, e toda opção ligada a um lutador leva a cor do canto dele. Com os mercados de uma luta abertos, uma legenda que não sai da tela lembra quem é o vermelho e quem é o azul.
+15. Tema automático (segue o aparelho), claro ou escuro, escolhido na Carteira.
+16. O app fica guardado no aparelho: abre na hora e também sem internet, com os últimos dados que carregou. Quando uma versão nova é publicada, avisa e troca com um toque.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -131,7 +136,7 @@ Detalhes que já morderam:
 
 ## Arquitetura
 
-TypeScript em módulos, build pelo Vite 8.3.3 com TypeScript 7.0.2 (versões exatas no `package.json`). O build junta tudo num arquivo só, `dist/index.html`, com o script e o estilo dentro (plugin `single-file` no `vite.config.js`) e **sem minificar**: o que os testes medem, por nome de função e linha, é o arquivo que vai para o ar. A página gerada leva o commit de origem em `<meta name="ol-commit">`.
+TypeScript em módulos, build pelo Vite 8.3.3 com TypeScript 7.0.2 (versões exatas no `package.json`). O build junta tudo num arquivo só, `dist/index.html`, com o script e o estilo dentro (plugin `single-file` no `vite.config.js`) e **sem minificar**: o que os testes medem, por nome de função e linha, é o arquivo que vai para o ar. A página gerada leva o commit de origem em `<meta name="ol-commit">`. O único outro arquivo que o build emite é `dist/sw.js`, o service worker (seção "App guardado no aparelho").
 
 `npm run typecheck` roda o `tsc` em modo `strict`, com `noUnusedLocals`. Nenhum módulo usa `@ts-nocheck` ou `@ts-ignore` (o `docs_check.py` confere). O único `any` é o tipo `Json`, para o que vem da ESPN e do serviço de câmbio, que não é nosso nem documentado, e o objeto do leitor de imagem.
 
@@ -168,10 +173,13 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/app/helpers.ts` | `wallet`, `priceOf`, `slipCalc`, valor do cupom em dinheiro e em unidades |
 | `src/app/render.ts` | `render` e as três telas, cupom (`renderSheet`, `slipSummary`), gráfico, `place` |
 | `src/app/events.ts` | Um listener delegado por `data-act`, depósito e troca de moeda |
-| `src/main.ts` | Entrada: liga os listeners, expõe `window.__OL` e dispara a primeira sincronização |
-| `src/env.d.ts`, `src/styles.d.ts` | Declarações de tipo de `window.__OL`, do leitor de imagem e do import de CSS |
+| `src/app/update.ts` | Registro do service worker, aviso de versão nova (`initUpdates`, `applyUpdate`, `checkNow`) e `builtFrom`, o commit da página |
+| `src/main.ts` | Entrada: liga os listeners, expõe `window.__OL`, dispara a primeira sincronização e registra o service worker |
+| `src/env.d.ts` | Declarações de tipo de `window.__OL` e do leitor de imagem; os tipos do Vite (import de CSS, `import.meta.env`) vêm por referência |
 
-Os módulos de `src/app/` se importam em círculo (a tela chama ações, ações repintam a tela). Funciona porque nada é chamado enquanto os módulos carregam: o que roda na carga fica em `src/app/state.ts` (ler o que está salvo) e em `src/main.ts`. Código novo não deve chamar função de outro módulo no nível de cima do arquivo.
+`src/sw.js` é o service worker. É JavaScript puro, fora dos módulos e do `tsc`: roda em outro contexto, sem página, e o build só o copia para `dist/sw.js` trocando a versão.
+
+Os módulos de `src/app/` se importam em círculo (a tela chama ações, ações repintam a tela). Funciona porque nada é chamado enquanto os módulos carregam: o que roda na carga fica em `src/app/state.ts` (ler o que está salvo e aplicar o tema) e em `src/main.ts`. Código novo não deve chamar função de outro módulo no nível de cima do arquivo.
 
 `window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S, FX}` para teste.
 
@@ -185,7 +193,8 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
   cur: 'BRL'|'USD'|'EUR',        // moeda da banca: todos os valores abaixo estão nela
   conv: [{ t, from, to, rate, date }],   // conversões já feitas (as 20 últimas)
   tip: { mode: 'same'|'units', srcUnit },   // print em dinheiro: copiar o mesmo valor ou a mesma stake
-  stakeIn: 'money'|'units',       // como o valor é digitado no cupom
+  stakeIn: 'money'|'units',       // como o cupom pede o valor de toda aposta (configuração da Carteira)
+  theme: 'light'|'dark',          // tema escolhido; sem o campo, segue o aparelho
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
   bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
@@ -316,7 +325,7 @@ Regra do Lucas em 09/10/2026 (D28): **a moeda se troca no cartão de depósito, 
 - Uma unidade vale `unitPct`% da banca. O padrão é 10% da banca; o valor aceito vai de 0,1% a 100% (`Core.unitPct`, `Core.unitValue`).
 - **Banca** é o saldo disponível mais o que está em jogo nas apostas abertas. Assim a unidade não encolhe só porque há apostas abertas, e muda sozinha quando a banca muda.
 - No cupom há atalhos de 0,5u, 1u, 2u e 3u, que **definem** o valor da aposta (não somam), e o total aparece também em unidades.
-- **Valor em unidades:** a chave "Em R$ / Em unidades" do cupom (`S.stakeIn`, lembrada entre sessões) troca o campo de valor por um campo em unidades (`Core.maskUnits`, `Core.parseUnits`: até duas casas, no máximo 9999,99). O cupom guarda as duas formas em paralelo (`slip.stake`, `slip.units`, `slip.unitsN`), então trocar de modo não perde o valor. Em unidades, o valor em dinheiro acompanha a unidade de agora. Sem banca não há unidade, e a chave fica desabilitada.
+- **Dinheiro ou unidades é configuração, não escolha por aposta** (D36): o cartão "Valor das apostas", na Carteira, define como o cupom pede o valor (`S.stakeIn`, lembrado entre sessões). O cupom só mostra qual está valendo, com um atalho para as configurações. Em unidades, o campo de valor vira um campo em unidades (`Core.maskUnits`, `Core.parseUnits`: até duas casas, no máximo 9999,99). O cupom guarda as duas formas em paralelo (`slip.stake`, `slip.units`, `slip.unitsN`), então mudar a configuração não perde o valor digitado. Em unidades, o valor em dinheiro acompanha a unidade de agora. Sem banca não há unidade: o cupom pede dinheiro até o primeiro depósito, mesmo configurado em unidades.
 - Cada aposta guarda em `unit` o valor da unidade na hora em que foi feita. A Carteira mostra o resultado em unidades somando `(payout − stake) / unit` das apostas encerradas. Aposta antiga, sem `unit`, fica fora dessa conta.
 
 ## Copiar aposta (print ou texto)
@@ -347,15 +356,32 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout congela enquanto houver luta da aposta em andamento.
 - Só atualiza com o app aberto; ao reabrir, busca os resultados e liquida o que ficou pendente.
 
+## App guardado no aparelho (offline e versão nova)
+
+Pedido do Lucas em 10/10/2026 (D37): entrega mais rápida, abrir sem internet e avisar quando sai versão nova.
+
+- **O que fica guardado:** `dist/sw.js` (de `src/sw.js`) é um service worker. Na instalação ele guarda a página no cache `oito-lados-page-<versão>` e passa a responder toda abertura do app com essa cópia, sem ir à rede. Arquivos de `fonts.googleapis.com`, `fonts.gstatic.com` e `cdn.jsdelivr.net` (fontes e leitor de imagem) vão para o cache `oito-lados-assets-v1` na primeira vez que passam por ele e depois saem do aparelho.
+- **O que nunca passa pelo service worker:** ESPN e câmbio. O app precisa deles frescos e já guarda a última resposta no `localStorage` (`oitolados.cache.v1`, `oitolados.fx.v1`), que é o que aparece sem conexão. Sem conexão dá para ver lutas, apostas e carteira; apostar, fazer cashout e converter moeda continuam exigindo rede.
+- **Versão:** o build calcula um hash da página sem o carimbo de commit e grava em `sw.js`. Publicação que não muda o app (documentação, testes) gera o mesmo `sw.js` e não incomoda ninguém.
+- **Aviso de versão nova:** o navegador baixa o `sw.js` novo, que guarda a página nova e fica **esperando**. A página mostra a faixa "Saiu uma versão nova do app." com o botão "Atualizar agora" (`#update`). O toque manda o service worker novo assumir, a página recarrega já na versão nova e a cópia antiga é apagada. Sem o toque, o app aberto continua o mesmo: trocar a versão debaixo de um cupom aberto não é aceitável. Fechar o app de vez e abrir de novo também entra na versão nova.
+- **Quando procura:** ao abrir, toda vez que o app volta para a frente e a cada 30 min com ele aberto (`CHECK_EVERY`). O cartão "Versão do app", na Carteira, mostra o commit da página e tem o botão "Procurar versão nova".
+- **Onde não vale:** o service worker só é registrado na página publicada (`import.meta.env.PROD`, por http ou https). No `npm run dev` e na página aberta do disco (como os testes fazem) não há service worker, e o cartão diz isso.
+- **Dados não são tocados:** trocar de versão não mexe no `localStorage`.
+- **Limites conhecidos:** primeira visita sem conexão não abre (não há o que mostrar). O service worker só guarda resposta que consegue conferir (`res.ok`); arquivo pedido sem CORS chega opaco e não é guardado. Se o leitor de imagem pedir algum assim, ele não funciona sem internet: ler print sem conexão não foi testado e não deve ser prometido. Nada disso foi visto no Safari do iPhone (ver `docs/verificacao.md`).
+
 ## Interface
 
 Uma coluna de até 720 px. Barra superior fixa com saldo, barra de abas embaixo (Lutas, Apostas, Carteira), cupom como folha que sobe do rodapé.
 
-Identidade: cantos vermelho e azul para os lutadores, dourado para seleção e ação principal. Títulos em Big Shoulders Display, texto em Barlow (Google Fonts, com fallback). Tema claro e escuro por `prefers-color-scheme`, tudo em variáveis CSS no `:root`. Verde e vermelho de ganho/perda são separados das cores de canto.
+Identidade: cantos vermelho e azul para os lutadores, dourado para seleção e ação principal. Títulos em Big Shoulders Display, texto em Barlow (Google Fonts, com fallback). Verde e vermelho de ganho/perda são separados das cores de canto.
+
+Tema: claro e escuro, tudo em variáveis CSS no `:root`. Por padrão segue o aparelho (`prefers-color-scheme`); o cartão "Aparência", na Carteira, deixa fixar um dos dois (`S.theme`, D38). `applyTheme` põe a escolha em `data-theme` no `<html>` e acerta a cor das barras do navegador (`theme-color`). A paleta escura aparece duas vezes em `src/styles.css`, uma para "o aparelho pediu" e outra para "a pessoa escolheu"; o `docs_check.py` confere que as duas são iguais.
 
 Cor de canto nas opções: `Core.sideOf(key)` diz de qual lutador é uma seleção (`ml`, `mov`, `wr` e `tda`; o resto é da luta inteira e devolve `null`). Nos mercados, a opção de um lutador ganha a barra e um fundo leve na cor do canto dele, e o cabeçalho da coluna ganha um traço na mesma cor. No cupom, na tela de copiar aposta e na lista de apostas, a seleção leva um quadradinho da cor. Os botões de vencedor não repetem a marca porque já ficam na linha do lutador.
 
-Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
+Legenda dos cantos (D35): com os mercados de uma luta abertos, uma faixa com os dois sobrenomes e a cor de cada canto (`.corners`) fica presa logo abaixo da barra superior enquanto os mercados daquela luta rolam. Toda opção de lutador também leva `title` com o nome e o canto ("Almeida · canto vermelho"); no iPhone não existe ponteiro, então quem resolve lá é a faixa.
+
+Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Esses dois lados têm um par de cores só deles (D34): `Core.overUnder(key)` devolve `'o'` ou `'u'` para `tot` e `td`, e a opção ganha fundo leve, rótulo colorido e uma seta (▲ no +, ▼ no −), em `--over` e `--under`. Não são as cores de canto, porque + e − não pertencem a lutador nenhum. A mesma seta marca a seleção no cupom, na tela de copiar aposta e na lista de apostas. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
 
 Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-*)`, campos com fonte de 16 px ou mais (evita zoom), metas `apple-mobile-web-app-*`. O Safari pode limpar o `localStorage` de site sem uso por semanas; por isso a Carteira tem backup e restauração por texto.
 
@@ -365,12 +391,12 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 npm ci                       # Vite e TypeScript
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: tipos, build, docs, unit, contract, autoteste da checagem de produção, e2e claro e escuro e cobertura
+scripts/verify.sh            # tudo: tipos, build, docs, unit, contract, autoteste da checagem de produção, e2e claro e escuro, pwa e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 npm run dev                  # servidor de desenvolvimento do Vite
 ```
-O `verify.sh` começa pelo `tsc` e pelo build; se um dos dois falha, os testes nem rodam. **Todo teste abre `dist/index.html`**, a página gerada, e não o código-fonte: o que é testado é o que é publicado.
+O `verify.sh` começa pelo `tsc` e pelo build; se um dos dois falha, os testes nem rodam. **Todo teste usa `dist/`**, o que o build gerou, e não o código-fonte: o que é testado é o que é publicado. Todos abrem `dist/index.html` do disco, menos o `pwa.py`.
 
 `unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro. Os mesmos casos ainda rodam pelo navegador; passá-los para um executor de testes de TypeScript, sem navegador, é o próximo passo natural e não foi feito (ver `docs/escala.md`).
 
@@ -378,9 +404,11 @@ O `verify.sh` começa pelo `tsc` e pelo build; se um dos dois falha, os testes n
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código em `src/`, e também a configuração do build (versões exatas, modo `strict`, núcleo sem DOM, módulos documentados).
 
-**Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%).
+**Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%). `cov.stop` para a medição e solta a página: com o medidor ainda preso, uma página fechada continuava contando como aberta para o service worker.
 
 `e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+
+`pwa.py` é o único teste que serve `dist/` por um servidor local, porque service worker não existe em página aberta do disco. Ele publica o build e depois uma "versão seguinte" (outra página, outro `sw.js`) e confere: a página fica guardada, a primeira instalação não anuncia nada, o app abre com o site fora do ar sem pedir a página à rede, a versão nova é anunciada, o app em uso só troca depois do toque, a cópia antiga é apagada, e publicar de novo sem mudar o app não avisa. O teste não consegue interceptar o que o próprio service worker pede; por isso um segundo servidor local faz o papel dos endereços de fontes e do leitor de imagem, e o `sw.js` servido no teste guarda arquivos só dele (sem isso, o teste iria ao Google de verdade a cada abertura). Quais endereços o `sw.js` de verdade guarda é conferido pelo `docs_check.py`. No fim o teste fecha o app com uma versão esperando e abre de novo, para ver que ela assume.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 
@@ -388,7 +416,7 @@ Para testar contra a ESPN de verdade: `npm run dev` e abrir o endereço que o Vi
 
 ## Publicação
 
-Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. O `vercel.json` manda a Vercel fazer o mesmo que o `verify.sh` e o CI fazem: `npm ci`, `npm run build`, publicar `dist/`. O `.vercelignore` deixa de fora o que o build não lê (testes, documentação). A primeira importação do projeto, ainda sem `vercel.json`, falhou porque a Vercel escolheu sozinha o preset "FastHTML" (Python) e procurou um `main.py`.
+Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. O `vercel.json` manda a Vercel fazer o mesmo que o `verify.sh` e o CI fazem: `npm ci`, `npm run build`, publicar `dist/`. O `.vercelignore` deixa de fora o que o build não lê (testes, documentação). São publicados dois arquivos: `index.html` e `sw.js`. A primeira importação do projeto, ainda sem `vercel.json`, falhou porque a Vercel escolheu sozinha o preset "FastHTML" (Python) e procurou um `main.py`.
 
 O build grava o commit em `<meta name="ol-commit">`. Na Vercel ele vem da variável `VERCEL_GIT_COMMIT_SHA`; fora dela, do `git`.
 
@@ -400,12 +428,14 @@ A Vercel publica o que chegar na `main` sem olhar o CI. Quem garante que só ent
 - O workflow `Produção` roda `scripts/check_production.py` depois de cada push na `main`: espera a produção mostrar o carimbo do commit que entrou e **continua olhando por 5 min**, porque o deploy errado pode chegar depois do certo. Falhou: na Vercel, promover o deploy do commit mais recente da `main`, ou fazer um novo merge.
 - Em PR o mesmo script só informa qual commit a produção está servindo (`--report`) e nunca falha. `--selftest` testa o script contra um servidor local e roda no `verify.sh`.
 
+**Publicar não troca o app de quem já abriu.** O aparelho mostra a cópia guardada até a pessoa tocar em "Atualizar agora" (seção "App guardado no aparelho"). A checagem de produção lê o servidor, não o aparelho: produção certa e app antigo na mão é o estado normal entre a publicação e o toque.
+
 No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Início.
 
 ## Ideias para depois
 
-- PWA de verdade: `manifest.json`, ícone em arquivo, service worker para abrir offline.
+- O resto da PWA: `manifest.json` e ícone em arquivo. O service worker e a abertura sem internet já existem (D37).
 - Rodar os casos de `tests/unit.py` num executor de testes de TypeScript, sem navegador.
 - Linhas alternativas de quedas por lutador (hoje só "pelo menos 1").
-- Notificação quando uma aposta fecha (exige service worker e permissão).
+- Notificação quando uma aposta fecha (exige permissão e um servidor para enviar; o service worker já existe).
 - Mostrar quedas no resultado de todas as lutas, não só das que têm aposta.

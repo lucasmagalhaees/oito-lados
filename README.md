@@ -24,8 +24,10 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Cashout:** devolve o valor integral enquanto nenhuma luta da aposta foi decidida. Se parte da múltipla já bateu e o resto ainda não começou, oferece um valor para encerrar, calculado pelas odds de agora. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
 - **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. Se o original fala em unidades, copia as unidades. Se traz dinheiro, você escolhe: mesmo valor ou mesma stake. A imagem é lida no próprio aparelho.
-- **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). No cupom o valor pode ser digitado em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades.
-- **Leitura rápida:** mais e menos de uma linha aparecem como + e −, e cada opção ligada a um lutador leva a cor do canto dele.
+- **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). Nas configurações você escolhe se o cupom pede o valor em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades.
+- **Leitura rápida:** mais e menos de uma linha aparecem como + e −, com cores próprias, e cada opção ligada a um lutador leva a cor do canto dele. Com os mercados abertos, uma legenda presa na tela lembra quem é o vermelho e quem é o azul.
+- **Tema:** automático, claro ou escuro.
+- **Abre sem internet:** o app fica guardado no aparelho e abre na hora, com os últimos dados que carregou. Quando sai uma versão nova, ele avisa e troca com um toque.
 - **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
 
@@ -33,7 +35,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 
 É uma página estática, sem backend. O navegador consulta a API pública da ESPN para montar o card, ler as odds e acompanhar status, resultado e estatísticas.
 
-O código é TypeScript em módulos (`src/`). O build do Vite gera um único `dist/index.html`, com script e estilo dentro, que é o que os testes abrem e o que vai para o ar.
+O código é TypeScript em módulos (`src/`). O build do Vite gera `dist/index.html`, a página inteira num arquivo, com script e estilo dentro, e `dist/sw.js`, o service worker que guarda essa página no aparelho. É isso que os testes usam e o que vai para o ar.
 
 | | De onde vem |
 |---|---|
@@ -53,7 +55,7 @@ Precisa de Node 22 ou mais novo.
 ```bash
 npm ci
 npm run dev      # servidor de desenvolvimento; abra o endereço que ele mostrar
-npm run build    # gera dist/index.html, a página que é publicada
+npm run build    # gera dist/index.html e dist/sw.js, o que é publicado
 ```
 
 ## Testes
@@ -72,6 +74,7 @@ scripts/verify.sh           # confere os tipos, faz o build e roda tudo contra a
 | `tests/contract.py` | Os leitores da ESPN e do serviço de câmbio contra respostas reais gravadas em `tests/fixtures/` |
 | `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
+| `tests/pwa.py` | O service worker, com a página servida por um servidor local: abrir sem conexão, aviso de versão nova e troca pelo botão |
 | `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
 | `tests/contract_live.py` | A API real da ESPN e o serviço de câmbio. Roda toda semana no GitHub Actions e avisa se o formato mudar |
 | `scripts/check_production.py` | Depois de cada merge, se a produção está no commit da `main` e continua nele |
@@ -102,8 +105,9 @@ index.html                           esqueleto da página, entrada do build
 src/core/                            lógica pura: odds, leitores da ESPN, preço, liquidação, cashout
 src/app/                             a página: estado, rede, telas e eventos
 src/main.ts                          ponto de entrada
+src/sw.js                            service worker: guarda o app no aparelho
 package.json                         Vite e TypeScript, em versões exatas
-vite.config.js                       build em um arquivo só
+vite.config.js                       build: a página num arquivo só, mais o service worker
 tsconfig.json                        TypeScript em modo strict
 vercel.json                          como a Vercel constrói e publica
 scripts/verify.sh                    comando único de verificação
@@ -114,6 +118,7 @@ tests/contract_live.py               conferência da API real da ESPN
 tests/docs_check.py                  documentação conferida contra o código
 tests/e2e.py                         teste ponta a ponta
 tests/mock_espn.py                   ESPN simulada, com lutadores fictícios
+tests/pwa.py                         abrir sem conexão e trocar de versão
 tests/cov.py                         cobertura de código medida pelo navegador
 tests/package.json                   cópias locais do leitor de imagem para o teste
 tests/fixtures/espn/                 respostas reais da ESPN, reduzidas
@@ -137,6 +142,8 @@ CLAUDE.md                            especificação e regras do projeto
 
 - A API da ESPN é pública, mas não é oficial nem documentada, e pode mudar sem aviso.
 - Só atualiza com o app aberto. Ao reabrir, ele busca os resultados e liquida o que ficou pendente.
+- Sem internet dá para abrir e ver lutas, apostas e carteira como estavam. Apostar, fazer cashout e trocar de moeda exigem conexão.
+- Depois de uma publicação, o aparelho continua na versão anterior até você tocar em "Atualizar agora".
 - As odds travam quando a luta começa. Não há aposta ao vivo.
 - Os dados ficam em um aparelho só.
 

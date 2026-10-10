@@ -27,6 +27,13 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 19. Perguntas sobre mais de um usuário e sobre custo de backend, respondidas e anotadas em `docs/escala.md`. O Lucas pediu a migração para Vite + TypeScript (etapa 1 da escala), a fazer num PR separado.
 20. Migração feita no mesmo dia (D33), em cima do PR dos pedidos anteriores.
 
+## Linha do tempo de 10/10/2026
+
+1. O Lucas mesclou os PRs #8 e #9 com 25 segundos de intervalo. O workflow `Produção` rodou no modo estrito no commit `4e3e31d` e passou: a produção ficou na versão certa e o carimbo de commit chegou à página publicada pela Vercel.
+2. Pedido das 07:45, com um print do mercado "Total de rounds": faltou esquema de cores ali; um jeito de lembrar quem é azul e quem é vermelho sem rolar a tela de volta; dinheiro ou unidades como configuração e não por aposta; ver o que dá para guardar do app para abrir mais rápido, o modo offline, e avisar quando sai versão nova.
+3. Duas perguntas feitas antes de implementar. Cores no total de rounds: criar um mercado por lutador ou dar cores próprias a + e −? Resposta: "quero o 2" (D34). Tema: quer escolher dentro do app? Resposta: "sim, quero dark mode no app" (D38).
+4. Feito num PR só: D34 a D38.
+
 ## D1. Dinheiro fictício e marca própria
 
 - **Contexto:** a referência era o bet365, mas sem dinheiro real.
@@ -270,6 +277,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - Em unidades, os atalhos de dinheiro saem da tela e ficam só os de unidade e o "Tudo".
   - Os atalhos altos são do cupom. Os do depósito continuam em 100, 500, 1.000 e 5.000.
 - **Descartado:** trocar o padrão para unidades sem ele pedir.
+- **Revista pela D36** (10/10/2026): a chave saiu do cupom e virou configuração na Carteira.
 
 ## D31. Mais e menos como + e −, e cor de canto nas opções
 
@@ -277,7 +285,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Decisão:** total de rounds e de quedas passam a "+2.5" e "−2.5", com uma legenda curta no título do mercado. Toda opção que pertence a um lutador (método por lutador, vencedor e round, acerta queda) ganha barra e fundo leve na cor do canto dele, o cabeçalho da coluna ganha um traço da cor, e no cupom e nas apostas a seleção leva um quadradinho da cor.
 - **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
   - Usei o sinal de menos tipográfico (−), que tem a largura do +. O leitor de texto aceita também o hífen.
-  - Não existe um mercado único de "vencedor e mais/menos rounds". Essa aposta é feita combinando as duas seleções da mesma luta no cupom, e ali a seleção do lutador aparece com a cor dele. Não criei mercado novo.
+  - Não existe um mercado único de "vencedor e mais/menos rounds". Essa aposta é feita combinando as duas seleções da mesma luta no cupom, e ali a seleção do lutador aparece com a cor dele. Não criei mercado novo. **Confirmado pelo Lucas em 10/10/2026** (D34).
 - **Consequência:** apostas antigas guardam o texto da época ("Mais de 2.5 rounds").
 
 ## D32. Produção servindo versão antiga depois de merges em sequência
@@ -296,7 +304,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Decisão:** o código saiu do `index.html` para `src/`, em TypeScript `strict`: `src/core/` com a lógica pura e `src/app/` com a página. Build pelo Vite 8.3.3 e TypeScript 7.0.2, em versões exatas.
 - **O que não mudou, de propósito:**
   - O produto. Os mesmos testes passam com os mesmos números (340 unitários, saldo final de R$ 1.609,59 no ponta a ponta).
-  - O que vai para o ar continua sendo **um arquivo só** (`dist/index.html`, com script e estilo dentro). Assim os testes continuam abrindo a página do disco, o deploy continua sendo uma página estática e nada depende de outros arquivos chegarem.
+  - O que vai para o ar continua sendo **um arquivo só** (`dist/index.html`, com script e estilo dentro; desde a D37 há um segundo arquivo, o service worker). Assim os testes continuam abrindo a página do disco, o deploy continua sendo uma página estática e nada depende de outros arquivos chegarem.
   - Sem framework e sem dependência em tempo de execução. Vite e TypeScript são só de build.
 - **Escolhas dentro da decisão:**
   - **Sem minificar.** A cobertura é medida por nome de função e linha no arquivo gerado, e o que é testado é exatamente o que é publicado. São uns 125 kB; para um usuário, o tamanho não pesa.
@@ -307,7 +315,54 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Consequência:** publicar passou a depender de um build na Vercel (`npm ci`, `npm run build`). Se o build falhar lá, a produção fica na versão anterior.
 - **Como a migração foi feita:** o script antigo foi cortado nas próprias seções, cada corte virou um módulo, e só depois vieram os tipos. Antes de tipar, a página gerada já passava em todos os testes; depois de tipar, passou de novo. Três trechos foram reescritos para o compilador aceitar, sem mudar o resultado: `legOutcome` (uma variável para "o resultado, se a luta acabou"), `slipCalc` (o preço da combinada lido só quando ela é válida) e `doCashout` (a oferta calculada uma vez antes de pedir confirmação).
 
-## Pendências em 09/10/2026
+## D34. + e − com cores próprias, sem relação com lutador
+
+- **Contexto (10/10/2026):** o Lucas mandou um print do "Total de rounds" dizendo que "faltou o esquema de cores". Pela D31 só opção de lutador tinha cor, e + e − não são de lutador nenhum. Perguntei qual das duas coisas ele queria: (1) um mercado novo de total de rounds por lutador, que aí teria as cores dos cantos, ou (2) um esquema de cores próprio para + e −. Resposta: "quero o 2".
+- **Decisão:** + e − ganham um par de cores só deles (`--over` e `--under`), com fundo leve, rótulo colorido e uma seta (▲ no +, ▼ no −). A seta existe para a diferença não depender só da cor. A mesma marca aparece no cupom, na tela de copiar aposta e na lista de apostas.
+- **Descartado:** usar vermelho e azul nessas opções (diria que o + é de um lutador e o − do outro) e criar o mercado por lutador (opção 1, que ele não quis).
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Vale também para o total de quedas, que usa o mesmo + e −.
+  - As duas cores (um azul-petróleo e um violeta) fui eu que escolhi, longe do vermelho e do azul dos cantos e do verde e vermelho de ganho e perda.
+
+## D35. Legenda dos cantos presa na tela
+
+- **Contexto (10/10/2026):** "poderia ter um tooltip ou algum mecanismo para me lembrar quem é azul e quem é vermelho sem ter que scrollar tudo de novo".
+- **Decisão:** com os mercados de uma luta abertos, uma faixa com os dois sobrenomes e a cor de cada canto fica presa logo abaixo da barra superior enquanto os mercados daquela luta rolam. Além disso, cada opção de lutador tem um `title` com o nome e o canto.
+- **Descartado:** só o tooltip. No iPhone não existe ponteiro parado em cima de botão, então ele não resolveria onde o app é usado. Também descartado escrever o nome do lutador em toda opção: a grade ficaria ilegível em 393 px.
+- **Interpretação que precisou ser feita:** os dois nomes ficam juntos à esquerda da faixa. Um em cada ponta ficaria em cima das colunas de + e − e daria a entender que cada coluna é de um lutador.
+
+## D36. Dinheiro ou unidades é configuração, não chave do cupom
+
+- **Contexto (10/10/2026):** "quero também que a estratégia de valores ou unidades fique parametrizável nas configurações em vez de ser para cada aposta". Revê a D30, que tinha posto a chave dentro do cupom.
+- **Decisão:** a Carteira ganhou o título "Configurações" e o cartão "Valor das apostas", com "Em R$" e "Em unidades". Vale para todas as apostas. O cupom só diz qual está valendo e tem um atalho para mudar.
+- **O que não mudou:** os atalhos de 0,5u a 3u continuam no cupom nos dois modos, e a escolha continua salva em `stakeIn`, então quem já tinha escolhido unidades continua em unidades.
+- **Interpretação que precisou ser feita:** com a banca vazia não existe unidade. Em vez de travar o cupom, ele pede dinheiro até o primeiro depósito, e o cartão explica.
+
+## D37. App guardado no aparelho: abre sem internet e avisa de versão nova
+
+- **Contexto (10/10/2026):** "veja o que dá para cachear do app para a entrega ser mais rápida, tem o modo offline que você comentou e talvez pudesse avisar ao usuário que tem nova versão publicada e aí pedir que ele faça um hard update na versão".
+- **Decisão:** um service worker (`src/sw.js`, publicado como `sw.js`).
+  - Guarda a página no aparelho e responde toda abertura com essa cópia: abre na hora e abre sem conexão, com os últimos dados que o app já guardava.
+  - Guarda fontes e arquivos do leitor de imagem na primeira vez que passam por ele.
+  - Quando uma versão nova é publicada, ela é baixada e fica esperando. O app mostra "Saiu uma versão nova do app." com o botão "Atualizar agora". O toque troca a versão e recarrega: é o "hard update", sem a pessoa ter que limpar cache.
+  - Um cartão "Versão do app" na Carteira mostra o commit da página e tem "Procurar versão nova".
+- **Escolhas dentro da decisão:**
+  - **A versão nova espera o toque.** Trocar o app sozinho, com um cupom aberto, perderia o que a pessoa estava fazendo.
+  - **ESPN e câmbio nunca são respondidos pelo service worker.** Odd velha servida como nova é o pior erro que este app pode cometer. O app já guarda a última resposta por conta própria e mostra com a data.
+  - **A versão é um hash da página sem o carimbo de commit.** Se fosse o commit, todo merge de documentação faria o aparelho pedir atualização sem nada ter mudado.
+  - **Service worker escrito à mão**, umas 40 linhas, em vez de Workbox ou `vite-plugin-pwa`: são dependências grandes para o que cabe em um arquivo, e o projeto não tem dependência em tempo de execução.
+- **O que muda em decisões antigas:** a D33 dizia que vai para o ar "um arquivo só". Agora são dois, porque o navegador exige que o service worker seja um arquivo à parte. A página continua inteira num arquivo.
+- **Descartado, por enquanto:** `manifest.json` e ícone em arquivo (não foram pedidos; estão nas ideias) e notificação.
+- **Consequência:** publicar deixou de trocar na hora o app de quem já abriu. Entre a publicação e o toque em "Atualizar agora", o aparelho roda a versão anterior. Para saber qual versão está no aparelho: cartão "Versão do app".
+- **O que não se sabe:** como isso se comporta no Safari do iPhone e no app instalado na Tela de Início. Só foi testado no Chromium (ver `verificacao.md`).
+
+## D38. Tema escolhido no app
+
+- **Contexto (10/10/2026):** o app já tinha tema escuro, mas só seguindo o aparelho. Perguntado se queria escolher dentro do app, o Lucas respondeu: "sim, quero dark mode no app".
+- **Decisão:** cartão "Aparência" nas configurações, com Automático, Claro e Escuro. A escolha fica salva (`theme`) e sobrevive a backup, restauração e a zerar a simulação.
+- **Interpretação que precisou ser feita (confirmar com o Lucas):** o padrão continua sendo Automático. Não troquei o padrão para escuro.
+
+## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
@@ -315,9 +370,9 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais | Lucas |
-| Confirmar as interpretações do valor em unidades (D30) e de + / − e cores (D31) | Lucas |
-| Ver o workflow `Produção` rodar no modo estrito no primeiro merge depois dele | Quem fizer o próximo merge |
-| Conferir o carimbo de commit na página publicada pela Vercel (o build da prévia do PR #9 passou; a página não foi lida) | Lucas, ou o workflow `Produção` no merge |
+| Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
+| Confirmar as cores escolhidas para + e − e que valem também para quedas (D34), e o padrão Automático do tema (D38) | Lucas |
+| Abrir o app no iPhone depois deste PR: ver se abre sem internet (modo avião) e se o aviso de versão nova aparece no merge seguinte (D37) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

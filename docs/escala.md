@@ -64,7 +64,7 @@ O que ficou de fora e continua valendo como próximo passo:
 
 - Os casos de `tests/unit.py` como testes do `core` num executor de TypeScript, rodando sem navegador. Hoje eles rodam pelo navegador contra a página gerada.
 - Separar `src/app/` em camadas mais limpas (`espn/`, `store/`, `ui/`). Hoje os módulos seguem as seções do script antigo e se importam em círculo.
-- PWA de verdade: `manifest.json`, ícone em arquivo, service worker.
+- O resto da PWA: `manifest.json` e ícone em arquivo. O service worker foi feito em 10/10/2026 (D37).
 
 ## Etapa 2: sincronizar entre aparelhos (um usuário)
 

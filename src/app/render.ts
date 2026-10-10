@@ -9,6 +9,7 @@ import { repeatable } from './repeat';
 import { legOut, resultText } from './settle';
 import { D, S, bankEmpty, imp, saveCache, saveS, slip, ui } from './state';
 import { busy, shownEvents } from './sync';
+import { builtFrom, canUpdate } from './update';
 import type { Bet, Currency, Fight, FightEvent, Leg, Option, Outcome, Side } from '../core';
 import type { Resolved, Wallet } from './helpers';
 
@@ -67,11 +68,14 @@ function vLutas(): string {
   });
   return h;
 }
-export const sideDot = (key: string): string => { const sd = Core.sideOf(key); return sd ? `<i class="sd ${sd}"></i>` : ''; };
+// the mark in front of a selection's name: the corner colour for a fighter's, the arrow for an over or an under
+export const sideDot = (key: string): string => { const sd = Core.sideOf(key), ou = Core.overUnder(key); return sd ? `<i class="sd ${sd}"></i>` : ou ? `<i class="ou ${ou}"></i>` : ''; };
 function optBtn(f: Fight, x: Option, cls?: string): string {
   const on = slip.sels.some(s => s.fid === f.id && s.key === x.key);
   const side = cls === 'ml' ? null : Core.sideOf(x.key);        // the winner buttons already sit on the fighter's own row
-  return `<button class="opt ${cls || ''} ${side ? 's' + side : ''} ${on ? 'on' : ''}" data-act="pick" data-fid="${esc(f.id)}" data-key="${esc(x.key)}" aria-pressed="${on}">${cls === 'ml' ? '' : `<span class="ol">${esc(x.label)}</span>`}<span class="ov">${x.src === 'est' ? '<i class="est" title="odd estimada">≈</i>' : ''}${fo(x.odd)}</span></button>`;
+  const whose = side ? ` title="${esc(f[side].name)} · canto ${side === 'a' ? 'vermelho' : 'azul'}"` : '';
+  const ou = Core.overUnder(x.key);
+  return `<button class="opt ${cls || ''} ${side ? 's' + side : ''} ${ou ? 'x' + ou : ''} ${on ? 'on' : ''}" data-act="pick" data-fid="${esc(f.id)}" data-key="${esc(x.key)}" aria-pressed="${on}"${whose}>${cls === 'ml' ? '' : `<span class="ol">${esc(x.label)}</span>`}<span class="ov">${x.src === 'est' ? '<i class="est" title="odd estimada">≈</i>' : ''}${fo(x.odd)}</span></button>`;
 }
 function fightCard(f: Fight, isMain: boolean): string {
   const p = priceOf(f), can = canBet(f), res = D.results[f.id];
@@ -91,7 +95,8 @@ function fightCard(f: Fight, isMain: boolean): string {
     const open = ui.open.has(f.id), extra = p.groups.length - 1;
     h += `<button class="more" data-act="more" data-fid="${esc(f.id)}" aria-expanded="${open}"><span>${open ? 'Fechar mercados' : `Método, rounds e quedas (+${extra} mercados)`}</span><span>${open ? '−' : '+'}</span></button>`;
     if (open) {
-      h += '<div class="mk">';
+      // stays in view while the markets scroll, so the corner colours can be read without going back up to the names
+      h += `<div class="mk"><div class="corners" aria-label="Cores dos cantos"><span class="a"><i></i>${esc(f.a.last)}</span><span class="b"><i></i>${esc(f.b.last)}</span></div>`;
       for (const g of p.groups.slice(1)) {
         h += `<h4><span class="label">${esc(g.title)}</span>${g.note ? `<em>${esc(g.note)}</em>` : ''}</h4><div class="grid g${g.cols}">`;
         if (g.heads) h += `<div class="colh"><i></i>${esc(f.a.last)}</div><div class="colh b"><i></i>${esc(f.b.last)}</div>`;
@@ -218,11 +223,23 @@ function vCarteira(w: Wallet): string {
   h += '</section>';
   const lastConv = (S.conv || []).slice(-1)[0];
   if (S.deposits.length) h += `<section class="card"><span class="label">Depósitos</span><div>${S.deposits.slice().reverse().slice(0, 8).map(d => `<div class="dep"><span>${esc(dWhen.format(d.t))}</span><b>${money(d.v)}</b></div>`).join('')}</div>${lastConv ? `<p class="hint" id="convlog">Banca convertida de ${CUR[lastConv.from]} para ${CUR[lastConv.to]} em ${esc(dWhen.format(lastConv.t))}, por ${esc(rateText(lastConv.from, lastConv.to, lastConv.rate))} (cotação de ${esc(dateBR(lastConv.date))}).</p>` : ''}</section>`;
+  h += `<div class="seg label" id="config">Configurações</div>`;
   h += `<section class="card"><span class="label">Unidade</span>
     <div class="unit" id="unitnow">1u = ${money(w.unit)}</div>
     <p class="hint">${pctText(w.unitPct)}% da banca de ${money(w.bank)} (saldo mais o que está em jogo). Muda sozinha quando a banca muda.</p>
     <div class="field"><input id="unitpct" inputmode="decimal" autocomplete="off" value="${esc(pctText(w.unitPct))}" aria-label="Porcentagem da banca que vale uma unidade"><span>% da banca</span></div>
     <button class="btn ghost block" data-act="unit">Aplicar</button></section>`;
+  const th = S.theme === 'light' || S.theme === 'dark' ? S.theme : 'auto';
+  h += `<section class="card" id="themecard"><span class="label">Aparência</span>
+    <div class="segm cur" role="group" aria-label="Tema do app">${([['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']] as const).map(([k, t]) => `<button class="${th === k ? 'on' : ''}" data-act="theme" data-m="${k}" aria-pressed="${th === k}">${t}</button>`).join('')}</div>
+    <p class="hint">${th === 'auto' ? 'Automático segue o modo claro ou escuro do aparelho.' : th === 'dark' ? 'Sempre escuro, mesmo com o aparelho no modo claro.' : 'Sempre claro, mesmo com o aparelho no modo escuro.'}</p></section>`;
+  const su = S.stakeIn === 'units';
+  h += `<section class="card" id="stakecard"><span class="label">Valor das apostas</span>
+    <p class="hint">Vale pra todas as apostas: é assim que o cupom pede o valor.</p>
+    <div class="segm" role="group" aria-label="Como informar o valor das apostas"><button class="${su ? '' : 'on'}" data-act="stakein" data-m="money" aria-pressed="${!su}">Em ${esc(sym())}</button><button class="${su ? 'on' : ''}" data-act="stakein" data-m="units" aria-pressed="${su}">Em unidades</button></div>
+    <p class="hint" id="stakehow">${!su ? `Você digita o valor em ${esc(sym())}. Os atalhos de 0,5u a 3u continuam no cupom.`
+      : w.unit > 0 ? `Você digita quantas unidades quer apostar. Hoje 1u = ${money(w.unit)}.`
+      : 'Ainda não há unidade, porque a banca está vazia. Até o primeiro depósito, o cupom pede o valor em dinheiro.'}</p></section>`;
   const tc = Core.tipCfg(S.tip), ex = tc.srcUnit || 1750, exStake = Core.tipStake({ kind: 'money', money: ex }, tc, w.unit);
   h += `<section class="card" id="tipcard"><span class="label">Ao copiar um print</span>
     <p class="hint">Print ou texto que fala em unidades ("Stake 1 unidade") sempre entra com as mesmas unidades, na sua unidade. A escolha abaixo vale pra print que traz o valor em dinheiro.</p>
@@ -237,6 +254,9 @@ function vCarteira(w: Wallet): string {
   if (ui.restore) h += `<textarea id="rs" placeholder="Cola aqui o backup" aria-label="Backup para restaurar"></textarea><button class="btn block" data-act="dorestore">Restaurar e substituir tudo</button>`;
   h += ui.reset ? `<p class="msg">Isso apaga saldo, depósitos e todas as apostas deste aparelho.</p><div class="rowbtns"><button class="btn danger" data-act="doreset">Apagar tudo</button><button class="btn ghost" data-act="reset">Manter</button></div>`
     : `<button class="btn danger block" data-act="reset">Zerar simulação</button>`;
+  h += '</section>';
+  const built = builtFrom();
+  h += `<section class="card" id="about"><span class="label">Versão do app</span><p class="hint" id="version">${built ? `Versão ${esc(built.slice(0, 7))}.` : 'Versão de desenvolvimento.'} ${canUpdate() ? 'O app fica guardado neste aparelho: abre na hora e também sem internet, com os últimos dados que carregou.' : 'Neste endereço o app não fica guardado no aparelho.'}</p>${canUpdate() ? '<button class="btn ghost block" data-act="checkupdate">Procurar versão nova</button>' : ''}`;
   return h + '</section>';
 }
 
@@ -261,13 +281,12 @@ export function renderSheet(): void {
   if (slip.mode === 'multi' && c.groups.some(g => g.combo)) h += '<p class="hint">Na mesma luta as odds não se multiplicam: o preço vem da chance de tudo acontecer junto.</p>';
   const iu = inUnits();
   h += `<label class="label" for="${iu ? 'stakeu' : 'stake'}">${slip.mode === 'multi' ? 'Valor da ' + mname.toLowerCase() : c.n > 1 ? 'Valor de cada aposta' : 'Valor da aposta'}</label>
-    <div class="segm" role="group" aria-label="Como informar o valor"><button class="${iu ? '' : 'on'}" data-act="stakein" data-m="money" aria-pressed="${!iu}">Em ${esc(sym())}</button><button class="${iu ? 'on' : ''}" data-act="stakein" data-m="units" aria-pressed="${iu}" ${c.unit > 0 ? '' : 'disabled'}>Em unidades</button></div>
     ${iu ? `<div class="field"><input id="stakeu" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(slip.units)}" aria-label="Valor em unidades"><span>unidades</span></div>`
       : `<div class="field"><span>${esc(sym())}</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
     <div class="quick">${[10, 50, 100].map(v => `<button data-act="stq" data-v="${v}">+${v}</button>`).join('')}<button data-act="stq" data-v="max">Tudo</button></div>
     <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="stq" data-v="${v}">+${Core.moneyText(v)}</button>`).join('')}</div>`}
     <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}${iu ? '<button data-act="stq" data-v="max">Tudo</button>' : ''}</div>
-    <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'}</p>
+    <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'} · Valor em ${iu ? 'unidades' : 'dinheiro'}: <button data-act="tab" data-tab="carteira" style="text-decoration:underline">mudar nas configurações</button></p>
     <div id="slipsum"></div>`;
   part('panel').innerHTML = h;
   slipSummary();

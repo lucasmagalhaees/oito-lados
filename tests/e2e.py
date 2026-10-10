@@ -44,6 +44,13 @@ with sync_playwright() as p:
     # deposit
     # money fields: thousands mask while typing, and the display currency
     pg.click('[data-act=tab][data-tab=carteira]')
+    # units chosen with an empty bankroll: there is no unit yet, so the card says so and the slip asks for money
+    pg.click('[data-act=stakein][data-m=units]'); assert 'Ainda não há unidade' in pg.inner_text('#stakehow'), pg.inner_text('#stakehow')
+    pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=pick][data-fid="f1"][data-key="ml:a"]'); pg.click('#slipbtn'); pg.wait_for_selector('#stake')
+    assert pg.locator('#stakeu').count() == 0 and 'Valor em dinheiro' in pg.inner_text('#panel'), pg.inner_text('#panel')
+    pg.click('#panel [data-act=sheet]'); pg.click('[data-act=pick][data-fid="f1"][data-key="ml:a"]')
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=money]')
+    assert pg.evaluate('window.__OL.S.stakeIn') == 'money' and pg.evaluate('window.__OL.slip.sels.length') == 0
     pg.click('#dep'); pg.keyboard.type('1234567,891')
     assert pg.input_value('#dep') == '1.234.567,89', pg.input_value('#dep')
     for _ in range(5): pg.keyboard.press("Backspace")
@@ -114,15 +121,33 @@ with sync_playwright() as p:
     pick = lambda fid, key: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     shot('s2-markets.png', True)
+    # a legend of the corner colours stays in view while the markets of a fight scroll
+    key = pg.locator('.fight:has([data-fid="f3"]) .corners')
+    assert pg.locator('.fight .corners').count() == 3 and key.locator('.a').inner_text() == 'ALMEIDA' and key.locator('.b').inner_text() == 'DUNNE', key.inner_text()
+    pg.locator('[data-fid="f3"][data-key="wr:a:3"]').scroll_into_view_if_needed(); pg.mouse.wheel(0, 200); pg.wait_for_timeout(200)
+    legend = key.bounding_box(); bar = pg.locator('header.top').bounding_box()
+    assert abs(legend['y'] - (bar['y'] + bar['height'])) <= 2, ('the legend must sit right under the top bar', legend, bar)
+    assert 'canto vermelho' in pg.get_attribute('[data-fid="f3"][data-key="wr:a:3"]', 'title') and 'canto azul' in pg.get_attribute('[data-fid="f3"][data-key="wr:b:3"]', 'title')
+    shot('s21-legenda.png'); pg.evaluate('window.scrollTo(0, 0)')
     # over and under read as + and −, and every option that belongs to a fighter carries that fighter's corner colour
     opt = lambda key, extra='': pg.locator(f'[data-act=pick][data-fid="f3"][data-key="{key}"]{extra}')
     assert [opt('tot:o:1.5').locator('.ol').inner_text(), opt('tot:u:1.5').locator('.ol').inner_text()] == ['+1.5', '−1.5']
     assert all(opt(k, '.sa').count() == 1 for k in ('wr:a:1', 'mov:a:sub', 'tda:a:yes')) and all(opt(k, '.sb').count() == 1 for k in ('wr:b:1', 'mov:b:ko', 'tda:b:no')), 'fighter options must be marked'
     assert all(opt(k, '.sa').count() + opt(k, '.sb').count() == 0 for k in ('tot:o:1.5', 'fm:ko', 'rnd:1', 'dist:yes', 'ml:a')), 'options about the whole fight (and the winner row) are not'
+    # over and under have a colour scheme of their own, different from each other and from both corners
+    assert all(opt(k, '.xo').count() == 1 for k in ('tot:o:1.5', 'tot:o:3.5', 'td:o:1.5')) and all(opt(k, '.xu').count() == 1 for k in ('tot:u:1.5', 'td:u:1.5')), 'over and under must be marked'
+    assert all(opt(k, '.xo').count() + opt(k, '.xu').count() == 0 for k in ('wr:a:1', 'fm:ko', 'rnd:1', 'dist:yes', 'tda:a:yes')), 'and nothing else'
+    ink = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"] .ol`)).color', key)
+    arrow = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"] .ol`), "::before").content', key)
+    assert ink('tot:o:1.5') != ink('tot:u:1.5') and ink('tot:o:1.5') == ink('td:o:1.5') and ink('tot:o:1.5') != ink('fm:ko'), (ink('tot:o:1.5'), ink('tot:u:1.5'))
+    corner = lambda side: pg.evaluate('s => getComputedStyle(document.querySelector(`.fight:has([data-fid="f3"]) .corners .${s} i`)).backgroundColor', side)
+    assert len({ink('tot:o:1.5'), ink('tot:u:1.5'), corner('a'), corner('b')}) == 4, (ink('tot:o:1.5'), ink('tot:u:1.5'), corner('a'), corner('b'))
+    assert (arrow('tot:o:1.5'), arrow('tot:u:1.5')) == ('"▲"', '"▼"'), (arrow('tot:o:1.5'), arrow('tot:u:1.5'))
     corner = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"]`), "::before").backgroundColor', key)
     assert corner('wr:a:1') != corner('wr:b:1') and corner('wr:a:1') == corner('mov:a:sub'), (corner('wr:a:1'), corner('wr:b:1'))
     pick('f3', 'wr:b:2'); pick('f3', 'tot:o:1.5'); pg.click('#slipbtn'); pg.wait_for_selector('#panel .sel')
     assert pg.locator('#panel .sel .sd.b').count() == 1 and pg.locator('#panel .sel .sd').count() == 1 and '+1.5 rounds' in pg.inner_text('#panel'), pg.inner_text('#panel')
+    assert pg.locator('#panel .sel .ou.o').count() == 1, 'the over in the slip carries its arrow'
     shot('s18-cores.png'); pg.click('#panel [data-act=unpick]'); pg.click('#panel [data-act=unpick]')
     def bet(sels, stake, mode='single'):
         for s in sels: pick(*s)
@@ -178,9 +203,23 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=lutas]')
     pg.click('[data-act=imp]'); pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
     assert txt('#impvalue') == 'R$ 50,00 · 0,5u', 'a tip in units is not touched by the setting: ' + txt('#impvalue')
-    pg.click('[data-act=impclose]'); cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
+    # appearance: automatic follows the device; light and dark hold whatever the device says
+    pg.click('[data-act=impclose]'); pg.click('.tabbar [data-tab=carteira]')
+    DARK, LIGHT = 'rgb(14, 18, 24)', 'rgb(242, 243, 245)'
+    paper = lambda: pg.evaluate('getComputedStyle(document.body).backgroundColor')
+    bars = lambda: pg.evaluate('[...document.querySelectorAll("meta[name=theme-color]")].map(m => m.content)')
+    device = DARK if (sys.argv[1] if len(sys.argv) > 1 else 'dark') == 'dark' else LIGHT
+    assert paper() == device and bars() == ['#0e1218', '#f2f3f5'], (paper(), bars())
+    pg.click('[data-act=theme][data-m=dark]'); assert paper() == DARK and bars() == ['#0e1218', '#0e1218'], (paper(), bars())
+    pg.click('[data-act=theme][data-m=light]'); assert paper() == LIGHT and bars() == ['#f2f3f5', '#f2f3f5'], (paper(), bars())
+    other = 'light' if device == DARK else 'dark'                    # leave the one the device is NOT asking for, and reload
+    pg.click(f'[data-act=theme][data-m={other}]'); shot('s22-tema.png')
+    cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
+    assert pg.evaluate('document.documentElement.dataset.theme') == other and paper() != device, 'the chosen theme survives a reload'
     assert pg.evaluate('JSON.stringify(window.__OL.S.tip)') == '{"mode":"units","srcUnit":1000}', 'the setting survives a reload'
-    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=same]'); assert 'Um print de R$ 1.000,00 vira uma aposta de R$ 1.000,00.' in txt('#tiphow'), txt('#tiphow')
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=theme][data-m=auto]')
+    assert paper() == device and bars() == ['#0e1218', '#f2f3f5'] and pg.evaluate('document.documentElement.dataset.theme') is None and pg.evaluate('"theme" in window.__OL.S') is False, (paper(), bars())
+    pg.click('[data-act=tipmode][data-m=same]'); assert 'Um print de R$ 1.000,00 vira uma aposta de R$ 1.000,00.' in txt('#tiphow'), txt('#tiphow')
     pg.click('.tabbar [data-tab=lutas]'); pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     pg.click('[data-act=imp]')
@@ -209,7 +248,14 @@ with sync_playwright() as p:
     shot('s16-atalhos.png')
     pg.click('[data-act=stq][data-v=max]'); assert pg.input_value('#stake') == '1.000', pg.input_value('#stake')
     # the stake can also be typed in units of the bankroll: the amount follows, and the choice is remembered
-    pg.click('[data-act=stakein][data-m=units]'); assert pg.input_value('#stakeu') == '10' and pg.locator('#stake').count() == 0, 'R$ 1.000,00 at R$ 100,00 a unit is 10u'
+    assert pg.locator('#panel [data-act=stakein]').count() == 0, 'money or units is a setting, not a switch on every slip'
+    pg.click('#panel [data-act=sheet]'); pg.click('.tabbar [data-tab=carteira]')
+    assert 'Você digita o valor em R$' in txt('#stakehow'), txt('#stakehow')
+    pg.click('[data-act=stakein][data-m=units]'); assert 'Hoje 1u = R$ 100,00' in txt('#stakehow'), txt('#stakehow')
+    shot('s19-configuracoes.png')
+    pg.click('.tabbar [data-tab=lutas]'); pg.click('#slipbtn'); pg.wait_for_selector('#stakeu')
+    assert pg.input_value('#stakeu') == '10' and pg.locator('#stake').count() == 0, 'R$ 1.000,00 at R$ 100,00 a unit is 10u'
+    assert 'Valor em unidades' in txt('#panel'), txt('#panel')
     pg.fill('#stakeu', ''); pg.click('#stakeu'); pg.keyboard.type('2.5x')
     assert pg.input_value('#stakeu') == '2,5' and 'R$ 250,00 · 2,5u' in txt('#slipsum') and 'Apostar R$ 250,00' in txt('[data-act=place]'), (pg.input_value('#stakeu'), txt('#slipsum'))
     pg.click('[data-act=stu][data-u="0.5"]'); assert pg.input_value('#stakeu') == '0,5' and 'R$ 50,00 · 0,5u' in txt('#slipsum'), txt('#slipsum')
@@ -221,7 +267,10 @@ with sync_playwright() as p:
     pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     pick('f1', 'ml:a'); pg.click('#slipbtn'); pg.wait_for_selector('#stakeu')
-    pg.fill('#stakeu', '1,25'); pg.click('[data-act=stakein][data-m=money]'); assert pg.input_value('#stake') == '125', 'switching back keeps the amount: ' + pg.input_value('#stake')
+    pg.fill('#stakeu', '1,25'); pg.click('#panel [data-act=tab][data-tab=carteira]')            # the slip links to the setting
+    assert pg.evaluate('window.__OL.ui.tab') == 'carteira' and pg.evaluate('document.getElementById("sheet").hidden')
+    pg.click('[data-act=stakein][data-m=money]'); pg.click('.tabbar [data-tab=lutas]'); pg.click('#slipbtn'); pg.wait_for_selector('#stake')
+    assert pg.input_value('#stake') == '125', 'switching back keeps the amount: ' + pg.input_value('#stake')
     assert pg.locator('[data-act=stq]').count() == 7 and pg.evaluate('window.__OL.S.stakeIn') == 'money'
     pg.click('[data-act=stu][data-u="2"]'); assert pg.input_value('#stake') == '200', pg.input_value('#stake')
     pg.click('[data-act=stu][data-u="1"]'); assert pg.input_value('#stake') == '100', pg.input_value('#stake')
