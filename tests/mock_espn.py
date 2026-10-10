@@ -137,4 +137,9 @@ _SLIP = """<div id="print" style="width:460px;background:#fff;color:#222;font:18
 SLIP_HTML = _SLIP % ('70010001', '1', '', 'Aposta simples', '1X2: V2: Caio Brandt - Dario Kessler', '2.70', '100', '270.00')
 ACCA_HTML = _SLIP % ('70010002', '2 (finalizado 0)', '<div style="padding:8px 12px">Marina Teles - Joana Prado Jr.</div><div style="padding:8px 12px">Rafael Almeida - Connor Lee Dunne</div>',
                      'Acumulador', '1X2: V1: Marina Teles - Joana Prado Jr.', '3.424', '80', '273.92')
+# and a list of selections as such an account shows them: names stacked, the market below, no value and no kind of bet
+LIST_HTML = """<div id="print" style="width:460px;background:#fff;color:#222;font:18px Arial,sans-serif;padding:20px">""" + ''.join(
+    '<div style="color:#444;margin-top:14px">%s. UFC Fight Night. 10.10.26</div><div style="font-weight:700">%s</div><div style="font-weight:700">%s</div>'
+    '<div style="display:flex;justify-content:space-between;margin:8px 0"><span>%s</span><b>%s</b></div><div style="border-bottom:1px solid #ddd;padding-bottom:10px">Não processado</div>' % row
+    for row in (('216740', 'Marina Teles', 'Joana Prado Jr.', '1X2: V1', '1.67'), ('216780', 'Rafael Almeida', 'Connor Lee Dunne', '1X2: V2', '2.05'))) + '</div>'
 TIP_TEXT = "🥊 *Rafael Almeida vs. Connor Lee Dunne*\n\n🎰 *Connor Lee Dunne* - Para vencer a luta\n\n💰 Odd - 1.44\n💎 Stake - 0,5 unidade"

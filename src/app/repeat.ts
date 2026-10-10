@@ -15,7 +15,7 @@ export const repeatable = (b: Bet): boolean => b.legs.length > 0 && b.legs.every
 export function repeatBet(id: string | undefined): void {
   const b = S.bets.find(x => x.id === id);
   if (!b || !repeatable(b)) { render(); return; }
-  slip.sels = b.legs.map(l => ({ fid: l.fid, key: l.key }));
+  slip.sels = b.legs.map(l => ({ fid: l.fid, key: l.key })); slip.copy = null;      // a repeat is a new bet at today's odds, not the copy the first one was
   slip.mode = b.type === 'multi' ? 'multi' : 'single';
   setStakeMoney(b.stake);
   ui.msg = ''; ui.cash = null; ui.sheet = true;

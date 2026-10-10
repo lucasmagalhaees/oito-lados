@@ -1,7 +1,7 @@
 import { Core } from '../core';
 import { loadBoard, loadOdds, openBets } from './api';
 import { CASH_WHY, cashoutOf } from './cashout';
-import { $, CUR, WEIGHT, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, money, part, pctText, rateText, signed, signedU, sym, symbolOf } from './format';
+import { $, CUR, WEIGHT, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, money, part, pctText, rateText, signed, signedPct, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
 import { canBet, inUnits, priceOf, setStakeMoney, slipCalc, wallet } from './helpers';
 import { renderImport } from './import';
@@ -12,7 +12,7 @@ import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
 import type { Bet, Currency, Fight, FightEvent, Leg, Option, Outcome, Side } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
-import type { Slip } from './state';
+import type { CopyMeta, Slip } from './state';
 
 /* ================= rendering ================= */
 let toastT: ReturnType<typeof setTimeout> | undefined;
@@ -134,7 +134,8 @@ function vApostas(): string {
       else line2 = `<span>${esc(dWhen.format(l.date))}</span>`;
       h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${sideDot(l.key, l.weight || D.fights.get(l.fid)?.weight)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
     }
-    const profit = b.payout - b.stake;
+    const profit = b.payout - b.stake, edge = Core.printedEdge(b);
+    if (b.from || edge) h += `<p class="src">${b.from ? `De ${esc(b.from)}` : 'Copiada'}${edge ? ` · odd do print ${fo(edge.printed)}, você pegou ${fo(edge.got)} (${signedPct(edge.diff)})` : ''}</p>`;
     h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b>${b.unit && b.unit > 0 ? `<span class="un">${fu(b.stake / b.unit)}</span>` : ''}</div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
       (isOpen ? `<div><small>Retorno</small><b>${money(Core.r2(b.stake * odd))}</b></div>`
         : `<div><small>Resultado</small><b class="${profit > 0 ? 'pos' : profit < 0 ? 'neg' : ''}">${signed(profit)}</b></div>`) + '</div>';
@@ -197,6 +198,14 @@ function breakdown(done: Bet[], keyOf: (b: Bet) => string): Row[] {
 function tblHtml(title: string, rows: Row[]): string {
   return `<div class="tbl"><table><thead><tr><th>${title}</th><th>Apostas</th><th>Apostado</th><th>Resultado</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(r.k)}</td><td>${r.n}</td><td>${money(r.st)}</td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
+// who the copied bets came from: staked, result, return on what was staked and hit rate (voided and cashed-out bets are not hits or misses)
+function originHtml(done: Bet[]): string {
+  const m = new Map<string, { k: string; n: number; st: number; ret: number; won: number; dec: number }>();
+  for (const b of done) { const k = b.from || 'Sem origem', r = m.get(k) || { k, n: 0, st: 0, ret: 0, won: 0, dec: 0 }; r.n++; r.st += b.stake; r.ret += b.payout; if (b.status === 'won' || b.status === 'lost') { r.dec++; if (b.status === 'won') r.won++; } m.set(k, r); }
+  const rows = [...m.values()].sort((a, b) => b.st - a.st);
+  // four columns are what a phone holds: how many bets and how much was staked go under the name
+  return `<div class="tbl" id="origins"><table><thead><tr><th>Origem</th><th>Resultado</th><th>ROI</th><th>Acerto</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(r.k)}<small>${r.n} ${r.n > 1 ? 'apostas' : 'aposta'} · ${money(r.st)}</small></td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}</td><td>${r.st ? signedPct(p / r.st) : '—'}</td><td>${r.dec ? `${r.won}/${r.dec}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
 function vCarteira(w: Wallet): string {
   let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div><p>${w.open.length ? `${money(w.atRisk)} em jogo em ${w.open.length} ${w.open.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ` : ''}${money(w.dep)} depositados no total</p></section>`;
   const cur = S.cur || 'BRL', dc = isCurrency(ui.depCur) ? ui.depCur : cur, other = dc !== cur, conv = other && !bankEmpty(), rate = conv ? Core.fxRate(FX, cur, dc) : null, df = fmtOf(dc);
@@ -221,7 +230,10 @@ function vCarteira(w: Wallet): string {
     h += `<span class="label">Resultado acumulado, aposta a aposta</span><div class="chart" id="chart"></div>`;
     h += tblHtml('Mercado', breakdown(w.done, b => isCombo(b) ? 'Combinada' : b.type === 'multi' ? 'Múltipla' : b.legs[0].cat));
     h += tblHtml('Evento', breakdown(w.done, b => { const s = new Set(b.legs.map(l => l.event)); return s.size === 1 ? evLabel({ name: [...s][0] }).main : 'Vários eventos'; }));
+    if (w.done.some(b => b.from)) h += originHtml(w.done);
   } else h += '<p class="hint">O gráfico e a quebra por mercado aparecem quando a primeira aposta for encerrada.</p>';
+  const eg = Core.edgeSummary(S.bets);
+  if (eg.n) h += `<p class="hint" id="edge">Odd contra o print: em ${eg.n} ${eg.n > 1 ? 'apostas copiadas' : 'aposta copiada'} com odd no original, você pegou em média ${signedPct(eg.avg)} em relação ao print (${eg.ahead} acima).</p>`;
   h += '</section>';
   const lastConv = (S.conv || []).slice(-1)[0];
   if (S.deposits.length) h += `<section class="card"><span class="label">Depósitos</span><div>${S.deposits.slice().reverse().slice(0, 8).map(d => `<div class="dep"><span>${esc(dWhen.format(d.t))}</span><b>${money(d.v)}</b></div>`).join('')}</div>${lastConv ? `<p class="hint" id="convlog">Banca convertida de ${CUR[lastConv.from]} para ${CUR[lastConv.to]} em ${esc(dWhen.format(lastConv.t))}, por ${esc(rateText(lastConv.from, lastConv.to, lastConv.rate))} (cotação de ${esc(dateBR(lastConv.date))}).</p>` : ''}</section>`;
@@ -286,6 +298,7 @@ export function renderSheet(): void {
     <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="stq" data-v="${v}">+${Core.moneyText(v)}</button>`).join('')}</div>`}
     <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}${iu ? '<button data-act="stq" data-v="max">Tudo</button>' : ''}</div>
     <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'} · Valor em ${iu ? 'unidades' : 'dinheiro'}: <button data-act="tab" data-tab="carteira" style="text-decoration:underline">mudar nas configurações</button></p>
+    ${slip.copy ? `<p class="hint" id="slipcopy">Aposta copiada${slip.copy.from ? ` de ${esc(slip.copy.from)}` : ''}: a origem e a odd do print ficam guardadas com ela.</p>` : ''}
     <div id="slipsum"></div>`;
   part('panel').innerHTML = h;
   slipSummary();
@@ -315,10 +328,14 @@ export async function recheck(fids: string[]): Promise<boolean> {
 }
 /** Writes the bets of a slip that has already been validated (`c.ok`: every selection has its fight and its price) and
  *  returns how many were made: one for a multiple, one per selection otherwise. Saving is left to the caller. */
-export function writeBets(c: SlipCalc, mode: Slip['mode'], now: number, salt: string): number {
-  const leg = (r: Resolved): Leg => { const f = r.f!, x = r.x!; return { fid: f.id, eid: f.eventId, key: r.s.key, market: x.market, sel: x.sel, cat: x.cat, weight: f.weight, fight: `${f.a.last} x ${f.b.last}`, event: f.eventName, date: f.date, odd: x.odd, src: x.src, out: null }; };
+export function writeBets(c: SlipCalc, mode: Slip['mode'], now: number, salt: string, copy: CopyMeta | null): number {
+  // a copied bet keeps what its original said: who it came from, and the odd printed for each selection and for the whole bet
+  const seen = (r: Resolved): number | undefined => (copy && copy.legs[r.s.fid + '|' + r.s.key]) || undefined;
+  const sameBet = !!copy && copy.sig === c.rs.map(r => r.s.fid + '|' + r.s.key).sort().join(',');
+  const leg = (r: Resolved): Leg => { const f = r.f!, x = r.x!, p = seen(r); return { fid: f.id, eid: f.eventId, key: r.s.key, market: x.market, sel: x.sel, cat: x.cat, weight: f.weight, fight: `${f.a.last} x ${f.b.last}`, event: f.eventName, date: f.date, odd: x.odd, src: x.src, out: null, ...(p ? { printed: p } : {}) }; };
   const unit = c.unit;                              // the unit in force when the bet is placed; the history is measured with it
-  const mk = (type: Bet['type'], legs: Leg[], i: number, odd: number, sgp: Record<string, number> | null): Bet => ({ id: 'b' + now.toString(36) + salt + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, unit, odd, sgp, legs, status: 'open', payout: 0, settledAt: null });
+  const mk = (type: Bet['type'], legs: Leg[], i: number, odd: number, sgp: Record<string, number> | null): Bet => ({ id: 'b' + now.toString(36) + salt + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, unit, odd, sgp, legs, status: 'open', payout: 0, settledAt: null,
+    ...(copy && copy.from ? { from: copy.from } : {}), ...(type === 'multi' && sameBet && copy!.bet ? { printed: copy!.bet } : {}) });
   if (mode === 'multi') {
     const sgp: Record<string, number> = {}; for (const g of c.groups) if (g.combo) sgp[g.fid] = g.odd!;      // price of each same-fight combo, fixed at placement
     S.bets.push(mk('multi', c.rs.map(leg), 0, c.odd, sgp)); return 1;
@@ -339,9 +356,9 @@ export async function place(): Promise<void> {
   if (slip.mode !== mode) { ui.msg = 'Essa combinação não está mais disponível com as odds novas.'; renderSheet(); render(); return; }
   if (c.rs.some(r => Math.abs(r.x!.odd - shown.get(r.s.fid + '|' + r.s.key)!) > 0.001) || (mode === 'multi' && Math.abs(c.odd - before.odd) > 0.001)) { ui.msg = 'As odds mudaram. Confere os valores novos e confirma de novo.'; renderSheet(); render(); return; }
   if (c.total > c.balance + 0.004) { renderSheet(); return; }
-  const made = writeBets(c, slip.mode, Date.now(), '');
+  const made = writeBets(c, slip.mode, Date.now(), '', slip.copy);
   saveS(); saveCache();
-  slip.sels = []; setStakeMoney(0); slip.mode = 'single'; ui.sheet = false; ui.msg = ''; ui.tab = 'apostas'; ui.filter = 'open';
+  slip.sels = []; slip.copy = null; setStakeMoney(0); slip.mode = 'single'; ui.sheet = false; ui.msg = ''; ui.tab = 'apostas'; ui.filter = 'open';
   renderSheet(); render(); window.scrollTo(0, 0);
   toast(made > 1 ? `${made} apostas feitas. Boa sorte.` : 'Aposta feita. Boa sorte.');
 }

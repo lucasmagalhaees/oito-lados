@@ -49,11 +49,15 @@ export interface Leg {
   odd: number; src: 'real' | 'est'; out?: Outcome | null; res?: string;
   /** The weight class as ESPN names it, copied with the bet; legs placed before this existed do not have it. */
   weight?: string;
+  /** The odd the original printed for this selection, when the bet was copied from one that gave it. */
+  printed?: number;
 }
 export interface CashInfo { kind: 'refund' | 'market'; full: number | null; chance: number | null }
 export interface Bet {
   id: string; t: number; type: 'single' | 'multi'; stake: number; unit?: number; odd: number; sgp?: Record<string, number> | null;
   legs: Leg[]; status: BetStatus; payout: number; settledAt: number | null; cash?: CashInfo;
+  /** For a copied bet: who it was copied from, as the person typed it, and the odd the original gave for the whole bet. */
+  from?: string; printed?: number;
 }
 export interface Deposit { t: number; v: number }
 export interface Conversion { t: number; from: Currency; to: Currency; rate: number; date: string }
@@ -77,6 +81,8 @@ export interface TipStake { how: 'units' | 'default' | 'same'; units: number | n
 export interface TipItem { fid: string; key: string; printedOdd: number | null; assumed: boolean; quote: string }
 /** Why part of a tip could not be read. `short`: the original says it is a multiple of `want` selections and only `got` were found. */
 export interface TipProblem { code: 'empty' | 'nofight' | 'ambiguous' | 'nomarket' | 'short'; fid?: string; want?: number; got?: number }
+/** A selection added to a tip for a fight it names without saying the bet: chosen by hand, or taken from another original. */
+export interface TipPick { fid: string; key: string; printedOdd?: number | null }
 /** What was read from a tip. `odd` is the printed odd of the whole bet, when one odd is given for several selections.
  *  `kind` is what the original says it is (a single, or a multiple of `legs` selections), when it says so. */
 export interface Tip { items: TipItem[]; stake: TipStakeIn; problems: TipProblem[]; odd: number | null; kind: 'single' | 'multi' | null; legs: number | null }

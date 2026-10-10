@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { isCurrency, setFmt } from './format';
-import type { AppState, AthleteStats, CornerPair, Currency, Fight, FightEvent, Odds, Result, Takedowns, Tip } from '../core';
+import type { AppState, AthleteStats, CornerPair, Currency, Fight, FightEvent, Odds, Result, Takedowns, Tip, TipPick, TipStakeIn } from '../core';
 
 /* ================= persistent state ================= */
 export const LS = {
@@ -79,12 +79,20 @@ export interface Ui {
 }
 export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
-export interface Slip { sels: { fid: string; key: string }[]; mode: 'single' | 'multi'; stake: string; units: string; unitsN: number }
-export const slip: Slip = { sels: [], mode: 'single', stake: '', units: '', unitsN: 0 };
+/** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
+ *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */
+export interface CopyMeta { from: string; bet: number | null; sig: string; legs: Record<string, number> }
+export interface Slip { sels: { fid: string; key: string }[]; mode: 'single' | 'multi'; stake: string; units: string; unitsN: number; copy: CopyMeta | null }
+export const slip: Slip = { sels: [], mode: 'single', stake: '', units: '', unitsN: 0, copy: null };
 /** The "copy a bet" sheet. */
 /** One bet read in the copy screen: from the text field, or from one picture. */
-export interface ImportOp { id: number; src: 'text' | 'image'; name: string; res: Tip }
+export interface ImportOp {
+  id: number; src: 'text' | 'image'; name: string; res: Tip;
+  /** What the person changed in it: selections chosen for fights the original names without a bet (`src` is the item of
+   *  the list they were taken from), fights not to fill in automatically, a value typed, and single or multiple. */
+  picks: (TipPick & { src?: number })[]; noauto: string[]; stake: TipStakeIn | null; mode: Slip['mode'] | null;
+}
 /** The copy screen. `ops` is the list of bets read so far; `at` and `of` count the pictures while they are being read. */
-export interface ImportState { open: boolean; text: string; busy: boolean; pct: number; at: number; of: number; ops: ImportOp[]; err: string; msg: string; placing: boolean }
-export const imp: ImportState = { open: false, text: '', busy: false, pct: 0, at: 0, of: 0, ops: [], err: '', msg: '', placing: false };
+export interface ImportState { open: boolean; text: string; busy: boolean; pct: number; at: number; of: number; ops: ImportOp[]; err: string; msg: string; placing: boolean; from: string }
+export const imp: ImportState = { open: false, text: '', busy: false, pct: 0, at: 0, of: 0, ops: [], err: '', msg: '', placing: false, from: '' };
 export const bankEmpty = (): boolean => !S.deposits.length && !S.bets.length;
