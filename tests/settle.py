@@ -58,6 +58,9 @@ with sync_playwright() as p:
     check('a bet on takedowns says it waits for the count to stop moving', txt('#view').count('esperando as quedas fecharem (até 2 min)') == 1, txt('#view')[-900:])
     pg.evaluate('window.__OL.D.td.f1.final = true')
     check('the strip sums up the two that closed', 'Desde a última vez: 2 apostas fecharam' in txt('#since'), txt('#since'))
+    sinceu = pg.evaluate('(() => { const S = window.__OL.S; return S.bets.filter(b => ["won", "lost"].includes(b.status) && b.settledAt > S.seen).reduce((a, b) => a + (b.payout - b.stake) / b.unit, 0); })()')
+    shown = txt('#since b span').split(' · ')[-1]
+    check('and says the result in units too', shown.endswith('u') and abs(float(shown.replace('u', '').replace('−', '-').replace('+', '').replace(',', '.')) - sinceu) < 0.006, (txt('#since b span'), sinceu))
     # while a bet waits on a finished fight the source is asked again sooner than with a fight merely in progress (15 s)
     check('a bet is waiting on a finished fight', pg.evaluate('window.__OL.settling(Date.now())') is True)
     before = boards(); pg.wait_for_timeout(9500)

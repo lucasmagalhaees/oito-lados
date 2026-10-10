@@ -43,6 +43,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 12. Com a terceira leva em andamento, entre 16:59 e 17:04, mais pedidos, **ainda não feitos e fora deste PR**: um botão para colar o texto da área de transferência; sugerir stake de 0,2u a 0,4u em múltipla com mais de quatro seleções; setinhas de meio em meio no campo de unidades; e uma revisão da regra de valor ao copiar ("tem que seguir o que foi parametrizado: ou segue a stake, ou segue o valor"; em unidades, print que não diz unidades vale 1u, e não o dinheiro do print, o que revê a D42), com a stake em unidades e a hora de cada aposta à vista para conferir o consolidado. E uma pergunta: dá para mandar notificação quando a aposta é resolvida? Respondida (D63).
 13. Às 17:09: "deixa quieto esse lance da notificação" e "só garante que está numa forma bacana esse lance de resolver a aposta, pra ganho e pra perda; seria bacana não demorar tanto depois que a luta acabou, mas eu consigo esperar um tempo". É a primeira noite com luta de verdade. Revisão do caminho de liquidação (D64), num PR à frente dos outros pedidos da fila.
 14. PR #15 mesclado às 17:19 (depois de um conserto: o `docs_check.py` falhou no CI por exigir uma pasta que só existe depois de um teste rodar). PR #16, da liquidação, aberto com o CI verde. Em seguida, os pedidos do item 12: botão de colar (D65), stake sugerida em múltipla longa (D66), setas no campo de unidades (D67), a regra de valor ao copiar seguida à risca (D68) e a stake e a hora à vista em cada aposta lida (D69).
+15. PR #16 mesclado às 17:42 e PR #17 às 17:46. A checagem de produção do #16 foi cancelada pela do #17 (o workflow `Produção` cancela a execução anterior do mesmo branch); a do #17 passou no commit `3491921`. O Lucas perguntou por que a do #16 "falhou" (respondido: cancelada, não falha) e se compartilhar a sessão já exigiria um backend. Respondido, sem implementar nada: mandar uma cópia já sai pelo backup por texto; acompanhar ao vivo, ou a mesma banca em dois aparelhos, é a etapa 2 do `docs/escala.md` e só começa se ele pedir. Às 17:57: "falta trazer a quantidade de unidades apostadas no evento, e de outras visualizações de unidades também, ganhos potenciais em reais e em unidades" (D70).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -689,6 +690,26 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Interpretação que precisou ser feita (perguntada ao Lucas, sem resposta ainda):** "a hora de cada oportunidade" foi lida como a hora da **luta**, que o app conhece sempre. A hora em que o canal postou só existe em alguns prints e não é lida.
 - **O que já existia:** na aba Apostas cada aposta já mostrava a stake em unidades, a hora de cada luta e a hora em que foi feita.
 
+## D70. Unidades e ganho possível em toda tela que mostra dinheiro em jogo
+
+- **Contexto (10/10/2026, 17:57):** "falta trazer a quantidade de unidades apostadas no evento, e de outras visualizações de unidades também, ganhos potenciais em reais e em unidades".
+- **Decisão:**
+  - Duas palavras, com sentido fixo no app inteiro: **retorno** é o que volta se a aposta bater (stake × odd); **ganho** é o retorno menos a stake.
+  - Onde aparece dinheiro em jogo aparece também em unidades, e onde aparece o retorno possível aparece o ganho possível, em dinheiro e em unidades:
+    - cada evento da aba Apostas abre com um quadro: em jogo (R$ e u), retorno, ganho (R$ e u); com apostas em mais de um evento, um quadro "Tudo em aberto" antes dos grupos;
+    - cada aposta aberta ganha a linha "Ganho se bater"; a encerrada mostra o resultado também em unidades;
+    - a marca no card da luta ("N apostas · R$ X") ganha as unidades, e o aviso de quanto já está em jogo numa luta também;
+    - a Carteira diz, embaixo do saldo, o que está em jogo em unidades e o retorno e o ganho se todas baterem; as tabelas por mercado e por evento trazem o resultado em unidades;
+    - o cupom ganha "Ganho possível"; a lista de copiar diz o ganho de cada item e o retorno e o ganho do lote;
+    - a faixa "Desde a última vez" diz o resultado também em unidades.
+  - Em aposta já feita, as unidades são as da unidade do dia dela, como na D61 e na D69: a unidade muda com a banca, e medir pela de hoje mudaria o tamanho de uma aposta antiga. No cupom e na lista de copiar vale a unidade de agora, que é a que a aposta vai guardar.
+  - Num total, a aposta sem unidade guardada (anterior à D30) conta só em dinheiro, e o quadro diz de quantas são as unidades.
+- **Interpretações que precisaram ser feitas:**
+  - "Ganhos potenciais" foi lido como o **lucro** (retorno menos a stake), e o retorno continua ao lado. Em casa de apostas a expressão às vezes quer dizer o retorno inteiro; com os dois na tela, cada um com seu nome, não há como confundir.
+  - O retorno não vem em unidades: seria um terceiro número em unidades em cada quadro, e o que se mede em unidades é a stake e o lucro.
+  - "Se todas baterem" vale para o total de um evento e para o total em aberto, mesmo quando há apostas uma contra a outra, que não batem juntas (como na D60).
+- **O que já existia:** as unidades em jogo por evento entraram no PR #17 (D69), entre parênteses numa linha de texto, 11 minutos antes do pedido. O app do aparelho só troca de versão com o toque em "Atualizar agora" (D37), então é possível que o pedido tenha sido feito olhando a versão anterior. Não foi confirmado.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -702,6 +723,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
+| Confirmar: "ganhos potenciais" como lucro (retorno menos a stake), o retorno sem unidades e as telas escolhidas (D70) | Lucas |
 | Confirmar: "mais de quatro" como cinco ou mais, sugestão sem preencher sozinha, seta indo à meia unidade mais próxima, e a hora da aposta como a hora da luta (D66, D67, D69) | Lucas |
 | Confirmar as interpretações da terceira leva: item pronto recolhido de início, a aposta nova fora do topo das abertas, a ordem pela primeira luta e a marca do card contando a múltipla inteira (D58 a D60) | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |

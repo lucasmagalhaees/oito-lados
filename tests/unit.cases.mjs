@@ -424,9 +424,11 @@ export default function cases(Core) {
   eq('history: singles are looked up one by one', ids(Core.dupBets(book, [{ fid: 'f3', key: 'ml:a' }, { fid: 'f1', key: 'ml:a' }], 'single')), ['s1']);
   eq('history: a selection inside an open multiple is not that single', ids(Core.dupBets(book, [{ fid: 'f1', key: 'ml:a' }], 'single')), []);
   eq('history: one selection asked as a multiple is a single', ids(Core.dupBets(book, [{ fid: 'f3', key: 'ml:a' }], 'multi')), ['s1']);
-  eq('history: what is at stake on a fight', Core.exposure(book, 'f1'), { n: 1, stake: 50, held: [{ id: 'm1', stake: 50, keys: ['ml:a'], sel: 'sel ml:a' }] });
+  eq('history: what is at stake on a fight', Core.exposure(book, 'f1'), { n: 1, stake: 50, units: 0, unitBets: 0, held: [{ id: 'm1', stake: 50, keys: ['ml:a'], sel: 'sel ml:a' }] });
   eq('history: open bets only, each with what it holds there', (e => [e.n, e.stake, e.held.map(h => h.id)])(Core.exposure(book.concat(hb('s3', 'single', 'open', 20.5, 0, [hl('f3', 'mov:b:ko')])), 'f3')), [2, 50.5, ['s1', 's3']]);
-  eq('history: nothing at stake', Core.exposure(book, 'f9'), { n: 0, stake: 0, held: [] });
+  eq('history: nothing at stake', Core.exposure(book, 'f9'), { n: 0, stake: 0, units: 0, unitBets: 0, held: [] });
+  eq('history: what is at stake on a fight in units, each bet by the unit it was placed with; a bet with no unit is left out of the units', (e => [e.n, e.stake, e.units, e.unitBets])(Core.exposure([hb('u1', 'single', 'open', 100, 0, [hl('f1', 'ml:a')], { unit: 50 }),
+    hb('u2', 'multi', 'open', 30, 0, [hl('f1', 'ml:b'), hl('f2', 'ml:a')], { unit: 200 }), hb('u3', 'single', 'open', 7, 0, [hl('f1', 'ml:a')]), hb('u4', 'single', 'open', 500, 0, [hl('f2', 'ml:a')], { unit: 50 }), hb('u5', 'single', 'lost', 500, 0, [hl('f1', 'ml:a')], { unit: 50 })], 'f1')), [3, 137, 2.15, 2]);       // 2u + 0,15u
   eq('odd drop: the whole bet against the odd the original gives for it', Core.copyDrop(1.614, [{ fid: 'f1', printed: null, now: 1.2 }, { fid: 'f2', printed: null, now: 1.29 }]), -0.0397);       // 1.55 / 1.614
   eq('odd drop: with an odd on every selection, they are multiplied', Core.copyDrop(null, [{ fid: 'f1', printed: 1.232, now: 1.2 }, { fid: 'f2', printed: 1.31, now: 1.29 }]), -0.0397);          // 1.55 / 1.614
   eq('odd drop: one selection', [Core.copyDrop(null, [{ fid: 'f1', printed: 2.7, now: 2.5 }]), Core.copyDrop(null, [{ fid: 'f1', printed: 2, now: 2.1 }])], [-0.0741, 0.05]);
@@ -443,6 +445,13 @@ export default function cases(Core) {
   eq('open bets: by event, the one that starts first on top; a bet across events on its own', Core.openByEvent(openOnes, place).map(g => [g.eid, g.event, g.date, ids(g.bets)]),
     [['e1', 'UFC e1', 100, ['multi', 'prelimA', 'prelimB', 'main']], ['', '', 300, ['across']], ['e2', 'UFC e2', 900, ['late']]]);
   eq('open bets: what is at stake in each event, and what it pays if every bet wins', Core.openByEvent(openOnes, place).map(g => [g.stake, g.ret]), [[95, 248.95], [50, 200], [10, 20]]);       // 102,60 + 8,35 + 108,00 + 30,00
+  eq('open bets: the gain of each event is what it pays less what is at stake', Core.openByEvent(openOnes, place).map(g => [g.n, g.gain, g.units, g.gainUnits, g.unitBets]), [[4, 153.95, 0, 0, 0], [1, 150, 0, 0, 0], [1, 10, 0, 0, 0]]);
+  const unitOnes = [hb('a', 'single', 'open', 100, 0, [ol('f1', 'e1', 100)], { odd: 2.5, unit: 100 }), hb('b', 'multi', 'open', 30, 0, [ol('f1', 'e1', 100), ol('f2', 'e1', 100)], { odd: 6.33, unit: 150 }),
+    hb('c', 'single', 'open', 40, 0, [ol('f2', 'e1', 100)], { odd: 1.5 }), hb('d', 'single', 'won', 100, 300, [ol('f2', 'e1', 100)], { odd: 3, unit: 100 })];
+  eq('open totals: stake and gain in money and in units, each bet by the unit it was placed with', Core.openTotals(unitOnes), { n: 3, stake: 170, ret: 499.9, gain: 329.9, units: 1.2, gainUnits: 2.566, unitBets: 2 });       // 250 + 189,90 + 60; 1u + 0,2u; +1,5u + 1,066u, and the bet with no unit only in money
+  eq('open totals: the same in the group of the event', Core.openByEvent(unitOnes).map(g => [g.stake, g.ret, g.gain, g.units, g.gainUnits, g.unitBets]), [[170, 499.9, 329.9, 1.2, 2.566, 2]]);
+  eq('open totals: the return of each bet is rounded to cents before it is summed, as the bet pays', Core.openTotals([hb('r1', 'single', 'open', 3.33, 0, [ol('f1', 'e1', 100)], { odd: 1.15, unit: 10 }), hb('r2', 'single', 'open', 3.33, 0, [ol('f2', 'e1', 100)], { odd: 1.15, unit: 10 })]), { n: 2, stake: 6.66, ret: 7.66, gain: 1, units: 0.666, gainUnits: 0.1, unitBets: 2 });       // 3,83 each, not 3,8295
+  eq('open totals: nothing open', Core.openTotals([unitOnes[3]]), { n: 0, stake: 0, ret: 0, gain: 0, units: 0, gainUnits: 0, unitBets: 0 });
   eq('open bets: without the place on the card, bets of the same hour keep the order they were made in', ids(Core.openByEvent(openOnes)[0].bets), ['multi', 'prelimB', 'prelimA', 'main']);
   eq('open bets: none', Core.openByEvent([openOnes[6]]), []);
   const closed = [hb('a', 'single', 'won', 100, 250, [hl('f1', 'ml:a', { printed: 2 })], { from: 'Canal A', odd: 2.2 }), hb('b', 'single', 'lost', 300, 0, [hl('f2', 'ml:a', { printed: 2 })], { from: 'Canal B', odd: 1.8 }),
@@ -465,8 +474,10 @@ export default function cases(Core) {
   eq('period: the event of the bet that closed last, by its latest fight', (r => [ids(r.bets), r.event])(Core.periodBets(past, 'event', NOW)), [['x', 'new'], 'UFC 3: Brandt vs. Kessler']);
   eq('period: nothing closed, or a period that does not exist', [Core.periodBets([], 'event', NOW), ids(Core.periodBets(past, 'banana', NOW).bets).length], [{ bets: [], event: null }, 4]);
   eq('since: what closed by itself after a moment, with the result by origin', Core.sinceSummary(closed.concat(hb('late', 'single', 'lost', 25, 0, [hl('f1', 'ml:a')], { from: 'Canal A', settledAt: 9000 }), hb('op', 'single', 'open', 5, 0, [hl('f1', 'ml:a')])), 4000),
-    { n: 5, pnl: -155, by: [{ k: 'Canal A', n: 3, pnl: 125 }, { k: '', n: 1, pnl: 20 }, { k: 'Canal B', n: 1, pnl: -300 }] });                 // the cashout is not there: the person did that one
-  eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, by: [] }, 4]);
+    { n: 5, pnl: -155, units: 0, unitBets: 0, by: [{ k: 'Canal A', n: 3, pnl: 125 }, { k: '', n: 1, pnl: 20 }, { k: 'Canal B', n: 1, pnl: -300 }] });                 // the cashout is not there: the person did that one
+  eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, units: 0, unitBets: 0, by: [] }, 4]);
+  eq('since: the result in units too, each bet by the unit it was placed with', (r => [r.n, r.pnl, r.units, r.unitBets])(Core.sinceSummary([hb('w', 'single', 'won', 100, 300, [hl('f1', 'ml:a')], { unit: 50 }), hb('l', 'single', 'lost', 1000, 0, [hl('f2', 'ml:a')], { unit: 500 }),
+    hb('n', 'single', 'won', 20, 50, [hl('f3', 'ml:a')]), hb('k', 'single', 'cashed', 60, 90, [hl('f3', 'ml:b')], { unit: 10 })], 0)), [3, -770, 2, 2]);       // +4u and -2u; the bet with no unit only counts in money
   eq('tip: empty', tip("  \n ").problems, [{ code: 'empty' }]);
   eq('tip: a name inside another word is not a match', tip("Almeidas x Dunnes\nvence").problems, [{ code: 'nofight' }]);
   return { n, fails };
