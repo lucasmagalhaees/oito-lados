@@ -174,6 +174,8 @@ export function price(f: Fight, o: Odds, st?: FightStats): Pricing {
 }
 
 // which way an over/under selection goes ('o' more than the line, 'u' less), or null for every other market
+/** Whether a weight class, as ESPN names it, is a women's one ("W Flyweight"). A women's catchweight cannot be told apart. */
+export const isWomens = (weight: unknown): boolean => /^W /.test(String(weight == null ? '' : weight));
 export const overUnder = (key: unknown): 'o' | 'u' | null => { const q = String(key).split(':'); return (q[0] === 'tot' || q[0] === 'td') && (q[1] === 'o' || q[1] === 'u') ? q[1] : null; };
 // the corner a selection belongs to ('a' or 'b'), or null when it is about the fight as a whole
 export const sideOf = (key: unknown): Side | null => { const q = String(key).split(':'); return ['ml', 'mov', 'wr', 'tda'].includes(q[0]) && (q[1] === 'a' || q[1] === 'b') ? q[1] : null; };

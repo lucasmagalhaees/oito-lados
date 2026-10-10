@@ -2,10 +2,19 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [0.5.1] - 2026-10-10
+## [0.6.0] - 2026-10-10
 
 ### Adicionado
 - Atalhos de 10.000, 100.000 e 1.000.000 no cartão de depósito.
+- Três pares de cor para os cantos (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
+- Ao copiar um original que traz unidades e dinheiro, a tela diz qual dos dois ficou de fora.
+
+### Alterado
+- + e − deixaram o azul-petróleo e o violeta: agora são neutros, com barra lateral e seta.
+- Copiar print não tem mais configuração própria. "Valor das apostas" decide: em R$ entra o mesmo valor, em unidades a mesma stake. Original com os dois segue a configuração (antes as unidades ganhavam sempre).
+
+### Removido
+- O cartão "Ao copiar um print" e o campo "1u do print". O app não ajusta mais a aposta de outra pessoa à sua banca.
 
 ## [0.5.0] - 2026-10-10
 

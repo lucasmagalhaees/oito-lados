@@ -121,11 +121,21 @@ check('app carries an integrity hash for the OCR script', bool(sri))
 if lib.exists() and sri:
     real = 'sha384-' + base64.b64encode(hashlib.sha384(lib.read_bytes()).digest()).decode()
     check('integrity hash matches the pinned OCR file', real == sri.group(1), f'{real} vs {sri.group(1)}')
-# 5d. the setting for copied bets: the modes in the spec table are the modes in the code
-code_modes = re.search(r"const TIP_MODES[^=]*= \[([^\]]+)\];", html)
-spec_modes = re.findall(r'^  \| `(\w+)`', spec[spec.index('## Copiar aposta'):spec.index('## Sincronização')], re.M)
-spec_modes = [m for m in spec_modes if m != 'mode']      # the table header
-check('copied-bet modes in the spec match the code', bool(code_modes) and [m.strip(" '") for m in code_modes.group(1).split(',')] == spec_modes, f'{code_modes and code_modes.group(1)} vs {spec_modes}')
+# 5d. copied bets follow the one setting for stakes; nothing asks what a unit is worth to whoever made the print
+check('the stake of a copied bet is decided by the money-or-units setting', "Core.tipStake(st, S.stakeIn, w.unit)" in html and "mode === 'units'" in html and '`Core.tipStake(stake, S.stakeIn, unidade)`' in spec)
+check('the unit of whoever made the print is not asked for or stored', not re.search(r'srcUnit|tipCfg|TIP_MODES|tipsrc', html) and 'não é perguntado' in spec)
+# 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
+css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
+pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)
+check('three corner pairs, red and blue first', [p[0] for p in pairs] == ['red-blue', 'green-pink', 'purple-orange'], pairs)
+for pid, a, b in pairs:
+    short = ''.join(w[0] for w in pid.split('-'))
+    check('corner pair has its colours in both themes and its swatches', css_all.count(f'--{short}-a:') == 3 and css_all.count(f'--{short}-b:') == 3 and f'.sw.{pid}.a' in css_all and f'.sw.{pid}.b' in css_all, pid)
+    check('corner pair is drawn when chosen', pid == 'red-blue' or f'[data-corners="{pid}"]{{--ca:var(--{short}-a);--cb:var(--{short}-b)}}' in css_all, pid)
+    check('corner pair is named in the spec', f'`{pid}`' in spec and f'{a} e {b}' in spec, (pid, a, b))
+check('red and blue is the pair in use until another is chosen', '--ca:var(--rb-a); --cb:var(--rb-b);' in css_all)
+check("women's fights are told by the weight class", "/^W /.test(" in html and 'começando com "W "' in spec)
+check('settings are listed once, for reset and restore', html.count('...settingsOf(') == 2 and '`settingsOf`' in spec)
 check('units field limits are the documented ones', ".slice(0, 4);" in html and 'no máximo 9999,99' in spec)
 side_fn = re.search(r"const sideOf = [^\[]*\[([^\]]+)\]\.includes", html)
 check('fighter-side families in the code are the ones the spec names', bool(side_fn) and [x.strip(" '") for x in side_fn.group(1).split(',')] == ['ml', 'mov', 'wr', 'tda'] and '(`ml`, `mov`, `wr` e `tda`;' in spec)

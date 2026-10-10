@@ -4,7 +4,7 @@ Usage: python3 tests/e2e.py [dark|light]   (needs: pip install -r tests/requirem
 Walks one fictional card through pre-fight -> live -> final, places singles, parlays and same-fight combos through the UI,
 and prints prices, settlements and the final balance (expected: R$ 1.609,59).
 """
-import json, sys, pathlib
+import json, re, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mock_espn import PHASE, FX, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, TIP_TEXT
 import base64
@@ -72,6 +72,7 @@ with sync_playwright() as p:
     txt = lambda sel: pg.inner_text(sel).replace('\xa0', ' ')
     pg.click('[data-act=depcur][data-c=USD]')
     assert pg.inner_text('.field span') == 'US$' and 'A banca passa a ser em Dólar' in txt('#fxinfo'), txt('#fxinfo')
+    assert txt('[data-act=depq][data-v="1000000"]') == 'US$ 1.000.000' and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, 'the deposit shortcuts follow the currency of the deposit and still fit'
     assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'picking a currency changes nothing by itself: ' + bal()
     assert pg.inner_text('[data-act=convonly]') == 'Só trocar a moeda para Dólar', pg.inner_text('[data-act=convonly]')
     pg.click('[data-act=convonly]'); assert bal().replace('\xa0', ' ') == 'US$ 0,00' and FX['calls'] == 0 and pg.locator('[data-act=convonly]').count() == 0, (bal(), FX['calls'])
@@ -143,12 +144,43 @@ with sync_playwright() as p:
     # over and under have a colour scheme of their own, different from each other and from both corners
     assert all(opt(k, '.xo').count() == 1 for k in ('tot:o:1.5', 'tot:o:3.5', 'td:o:1.5')) and all(opt(k, '.xu').count() == 1 for k in ('tot:u:1.5', 'td:u:1.5')), 'over and under must be marked'
     assert all(opt(k, '.xo').count() + opt(k, '.xu').count() == 0 for k in ('wr:a:1', 'fm:ko', 'rnd:1', 'dist:yes', 'tda:a:yes')), 'and nothing else'
-    ink = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"] .ol`)).color', key)
+    bar = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"]`), "::before").backgroundColor', key)
     arrow = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"] .ol`), "::before").content', key)
-    assert ink('tot:o:1.5') != ink('tot:u:1.5') and ink('tot:o:1.5') == ink('td:o:1.5') and ink('tot:o:1.5') != ink('fm:ko'), (ink('tot:o:1.5'), ink('tot:u:1.5'))
     corner = lambda side: pg.evaluate('s => getComputedStyle(document.querySelector(`.fight:has([data-fid="f3"]) .corners .${s} i`)).backgroundColor', side)
-    assert len({ink('tot:o:1.5'), ink('tot:u:1.5'), corner('a'), corner('b')}) == 4, (ink('tot:o:1.5'), ink('tot:u:1.5'), corner('a'), corner('b'))
+    neutral = lambda c: (lambda v: max(v) - min(v) <= 40)([int(x) for x in re.findall(r'\d+', c)[:3]])
+    assert bar('tot:o:1.5') != bar('tot:u:1.5') and bar('tot:o:1.5') == bar('td:o:1.5') and bar('tot:u:1.5') == bar('td:u:1.5'), (bar('tot:o:1.5'), bar('tot:u:1.5'))
+    assert neutral(bar('tot:o:1.5')) and neutral(bar('tot:u:1.5')) and not neutral(corner('a')) and not neutral(corner('b')), 'over and under carry no hue; the corners do'
     assert (arrow('tot:o:1.5'), arrow('tot:u:1.5')) == ('"▲"', '"▼"'), (arrow('tot:o:1.5'), arrow('tot:u:1.5'))
+    # the corners come in three pairs of colours, chosen in the settings separately for men's and for women's fights
+    # (f1 is a women's fight, f2 and f3 are men's); over and under look the same under all of them
+    legend = lambda fid, side: pg.evaluate('([f, s]) => getComputedStyle(document.querySelector(`.fight:has([data-fid="${f}"]) .corners .${s} i`)).backgroundColor', [fid, side])
+    bar_of = lambda fid, key: pg.evaluate('([f, k]) => getComputedStyle(document.querySelector(`[data-fid="${f}"][data-key="${k}"]`), "::before").backgroundColor', [fid, key])
+    title_of = lambda fid, key: pg.get_attribute(f'[data-fid="{fid}"][data-key="{key}"]', 'title')
+    def choose(group, pair):
+        pg.click('.tabbar [data-tab=carteira]'); pg.click(f'[data-act=corners][data-g={group}][data-m={pair}]')
+        assert pg.get_attribute(f'[data-act=corners][data-g={group}][data-m={pair}]', 'aria-pressed') == 'true'
+    red_blue = (legend('f3', 'a'), legend('f3', 'b')); neutral_bars = (bar_of('f3', 'tot:o:1.5'), bar_of('f3', 'tot:u:1.5'))
+    assert (legend('f1', 'a'), legend('f1', 'b')) == red_blue, 'until a pair is chosen, every fight is red and blue'
+    choose('women', 'green-pink'); assert 'femininas em rosa e verde' in txt('#cornershow') and 'Masculinas em vermelho e azul' in txt('#cornershow'), txt('#cornershow')
+    shot('s24-cantos-config.png'); pg.click('.tabbar [data-tab=lutas]')
+    green_pink = (legend('f1', 'a'), legend('f1', 'b'))
+    assert (legend('f3', 'a'), legend('f3', 'b')) == red_blue and (legend('f2', 'a'), legend('f2', 'b')) == red_blue, "choosing for women's fights leaves the men's alone"
+    assert bar_of('f1', 'wr:a:1') == green_pink[0] and bar_of('f1', 'wr:b:1') == green_pink[1], "a fighter's option carries the colour of the legend"
+    assert 'canto rosa' in title_of('f1', 'wr:a:1') and 'canto verde' in title_of('f1', 'wr:b:1') and 'canto vermelho' in title_of('f3', 'wr:a:1')
+    pick('f1', 'mov:a:ko'); pick('f3', 'mov:b:ko'); pg.click('#slipbtn'); pg.wait_for_selector('#panel .sel .sd')
+    marks = pg.evaluate('[...document.querySelectorAll("#panel .sel .sd")].map(e => getComputedStyle(e).backgroundColor)')
+    assert marks == [green_pink[0], red_blue[1]], ('in the slip each selection carries the colour of its own fight', marks)
+    pg.click('#panel [data-act=sheet]'); pick('f1', 'mov:a:ko'); pick('f3', 'mov:b:ko')
+    pg.locator('[data-fid="f1"][data-key="td:o:1.5"]').scroll_into_view_if_needed(); shot('s24-cantos-femininas.png'); pg.evaluate('window.scrollTo(0, 0)')
+    choose('men', 'purple-orange'); pg.click('.tabbar [data-tab=lutas]')
+    purple_orange = (legend('f3', 'a'), legend('f3', 'b'))
+    assert (legend('f1', 'a'), legend('f1', 'b')) == green_pink and (legend('f2', 'a'), legend('f2', 'b')) == purple_orange and 'canto laranja' in title_of('f3', 'wr:a:1') and 'canto roxo' in title_of('f3', 'wr:b:1')
+    assert len(set(red_blue + green_pink + purple_orange)) == 6 and not any(neutral(c) for c in green_pink + purple_orange), (red_blue, green_pink, purple_orange)
+    assert (bar_of('f3', 'tot:o:1.5'), bar_of('f3', 'tot:u:1.5')) == neutral_bars and (bar_of('f1', 'td:o:1.5'), bar_of('f1', 'td:u:1.5')) == neutral_bars, 'over and under do not follow the corners'
+    pg.locator('[data-fid="f3"][data-key="td:o:1.5"]').scroll_into_view_if_needed(); shot('s24-cantos-masculinas.png'); pg.evaluate('window.scrollTo(0, 0)')
+    assert pg.evaluate('window.__OL.S.corners') == {'men': 'purple-orange', 'women': 'green-pink'}, pg.evaluate('window.__OL.S.corners')
+    choose('men', 'red-blue'); choose('women', 'red-blue'); pg.click('.tabbar [data-tab=lutas]')
+    assert pg.evaluate('"corners" in window.__OL.S') is False and (legend('f1', 'a'), legend('f3', 'b')) == red_blue, 'red and blue is the absence of a choice'
     corner = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"]`), "::before").backgroundColor', key)
     assert corner('wr:a:1') != corner('wr:b:1') and corner('wr:a:1') == corner('mov:a:sub'), (corner('wr:a:1'), corner('wr:b:1'))
     pick('f3', 'wr:b:2'); pick('f3', 'tot:o:1.5'); pg.click('#slipbtn'); pg.wait_for_selector('#panel .sel')
@@ -191,24 +223,29 @@ with sync_playwright() as p:
     shot('s12-copiar.png'); pg.click('[data-act=impgo]'); pg.wait_for_selector('#stake')
     assert pg.input_value('#stake') == '250' and pg.evaluate('window.__OL.slip.sels.length') == 1, pg.input_value('#stake')
     pg.click('#panel [data-act=unpick]')
-    # the setting for a print that brings money: same amount (above), turned into units, or a fixed number of units
-    MONEY_TIP = 'Almeida x Dunne\nDunne para vencer a luta\nR$ 250,00'
-    def copied(expect_how):
-        pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.fill('#imptext', MONEY_TIP); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    # what a copied bet brings follows the one setting for stakes: in money the same amount, in units the same stake
+    MONEY_TIP = 'Almeida x Dunne\nDunne para vencer a luta\nR$ 250,00'; BOTH_TIP = MONEY_TIP + '\nStake 2u'
+    def copied(text, expect_how):
+        pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.fill('#imptext', text); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
         value = txt('#impvalue'); panel = txt('#panel'); assert expect_how in panel, panel
         pg.click('[data-act=impclose]'); return value
-    pg.click('.tabbar [data-tab=carteira]'); assert 'vira uma aposta de R$ 1.750,00.' in txt('#tiphow'), txt('#tiphow')
-    assert pg.locator('[data-act=tipmode]').all_inner_texts() == ['Mesmo valor', 'Mesma stake']
-    pg.click('[data-act=tipmode][data-m=units]'); assert 'diz quanto quem fez o print aposta por unidade' in txt('#tiphow'), txt('#tiphow')
-    assert copied('mesmo valor do print') == 'R$ 250,00 · 2,5u', 'without the unit of the source the amount is kept'
-    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipsave]'); assert pg.evaluate('window.__OL.S.tip.srcUnit') == 0, 'an empty field saves nothing'
-    pg.click('#tipsrc'); pg.keyboard.type('1000'); assert pg.input_value('#tipsrc') == '1.000', pg.input_value('#tipsrc')
-    pg.keyboard.press('Enter'); assert 'Um print de R$ 1.000,00 é 1u de quem fez, então vira 1u sua: R$ 100,00.' in txt('#tiphow'), txt('#tiphow')
-    shot('s14-print-config.png')
-    assert copied('mesma stake do print: R$ 250,00 ÷ R$ 1.000,00 por unidade = 0,25u') == 'R$ 25,00 · 0,25u'
-    pg.click('.tabbar [data-tab=lutas]')
-    pg.click('[data-act=imp]'); pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
-    assert txt('#impvalue') == 'R$ 50,00 · 0,5u', 'a tip in units is not touched by the setting: ' + txt('#impvalue')
+    pg.click('.tabbar [data-tab=carteira]')
+    assert pg.locator('#tipcard, [data-act=tipmode], #tipsrc').count() == 0, 'there is no separate setting for prints, and nothing asks what a unit is worth to whoever made the print'
+    assert 'Ao copiar um print: mesmo valor.' in txt('#tiphow') and 'vira uma aposta de R$ 1.750,00' in txt('#tiphow'), txt('#tiphow')
+    assert copied(MONEY_TIP, 'mesmo valor do print') == 'R$ 250,00 · 2,5u'
+    assert copied(BOTH_TIP, 'mesmo valor do print · o original também fala em 2u') == 'R$ 250,00 · 2,5u', 'in money, an original that states both brings its money, and says what it left out'
+    assert copied(TIP_TEXT, '0,5u do print') == 'R$ 50,00 · 0,5u', 'in money, an original with units only brings those units'
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=units]')
+    assert 'Ao copiar um print: mesma stake.' in txt('#tiphow') and 'vira 2u sua (R$ 200,00)' in txt('#tiphow'), txt('#tiphow')
+    pg.locator('#stakecard').scroll_into_view_if_needed(); shot('s14-print-config.png')
+    assert copied(BOTH_TIP, '2u do print · o original também traz R$ 250,00') == 'R$ 200,00 · 2u', 'in units, an original that states both brings its units, and says what it left out'
+    assert copied(MONEY_TIP, 'mesmo valor do print') == 'R$ 250,00 · 2,5u', 'in units, an original with money only brings that money, counted in units'
+    assert copied(TIP_TEXT, '0,5u do print') == 'R$ 50,00 · 0,5u'
+    pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.fill('#imptext', BOTH_TIP); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    pg.click('[data-act=impgo]'); pg.wait_for_selector('#stakeu')
+    assert pg.input_value('#stakeu') == '2' and 'R$ 200,00 · 2u' in txt('#slipsum'), (pg.input_value('#stakeu'), txt('#slipsum'))
+    pg.click('#panel [data-act=unpick]')
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=money]'); pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
     # appearance: automatic follows the device; light and dark hold whatever the device says
     pg.click('[data-act=impclose]'); pg.click('.tabbar [data-tab=carteira]')
     DARK, LIGHT = 'rgb(14, 18, 24)', 'rgb(242, 243, 245)'
@@ -220,12 +257,17 @@ with sync_playwright() as p:
     pg.click('[data-act=theme][data-m=light]'); assert paper() == LIGHT and bars() == ['#f2f3f5', '#f2f3f5'], (paper(), bars())
     other = 'light' if device == DARK else 'dark'                    # leave the one the device is NOT asking for, and reload
     pg.click(f'[data-act=theme][data-m={other}]'); shot('s22-tema.png')
+    pg.click('[data-act=corners][data-g=women][data-m=purple-orange]')
+    # a state saved by an older version still carries the setting that no longer exists
+    pg.evaluate('(() => { const s = JSON.parse(localStorage.getItem("oitolados.v1")); s.tip = { mode: "units", srcUnit: 1000 }; localStorage.setItem("oitolados.v1", JSON.stringify(s)); })()')
     cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
     assert pg.evaluate('document.documentElement.dataset.theme') == other and paper() != device, 'the chosen theme survives a reload'
-    assert pg.evaluate('JSON.stringify(window.__OL.S.tip)') == '{"mode":"units","srcUnit":1000}', 'the setting survives a reload'
+    assert pg.evaluate('window.__OL.S.corners') == {'women': 'purple-orange'}, 'and so does the pair of corner colours'
+    pg.click('.tabbar [data-tab=carteira]'); assert pg.get_attribute('[data-act=corners][data-g=women][data-m=purple-orange]', 'aria-pressed') == 'true'
+    pg.click('[data-act=corners][data-g=women][data-m=red-blue]')
+    assert pg.evaluate('"tip" in window.__OL.S') is False and pg.evaluate('window.__OL.S.stakeIn') in (None, 'money'), 'the old setting for prints is dropped on load, and changes nothing else'
     pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=theme][data-m=auto]')
     assert paper() == device and bars() == ['#0e1218', '#f2f3f5'] and pg.evaluate('document.documentElement.dataset.theme') is None and pg.evaluate('"theme" in window.__OL.S') is False, (paper(), bars())
-    pg.click('[data-act=tipmode][data-m=same]'); assert 'Um print de R$ 1.000,00 vira uma aposta de R$ 1.000,00.' in txt('#tiphow'), txt('#tiphow')
     pg.click('.tabbar [data-tab=lutas]'); pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     pg.click('[data-act=imp]')
@@ -362,14 +404,19 @@ with sync_playwright() as p:
     pg.click('[data-act=event]'); pg.wait_for_selector('.fight')                                       # picking the event again keeps the card on screen
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     # the person's data: backup, restore and reset
-    pg.click('.tabbar [data-tab=carteira]'); final = bal(); saved = pg.evaluate('JSON.stringify(window.__OL.S)')
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=corners][data-g=women][data-m=green-pink]')
+    final = bal(); saved = pg.evaluate('JSON.stringify(window.__OL.S)')
+    settings = lambda: pg.evaluate('(() => { const S = window.__OL.S; return [S.unitPct, S.stakeIn || "money", S.theme || "auto", S.corners, S.cur]; })()')
+    kept = settings(); assert kept[3] == {'women': 'green-pink'}, kept
     pg.click('[data-act=backup]'); pg.wait_for_timeout(300)                                             # copies to the clipboard, or shows the text when it cannot
     pg.click('[data-act=reset]'); pg.click('[data-act=reset]')                                           # opening and backing out of the reset keeps everything
     assert bal() == final, bal()
     pg.click('[data-act=reset]'); pg.click('[data-act=doreset]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
+    assert settings() == kept and pg.evaluate('window.__OL.S.bets.length + window.__OL.S.deposits.length') == 0, ('a reset clears the money and keeps the settings', settings(), kept)
     pg.click('[data-act=restore]'); pg.fill('#rs', 'isto não é um backup'); pg.click('[data-act=dorestore]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', 'a bad backup must change nothing'
     pg.fill('#rs', saved); pg.click('[data-act=dorestore]'); pg.wait_for_timeout(400)
     assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 15, (bal(), final)
+    assert settings() == kept, ('the settings come back with the backup', settings(), kept)
     print('backup e restauração: saldo', final, 'de volta depois de zerar')
     # converting a bankroll with a whole history: every amount follows, and the result in units stays the same
     assert len(pg.evaluate('window.__OL.S.conv')) == 3, 'the conversion log comes back with the backup'

@@ -1,5 +1,6 @@
+import { Core } from '../core';
 import { isCurrency, setFmt } from './format';
-import type { AppState, AthleteStats, Currency, Fight, FightEvent, Odds, Result, Takedowns, Tip } from '../core';
+import type { AppState, AthleteStats, CornerPair, Currency, Fight, FightEvent, Odds, Result, Takedowns, Tip } from '../core';
 
 /* ================= persistent state ================= */
 export const LS = {
@@ -11,12 +12,42 @@ export const validState = (s: unknown): s is AppState => !!s && typeof s === 'ob
 const saved: unknown = LS.get('oitolados.v1');
 /** Everything the person owns. Other modules read it through the live binding; replacing the whole state goes through setS. */
 export let S: AppState = validState(saved) ? saved : { v: 1, deposits: [], bets: [] };
+delete (S as { tip?: unknown }).tip;          // the separate setting for copied prints, gone since money-or-units decides it
 export const saveS = (): boolean => LS.set('oitolados.v1', S);
 export function setS(next: AppState): void { S = next; }
 /** The currency of the bankroll. It is always set once the page has loaded; the fallback only satisfies the type. */
 export const curNow = (): Currency => S.cur || 'BRL';
 export function setCurrency(code: unknown): void { S.cur = isCurrency(code) ? code : 'BRL'; setFmt(S.cur); }
 setCurrency(S.cur);
+/** The pairs of colours the two corners can take. `a` and `b` are the colour names of fighter a's and fighter b's corner. */
+export const CORNER_SETS = [
+  { id: 'red-blue', a: 'vermelho', b: 'azul' },
+  { id: 'green-pink', a: 'rosa', b: 'verde' },
+  { id: 'purple-orange', a: 'laranja', b: 'roxo' }
+] as const;
+export type CornerSet = typeof CORNER_SETS[number];
+export type CornerGroup = 'men' | 'women';
+export const isPair = (x: unknown): x is CornerPair => x === 'green-pink' || x === 'purple-orange';
+/** The pair chosen for men's or for women's fights. */
+export const cornerSetOf = (group: CornerGroup): CornerSet => { const id = S.corners && S.corners[group]; return CORNER_SETS.find(c => c.id === id) || CORNER_SETS[0]; };
+/** The pair a fight of this weight class is drawn in. */
+export const cornerSet = (weight: unknown): CornerSet => cornerSetOf(Core.isWomens(weight) ? 'women' : 'men');
+/** What to put on an element so the stylesheet draws it in that pair (nothing for red and blue, the default). */
+export const cornersAttr = (weight: unknown): string => { const id = cornerSet(weight).id; return id === 'red-blue' ? '' : ` data-corners="${id}"`; };
+/** Only what was chosen and is valid, so a restored backup cannot bring anything else in. */
+export function cleanCorners(c: unknown): AppState['corners'] {
+  const o = (c && typeof c === 'object' ? c : {}) as Record<string, unknown>, out: NonNullable<AppState['corners']> = {};
+  if (isPair(o.men)) out.men = o.men;
+  if (isPair(o.women)) out.women = o.women;
+  return out.men || out.women ? out : undefined;
+}
+/** The settings in a saved state, cleaned. They are what a reset keeps and what comes back with a backup: a new
+ *  setting goes here once, instead of in each of those places. */
+export function settingsOf(s: unknown): Pick<AppState, 'unitPct' | 'stakeIn' | 'theme' | 'corners'> {
+  const o = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>, corners = cleanCorners(o.corners);
+  return { unitPct: Core.unitPct(o.unitPct), ...(o.stakeIn === 'units' ? { stakeIn: 'units' as const } : {}),
+    ...(o.theme === 'light' || o.theme === 'dark' ? { theme: o.theme } : {}), ...(corners ? { corners } : {}) };
+}
 /** Light, dark, or whatever the device asks for (no attribute): the stylesheet does the rest. */
 export function applyTheme(): void {
   const forced = S.theme === 'light' || S.theme === 'dark' ? S.theme : null, root = document.documentElement;
