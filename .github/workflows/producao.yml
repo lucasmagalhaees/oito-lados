@@ -1,0 +1,34 @@
+name: Produção
+
+# After a merge, production must serve the index.html of main and keep serving it.
+# On 09/10/2026 four merges in a row left production on the oldest one: the host finished that deployment last.
+# On a pull request this only reports which commit production is serving; it never fails there.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: producao-${{ github.ref }}
+  cancel-in-progress: true   # only the newest push to main is worth checking
+
+jobs:
+  confere:
+    name: produção
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50      # the report names which earlier commit production is serving
+      - name: Which commit is production serving? (pull request)
+        if: github.event_name == 'pull_request'
+        run: python3 scripts/check_production.py --report
+      - name: Production must serve this commit and keep serving it
+        if: github.event_name != 'pull_request'
+        # exit 3 = this runner could not reach production at all: inconclusive, reported as a warning
+        run: python3 scripts/check_production.py || [ $? -eq 3 ]
