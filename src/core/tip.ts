@@ -1,24 +1,19 @@
 /* ---------- the stake of a copied bet ----------
-   A tip that speaks in units always uses those units. What to do with one that brings an amount of money is a setting:
-     same  - the same amount (the default)
-     units - the same stake: the amount is turned into units by what one unit is worth to whoever made the print
-             (srcUnit), and that many of my units are staked */
+   One setting decides it, the same one that says how the slip asks for the stake (money or units):
+     money - the same amount: the money the original shows. An original that only speaks in units brings those units.
+     units - the same stake: the units the original states, in my unit. An original that only shows money brings that
+             money, which the slip then shows in my units.
+   What one unit is worth to whoever made the print is not known and is not asked for. */
 import { r2 } from './odds';
 import { parseMoney } from './money';
-import type { Fight, Fighter, Side, Tip, TipCfg, TipStake, TipStakeIn } from './types';
+import type { Fight, Fighter, Side, Tip, TipStake, TipStakeIn } from './types';
 
-export const TIP_MODES: TipCfg['mode'][] = ['same', 'units'];
-export function tipCfg(c: unknown): TipCfg {
-  const o = (c && typeof c === 'object' ? c : {}) as { mode?: unknown; srcUnit?: unknown };
-  const src = Number(o.srcUnit);
-  return { mode: TIP_MODES.includes(o.mode as TipCfg['mode']) ? o.mode as TipCfg['mode'] : 'same', srcUnit: isFinite(src) && src > 0 ? r2(src) : 0 };
-}
-export function tipStake(stake: TipStakeIn, cfg: unknown, unit: unknown): TipStake {
-  const c = tipCfg(cfg), u = Math.max(0, Number(unit) || 0);
-  if (stake.kind === 'units') return { how: 'units', units: stake.units, value: r2(stake.units * u) };
-  if (stake.kind !== 'money') return { how: 'default', units: 1, value: r2(u) };
-  if (c.mode === 'units' && c.srcUnit > 0) { const n = stake.money / c.srcUnit; return { how: 'conv', units: n, value: r2(n * u) }; }
-  return { how: 'same', units: null, value: stake.money };
+export function tipStake(stake: TipStakeIn, mode: unknown, unit: unknown): TipStake {
+  const u = Math.max(0, Number(unit) || 0);
+  if (stake.kind === 'default') return { how: 'default', units: 1, value: r2(u) };
+  const money = stake.money && stake.money > 0 ? stake.money : 0, units = stake.kind === 'units' ? stake.units : 0;
+  if (units > 0 && (mode === 'units' || !money)) return { how: 'units', units, value: r2(units * u) };
+  return { how: 'same', units: u > 0 ? money / u : null, value: money };
 }
 
 /* ---------- copying a bet from a print or a pasted tip ----------
@@ -77,10 +72,12 @@ export function parseTip(text: unknown, fights: TipFight[]): Tip {
   const out: Tip = { items: [], problems: [], stake: { kind: 'default', units: 1 } };
   if (!raw.length) { out.problems.push({ code: 'empty' }); return out; }
   const L = raw.map(plain), N = L.map(l => l.replace(/\./g, ' ')), whole = L.join(' \n '), wholeN = N.join(' \n ');
+  // the stake: units, money, or both when the original states both (which one is copied is the caller's setting)
   const u = TIP.units.exec(whole), m = TIP.money.exec(whole);
-  if (u && parseFloat(u[1].replace(',', '.')) > 0) out.stake = { kind: 'units', units: parseFloat(u[1].replace(',', '.')) };
-  else if (TIP.half.test(whole)) out.stake = { kind: 'units', units: 0.5 };
-  else if (m && parseMoney(m[1]) > 0) out.stake = { kind: 'money', money: parseMoney(m[1]) };
+  const units = u && parseFloat(u[1].replace(',', '.')) > 0 ? parseFloat(u[1].replace(',', '.')) : TIP.half.test(whole) ? 0.5 : 0;
+  const money = m && parseMoney(m[1]) > 0 ? parseMoney(m[1]) : 0;
+  if (units) out.stake = money ? { kind: 'units', units, money } : { kind: 'units', units };
+  else if (money) out.stake = { kind: 'money', money };
 
   const both = fights.filter(f => mentions(wholeN, f.a) && mentions(wholeN, f.b));
   const one = both.length ? [] : fights.filter(f => mentions(wholeN, f.a) !== mentions(wholeN, f.b));

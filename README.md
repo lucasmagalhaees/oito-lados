@@ -23,10 +23,10 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
 - **Cashout:** devolve o valor integral enquanto nenhuma luta da aposta foi decidida. Se parte da múltipla já bateu e o resto ainda não começou, oferece um valor para encerrar, calculado pelas odds de agora. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
-- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. Se o original fala em unidades, copia as unidades. Se traz dinheiro, você escolhe: mesmo valor ou mesma stake. A imagem é lida no próprio aparelho.
+- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. O valor segue a sua configuração: em dinheiro, o mesmo valor do original; em unidades, a mesma stake. A imagem é lida no próprio aparelho.
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). Nas configurações você escolhe se o cupom pede o valor em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades.
-- **Leitura rápida:** mais e menos de uma linha aparecem como + e −, com cores próprias, e cada opção ligada a um lutador leva a cor do canto dele. Com os mercados abertos, uma legenda presa na tela lembra quem é o vermelho e quem é o azul.
-- **Tema:** automático, claro ou escuro.
+- **Leitura rápida:** mais e menos de uma linha aparecem como + e −, em tons neutros e com seta, e cada opção ligada a um lutador leva a cor do canto dele. Com os mercados abertos, uma legenda presa na tela lembra quem é o vermelho e quem é o azul.
+- **Tema e cores:** tema automático, claro ou escuro. Os cantos têm três pares de cor (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
 - **Abre sem internet:** o app fica guardado no aparelho e abre na hora, com os últimos dados que carregou. Quando sai uma versão nova, ele avisa e troca com um toque.
 - **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.

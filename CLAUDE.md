@@ -91,9 +91,9 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 10. Campos de valor com máscara de milhares.
 11. Moeda da banca: real, dólar ou euro, escolhida no cartão de depósito. Passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 12. Gestão de unidade: uma unidade é uma porcentagem da banca, 10% por padrão e ajustável. O valor da aposta é digitado em dinheiro ou em unidades, conforme a configuração escolhida na Carteira.
-13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. Print em unidades copia as unidades; print em dinheiro copia o mesmo valor ou a mesma stake, conforme a configuração.
-14. Mais e menos de uma linha aparecem como + e −, com um par de cores só deles, e toda opção ligada a um lutador leva a cor do canto dele. Com os mercados de uma luta abertos, uma legenda que não sai da tela lembra quem é o vermelho e quem é o azul.
-15. Tema automático (segue o aparelho), claro ou escuro, escolhido na Carteira.
+13. Copiar uma aposta a partir de um print (imagem) ou de um texto, com a odd de agora. O valor que entra segue a mesma configuração do cupom: em dinheiro, o mesmo valor do original; em unidades, a mesma stake.
+14. Mais e menos de uma linha aparecem como + e −, em tons neutros e com seta, e toda opção ligada a um lutador leva a cor do canto dele. Com os mercados de uma luta abertos, uma legenda que não sai da tela lembra de quem é cada cor.
+15. Tema automático (segue o aparelho), claro ou escuro, escolhido na Carteira. As cores dos cantos têm três pares (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
 16. O app fica guardado no aparelho: abre na hora e também sem internet, com os últimos dados que carregou. Quando uma versão nova é publicada, avisa e troca com um toque.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
@@ -149,19 +149,19 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/core/types.ts` | As formas dos dados: `Fight`, `Odds`, `Result`, `Bet`, `Leg`, `AppState`, `Pricing`, `Cashout`, `Tip` e as demais |
 | `src/core/odds.ts` | `r2`, `clamp`, `am2dec`, `devig`, `mo` (odd estimada com margem), mistura histórica por categoria |
 | `src/core/espn.ts` | Os leitores da ESPN: `normEvent`, `normOdds`, `attachDistance`, `normResult`, `statValue`. Único lugar que conhece o formato da API |
-| `src/core/pricing.ts` | `probs`, `jointModel`, `combo`, `price`, `sideOf` |
+| `src/core/pricing.ts` | `probs`, `jointModel`, `combo`, `price`, `sideOf`, `overUnder`, `isWomens` |
 | `src/core/settlement.ts` | `legOutcome`, `betResult` |
 | `src/core/cashout.ts` | `cashout`, `CASHOUT_MARGIN` |
 | `src/core/money.ts` | Máscara e leitura de valores, unidade (`unitPct`, `unitValue`), valor em unidades |
 | `src/core/fx.ts` | `normFx`, `fxRate`, `convertState`, `balanceOf` |
-| `src/core/tip.ts` | `parseTip`, `tipCfg`, `tipStake` |
+| `src/core/tip.ts` | `parseTip`, `tipStake` |
 | `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
 
 ### `src/app/`: a página
 
 | Módulo | O que tem |
 |---|---|
-| `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS` |
+| `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS`. Também o tema (`applyTheme`), os pares de cor dos cantos (`CORNER_SETS`, `cornerSet`) e `settingsOf`, a lista única do que é configuração |
 | `src/app/format.ts` | Moeda da banca, datas pt-BR, categorias de peso, `esc`, e os acessos ao DOM (`$`, `part`, `valOf`, `blurField`) |
 | `src/app/api.ts` | `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd` |
 | `src/app/fx.ts` | `FX` (cotação guardada) e `loadFx` |
@@ -192,14 +192,16 @@ Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN pass
 { v: 1,
   cur: 'BRL'|'USD'|'EUR',        // moeda da banca: todos os valores abaixo estão nela
   conv: [{ t, from, to, rate, date }],   // conversões já feitas (as 20 últimas)
-  tip: { mode: 'same'|'units', srcUnit },   // print em dinheiro: copiar o mesmo valor ou a mesma stake
-  stakeIn: 'money'|'units',       // como o cupom pede o valor de toda aposta (configuração da Carteira)
+  stakeIn: 'money'|'units',       // como o cupom pede o valor de toda aposta e o que se copia de um print (configuração da Carteira)
   theme: 'light'|'dark',          // tema escolhido; sem o campo, segue o aparelho
+  corners: { men, women },        // par de cores dos cantos por tipo de luta: 'green-pink' ou 'purple-orange'; ausente = vermelho e azul
   unitPct: 10,                    // porcentagem da banca que vale uma unidade
   deposits: [{ t, v }],
   bets: [{ id, t, type: 'single'|'multi', stake, unit, odd, sgp, legs, status: 'open'|'won'|'lost'|'void'|'cashed', payout, settledAt, cash }] }
 ```
-Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, fight, event, date, odd, src: 'real'|'est', out, res }`. Os textos são copiados na hora da aposta para o histórico continuar legível depois que a luta sai do placar.
+Perna (`legs[]`): `{ fid, eid, key, market, sel, cat, weight, fight, event, date, odd, src: 'real'|'est', out, res }`. Os textos são copiados na hora da aposta para o histórico continuar legível depois que a luta sai do placar. `weight` é a categoria como a ESPN escreve ("W Flyweight"), usada para a cor do canto; perna antiga não tem.
+
+Configuração nova entra em `settingsOf` (`src/app/state.ts`): é o que um "Zerar simulação" mantém e o que volta com um backup. Um estado salvo por versão antiga pode trazer `tip`, que é descartado na carga.
 
 `sgp`: `{ [fid]: odd }` com o preço de cada combinada na mesma luta, fixado na hora da aposta.
 
@@ -305,6 +307,7 @@ O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas
 - **Máscara:** os campos de aposta e de depósito formatam enquanto se digita (`Core.maskMoney`): 1500 vira 1.500 e 12345,6 vira 12.345,6. Ponto é sempre separador de milhar; a primeira vírgula abre os centavos, com no máximo duas casas. `applyMask` mantém o cursor no lugar. Em teclado sem vírgula, um ponto digitado vira vírgula.
 - **Leitura:** `Core.parseMoney` ignora os pontos, então "1.000" é mil.
 - **Atalhos de valor no cupom:** +10, +50, +100, +10.000, +100.000 e +1.000.000 somam ao que está no campo; "Tudo" coloca o saldo inteiro.
+- **Atalhos de valor no depósito** (D39): 100, 500, 1.000 e 5.000 na primeira linha, 10.000, 100.000 e 1.000.000 na segunda, sempre na moeda escolhida para o depósito. Também somam ao que está no campo. O depósito tem máximo de 1 bilhão por depósito.
 - **Moeda:** `S.cur` guarda a moeda da banca (BRL, USD ou EUR). O formato numérico é sempre o brasileiro (US$ 1.000,00).
 
 ## Moeda e câmbio
@@ -325,7 +328,7 @@ Regra do Lucas em 09/10/2026 (D28): **a moeda se troca no cartão de depósito, 
 - Uma unidade vale `unitPct`% da banca. O padrão é 10% da banca; o valor aceito vai de 0,1% a 100% (`Core.unitPct`, `Core.unitValue`).
 - **Banca** é o saldo disponível mais o que está em jogo nas apostas abertas. Assim a unidade não encolhe só porque há apostas abertas, e muda sozinha quando a banca muda.
 - No cupom há atalhos de 0,5u, 1u, 2u e 3u, que **definem** o valor da aposta (não somam), e o total aparece também em unidades.
-- **Dinheiro ou unidades é configuração, não escolha por aposta** (D36): o cartão "Valor das apostas", na Carteira, define como o cupom pede o valor (`S.stakeIn`, lembrado entre sessões). O cupom só mostra qual está valendo, com um atalho para as configurações. Em unidades, o campo de valor vira um campo em unidades (`Core.maskUnits`, `Core.parseUnits`: até duas casas, no máximo 9999,99). O cupom guarda as duas formas em paralelo (`slip.stake`, `slip.units`, `slip.unitsN`), então mudar a configuração não perde o valor digitado. Em unidades, o valor em dinheiro acompanha a unidade de agora. Sem banca não há unidade: o cupom pede dinheiro até o primeiro depósito, mesmo configurado em unidades.
+- **Dinheiro ou unidades é configuração, não escolha por aposta** (D36): o cartão "Valor das apostas", na Carteira, define como o cupom pede o valor (`S.stakeIn`, lembrado entre sessões). A mesma escolha decide o que entra ao copiar um print (D42). O cupom só mostra qual está valendo, com um atalho para as configurações. Em unidades, o campo de valor vira um campo em unidades (`Core.maskUnits`, `Core.parseUnits`: até duas casas, no máximo 9999,99). O cupom guarda as duas formas em paralelo (`slip.stake`, `slip.units`, `slip.unitsN`), então mudar a configuração não perde o valor digitado. Em unidades, o valor em dinheiro acompanha a unidade de agora. Sem banca não há unidade: o cupom pede dinheiro até o primeiro depósito, mesmo configurado em unidades.
 - Cada aposta guarda em `unit` o valor da unidade na hora em que foi feita. A Carteira mostra o resultado em unidades somando `(payout − stake) / unit` das apostas encerradas. Aposta antiga, sem `unit`, fica fora dessa conta.
 
 ## Copiar aposta (print ou texto)
@@ -335,14 +338,14 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` de `src/app/import.ts`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
 - **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems }`.
 - **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas (também escritos como "+2.5" e "−2.5"; um traço seguido de espaço é separador, não sinal) e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
-- **Valor** (`Core.tipStake`): se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual, sempre. Se não diz nada, considera 1u. Se traz um valor em dinheiro (o primeiro do texto, que no print é a aposta, não o retorno), vale a escolha do cartão "Ao copiar um print", na Carteira (`S.tip`, limpo por `Core.tipCfg`). São só duas, por decisão do Lucas (D29): ou copia o mesmo valor, ou copia a mesma stake.
+- **Valor** (`Core.tipStake(stake, S.stakeIn, unidade)`): não existe configuração separada para prints. Vale a mesma do cupom, por decisão do Lucas (D42):
 
-  | `mode` | O que faz com um print de R$ 1.750,00 |
-  |---|---|
-  | `same` ("Mesmo valor", padrão) | aposta os mesmos R$ 1.750,00 |
-  | `units` ("Mesma stake") | divide pelo valor de 1u de quem fez o print (`srcUnit`) e aposta essa quantidade da sua unidade. Sem `srcUnit` não há como saber a stake de um print em dinheiro: age como `same` e a tela avisa |
+  | "Valor das apostas" | O original traz só dinheiro (R$ 1.750,00) | O original traz só unidades ("2u") | O original traz os dois |
+  |---|---|---|---|
+  | Em R$ (mesmo valor) | aposta os mesmos R$ 1.750,00 | aposta 2u na sua unidade | copia o dinheiro |
+  | Em unidades (mesma stake) | aposta os mesmos R$ 1.750,00, mostrados em unidades suas | aposta 2u na sua unidade | copia as unidades |
 
-  O leitor não olha o símbolo de moeda do print: o número é lido como está. `srcUnit` é um valor na moeda do print e não é convertido quando a banca muda de moeda.
+  Se o original não diz valor nenhum, considera 1u. `parseTip` devolve `stake` como `{ kind: 'units', units, money? }`, `{ kind: 'money', money }` ou `{ kind: 'default' }`; o dinheiro é o primeiro valor do texto (no print é a aposta, não o retorno). Quando o original traz os dois, a tela de copiar diz qual ficou de fora. **Quanto vale a unidade de quem fez o print não é perguntado**: o app não ajusta a aposta de outra pessoa à sua banca. O leitor não olha o símbolo de moeda do print: o número é lido como está.
 - **Odd:** a aposta é feita com a odd de agora. A odd do original aparece só para comparar.
 - **Fluxo:** a tela mostra o que foi entendido e o que não foi (`TIP_WHY`: `empty`, `nofight`, `ambiguous`, `nomarket`, e "não tem odd agora"). "Levar pro cupom" enche o cupom; a aposta é feita pelo botão de sempre. Mais de uma luta no mesmo texto vira múltipla.
 - **Limite conhecido:** o leitor de texto foi feito em cima de dois formatos reais (um print de casa de apostas e uma mensagem de canal). Formato novo que ele não entender: acrescentar o caso em `tests/unit.py` primeiro.
@@ -373,15 +376,17 @@ Pedido do Lucas em 10/10/2026 (D37): entrega mais rápida, abrir sem internet e 
 
 Uma coluna de até 720 px. Barra superior fixa com saldo, barra de abas embaixo (Lutas, Apostas, Carteira), cupom como folha que sobe do rodapé.
 
-Identidade: cantos vermelho e azul para os lutadores, dourado para seleção e ação principal. Títulos em Big Shoulders Display, texto em Barlow (Google Fonts, com fallback). Verde e vermelho de ganho/perda são separados das cores de canto.
+Identidade: uma cor para cada canto (vermelho e azul por padrão), dourado para seleção e ação principal. Títulos em Big Shoulders Display, texto em Barlow (Google Fonts, com fallback). Verde e vermelho de ganho/perda são separados das cores de canto.
 
 Tema: claro e escuro, tudo em variáveis CSS no `:root`. Por padrão segue o aparelho (`prefers-color-scheme`); o cartão "Aparência", na Carteira, deixa fixar um dos dois (`S.theme`, D38). `applyTheme` põe a escolha em `data-theme` no `<html>` e acerta a cor das barras do navegador (`theme-color`). A paleta escura aparece duas vezes em `src/styles.css`, uma para "o aparelho pediu" e outra para "a pessoa escolheu"; o `docs_check.py` confere que as duas são iguais.
 
 Cor de canto nas opções: `Core.sideOf(key)` diz de qual lutador é uma seleção (`ml`, `mov`, `wr` e `tda`; o resto é da luta inteira e devolve `null`). Nos mercados, a opção de um lutador ganha a barra e um fundo leve na cor do canto dele, e o cabeçalho da coluna ganha um traço na mesma cor. No cupom, na tela de copiar aposta e na lista de apostas, a seleção leva um quadradinho da cor. Os botões de vencedor não repetem a marca porque já ficam na linha do lutador.
 
-Legenda dos cantos (D35): com os mercados de uma luta abertos, uma faixa com os dois sobrenomes e a cor de cada canto (`.corners`) fica presa logo abaixo da barra superior enquanto os mercados daquela luta rolam. Toda opção de lutador também leva `title` com o nome e o canto ("Almeida · canto vermelho"); no iPhone não existe ponteiro, então quem resolve lá é a faixa.
+Pares de cor dos cantos (D40): três pares, sempre com a cor quente no lutador `a` (o de cima): vermelho e azul (`red-blue`, o padrão), rosa e verde (`green-pink`), laranja e roxo (`purple-orange`). O cartão "Aparência" deixa escolher um par para as lutas masculinas e outro para as femininas (`S.corners`). `Core.isWomens(weight)` reconhece a luta feminina pela categoria da ESPN começando com "W "; um peso casado feminino não é reconhecido e sai no par das masculinas. O card da luta, ou a marca de uma seleção, leva `data-corners` com o par, e a folha de estilo troca `--ca` e `--cb` ali. Os tons ficam longe do verde de "ganhou" e do dourado de seleção. Aposta antiga, sem `weight` na perna, usa a categoria da luta enquanto ela estiver no placar e depois o par das masculinas.
 
-Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Esses dois lados têm um par de cores só deles (D34): `Core.overUnder(key)` devolve `'o'` ou `'u'` para `tot` e `td`, e a opção ganha fundo leve, rótulo colorido e uma seta (▲ no +, ▼ no −), em `--over` e `--under`. Não são as cores de canto, porque + e − não pertencem a lutador nenhum. A mesma seta marca a seleção no cupom, na tela de copiar aposta e na lista de apostas. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
+Legenda dos cantos (D35): com os mercados de uma luta abertos, uma faixa com os dois sobrenomes e a cor de cada canto (`.corners`) fica presa logo abaixo da barra superior enquanto os mercados daquela luta rolam. Toda opção de lutador também leva `title` com o nome e a cor do canto ("Almeida · canto vermelho"); no iPhone não existe ponteiro, então quem resolve lá é a faixa.
+
+Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Esses dois lados têm marca própria (D34, revista pela D41): `Core.overUnder(key)` devolve `'o'` ou `'u'` para `tot` e `td`, e a opção é montada como a de um lutador (barra lateral e fundo leve), mas em tons neutros (`--over` mais forte, `--under` mais claro) e com uma seta (▲ no +, ▼ no −). São neutros de propósito: + e − não pertencem a lutador nenhum, e com três pares de cor nos cantos qualquer cor ali bateria com algum par. A mesma seta marca a seleção no cupom, na tela de copiar aposta e na lista de apostas. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
 
 Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-*)`, campos com fonte de 16 px ou mais (evita zoom), metas `apple-mobile-web-app-*`. O Safari pode limpar o `localStorage` de site sem uso por semanas; por isso a Carteira tem backup e restauração por texto.
 

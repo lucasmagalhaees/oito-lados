@@ -47,6 +47,8 @@ export type Combo = { ok: false; why: 'impossible' | 'redundant' } | { ok: true;
 export interface Leg {
   fid: string; eid: string; key: string; market: string; sel: string; cat: string; fight: string; event: string; date: number;
   odd: number; src: 'real' | 'est'; out?: Outcome | null; res?: string;
+  /** The weight class as ESPN names it, copied with the bet; legs placed before this existed do not have it. */
+  weight?: string;
 }
 export interface CashInfo { kind: 'refund' | 'market'; full: number | null; chance: number | null }
 export interface Bet {
@@ -55,19 +57,23 @@ export interface Bet {
 }
 export interface Deposit { t: number; v: number }
 export interface Conversion { t: number; from: Currency; to: Currency; rate: number; date: string }
-export interface TipCfg { mode: 'same' | 'units'; srcUnit: number }
+export type CornerPair = 'green-pink' | 'purple-orange';
 /** Everything the person owns: what is saved under `oitolados.v1`. The balance is never stored, it is derived. */
 export interface AppState {
-  v: number; cur?: Currency; unitPct?: number; conv?: Conversion[]; tip?: TipCfg; stakeIn?: 'money' | 'units';
+  v: number; cur?: Currency; unitPct?: number; conv?: Conversion[]; stakeIn?: 'money' | 'units';
   /** light or dark when the person chose one; absent means "follow the device" */
   theme?: 'light' | 'dark';
+  /** The pair of colours of the two corners, for men's and for women's fights; an absent one means red and blue. */
+  corners?: { men?: CornerPair; women?: CornerPair };
   deposits: Deposit[]; bets: Bet[];
 }
 
 export interface FxRates { date: string; rates: Record<Currency, number>; ts?: number }
 
-export type TipStakeIn = { kind: 'units'; units: number } | { kind: 'money'; money: number } | { kind: 'default'; units: number };
-export interface TipStake { how: 'units' | 'default' | 'conv' | 'same'; units: number | null; value: number }
+/** The stake as the original states it. One that states both units and money is `units` with the money alongside. */
+export type TipStakeIn = { kind: 'units'; units: number; money?: number } | { kind: 'money'; money: number } | { kind: 'default'; units: number };
+/** The stake to copy: `units` when it comes from the units of the original, `same` when it is the money of the original. */
+export interface TipStake { how: 'units' | 'default' | 'same'; units: number | null; value: number }
 export interface TipItem { fid: string; key: string; printedOdd: number | null; assumed: boolean; quote: string }
 export interface TipProblem { code: 'empty' | 'nofight' | 'ambiguous' | 'nomarket'; fid?: string }
 export interface Tip { items: TipItem[]; stake: TipStakeIn; problems: TipProblem[] }

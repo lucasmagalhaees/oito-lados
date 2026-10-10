@@ -2,8 +2,11 @@
 :root{
   --bg:#f2f3f5; --surface:#ffffff; --surface2:#e8ebf0; --line:#d3d8e0; --fg:#141922; --muted:#5b6474;
   --gold:#855a00; --gold-bg:#f0c24f; --on-gold:#1b1400;
-  --red:#cf2f36; --blue:#2463d6;
-  --over:#096480; --under:#6b3fc4;
+  /* the corners: three pairs to choose from (a is the warm one). --ca and --cb are the pair in use */
+  --rb-a:#cf2f36; --rb-b:#2463d6; --gp-a:#d42a7b; --gp-b:#3d8f14; --po-a:#d9620a; --po-b:#7440d6;
+  --ca:var(--rb-a); --cb:var(--rb-b);
+  /* over and under: neutral on purpose, so they never read as a corner whatever pair is in use */
+  --over:#2a3340; --under:#6b7587;
   --win:#0b7a4c; --loss:#c22a2a; --live:#d92d20;
   --shade:rgba(10,14,20,.5);
   --font-display:"Big Shoulders Display","Arial Narrow","Helvetica Neue",Arial,sans-serif;
@@ -16,8 +19,8 @@
   :root:not([data-theme="light"]){
     --bg:#0e1218; --surface:#171c25; --surface2:#222a37; --line:#2d3646; --fg:#eef1f6; --muted:#9aa4b5;
     --gold:#f0c24f; --gold-bg:#f0c24f; --on-gold:#1b1400;
-    --red:#f0555b; --blue:#5b9bff;
-    --over:#56c8e6; --under:#bba4ff;
+    --rb-a:#f0555b; --rb-b:#5b9bff; --gp-a:#ff6bb0; --gp-b:#8fd648; --po-a:#ff9442; --po-b:#ab8cff;
+    --over:#e3e8f0; --under:#8a96aa;
     --win:#3fd08f; --loss:#ff7a7a; --live:#ff5a4d;
     --shade:rgba(3,5,8,.66);
     color-scheme:dark;
@@ -26,12 +29,15 @@
 :root[data-theme="dark"]{
   --bg:#0e1218; --surface:#171c25; --surface2:#222a37; --line:#2d3646; --fg:#eef1f6; --muted:#9aa4b5;
   --gold:#f0c24f; --gold-bg:#f0c24f; --on-gold:#1b1400;
-  --red:#f0555b; --blue:#5b9bff;
-  --over:#56c8e6; --under:#bba4ff;
+  --rb-a:#f0555b; --rb-b:#5b9bff; --gp-a:#ff6bb0; --gp-b:#8fd648; --po-a:#ff9442; --po-b:#ab8cff;
+  --over:#e3e8f0; --under:#8a96aa;
   --win:#3fd08f; --loss:#ff7a7a; --live:#ff5a4d;
   --shade:rgba(3,5,8,.66);
   color-scheme:dark;
 }
+/* a fight card, or a single mark, drawn in another pair (men's and women's fights can each have their own) */
+[data-corners="green-pink"]{--ca:var(--gp-a);--cb:var(--gp-b)}
+[data-corners="purple-orange"]{--ca:var(--po-a);--cb:var(--po-b)}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 var(--font-body);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;overflow-x:hidden}
@@ -91,8 +97,8 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 @keyframes pulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 .row{display:flex;align-items:center;gap:10px;padding:7px 12px}
-.corner{width:4px;align-self:stretch;border-radius:2px;background:var(--red);flex:none}
-.row.b .corner{background:var(--blue)}
+.corner{width:4px;align-self:stretch;border-radius:2px;background:var(--ca);flex:none}
+.row.b .corner{background:var(--cb)}
 .who{min-width:0;flex:1}
 .who b{display:block;font:800 23px/1 var(--font-display);text-transform:uppercase;letter-spacing:.01em;overflow-wrap:anywhere}
 .who span{font-size:12px;color:var(--muted)}
@@ -106,41 +112,46 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .opt.on .est{color:inherit}
 .opt[disabled]{opacity:.55;cursor:default}
 .opt.ml{flex:none;min-width:76px;justify-content:center}
-.opt.sa,.opt.sb{position:relative;padding-left:15px;overflow:hidden}
-.opt.sa::before,.opt.sb::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
-.opt.sb::before{background:var(--blue)}
-.opt.sa{background:color-mix(in srgb,var(--red) 10%,var(--surface2))}
-.opt.sb{background:color-mix(in srgb,var(--blue) 10%,var(--surface2))}
+.opt.sa,.opt.sb,.opt.xo,.opt.xu{position:relative;padding-left:15px;overflow:hidden}
+.opt.sa::before,.opt.sb::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ca)}
+.opt.sb::before{background:var(--cb)}
+.opt.sa{background:color-mix(in srgb,var(--ca) 10%,var(--surface2))}
+.opt.sb{background:color-mix(in srgb,var(--cb) 10%,var(--surface2))}
 .opt.on.sa,.opt.on.sb{background:var(--gold-bg)}
-/* over and under: their own two colours and an arrow, never the corner colours (those mean a fighter) */
-.opt.xo{background:color-mix(in srgb,var(--over) 10%,var(--surface2))}
-.opt.xu{background:color-mix(in srgb,var(--under) 10%,var(--surface2))}
-.opt.xo .ol,.opt.xu .ol{font-weight:700;font-size:14px;color:var(--over)}
-.opt.xu .ol{color:var(--under)}
-.opt.xo .ol::before,.opt.xu .ol::before,.ou::before{content:"▲";font-size:9px;margin-right:5px;vertical-align:2px}
-.opt.xu .ol::before,.ou.u::before{content:"▼"}
+/* over and under: built like a fighter's option (side bar, light tint) but in neutral tones and with an arrow, never a corner colour */
+.opt.xo::before,.opt.xu::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--over)}
+.opt.xu::before{background:var(--under)}
+.opt.xo{background:color-mix(in srgb,var(--over) 9%,var(--surface2))}
+.opt.xo .ol,.opt.xu .ol{font-weight:700;font-size:14px}
+.opt.xo .ol::before,.opt.xu .ol::before,.ou::before{content:"▲";font-size:9px;margin-right:5px;vertical-align:2px;color:var(--over)}
+.opt.xu .ol::before,.ou.u::before{content:"▼";color:var(--under)}
 .opt.on.xo,.opt.on.xu{background:var(--gold-bg)}
-.opt.on.xo .ol,.opt.on.xu .ol{color:inherit}
-.ou{font-style:normal;color:var(--over)}
-.ou.u{color:var(--under)}
-.sd{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--red);margin-right:6px;vertical-align:1px}
-.sd.b{background:var(--blue)}
+.opt.on.xo .ol::before,.opt.on.xu .ol::before{color:inherit}
+.ou{font-style:normal}
+/* the two swatches of each corner pair, in the settings */
+.sw{display:inline-block;width:16px;height:16px;border-radius:4px;margin:0 2px;vertical-align:-3px}
+.pairs{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px 12px;font-size:14px;font-weight:600}
+.sw.red-blue.a{background:var(--rb-a)}.sw.red-blue.b{background:var(--rb-b)}
+.sw.green-pink.a{background:var(--gp-a)}.sw.green-pink.b{background:var(--gp-b)}
+.sw.purple-orange.a{background:var(--po-a)}.sw.purple-orange.b{background:var(--po-b)}
+.sd{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--ca);margin-right:6px;vertical-align:1px}
+.sd.b{background:var(--cb)}
 .noodds{font-size:12px;color:var(--muted);flex:none}
 .more{display:flex;width:100%;justify-content:space-between;align-items:center;padding:11px 12px;border-top:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted);margin-top:4px}
 .mk{padding:0 12px 14px;border-top:1px solid var(--line)}
 .corners{position:sticky;top:calc(57px + env(safe-area-inset-top,0px));z-index:5;display:flex;flex-wrap:wrap;gap:4px 16px;margin:0 -12px;padding:7px 12px;background:var(--surface);border-bottom:1px solid var(--line);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 .corners span{display:flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere}
-.corners i{width:10px;height:10px;border-radius:2px;background:var(--red);flex:none}
-.corners .b i{background:var(--blue)}
+.corners i{width:10px;height:10px;border-radius:2px;background:var(--ca);flex:none}
+.corners .b i{background:var(--cb)}
 .mk h4{margin:14px 0 7px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:400}
 .mk h4 em{font-style:normal;font-size:12px;color:var(--muted)}
 .grid{display:grid;gap:6px}
 .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
 .g3 .opt{flex-direction:column;align-items:flex-start;justify-content:center;gap:2px}
-.colh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere;padding-bottom:5px;border-bottom:2px solid var(--red)}
-.colh.b{border-bottom-color:var(--blue)}
-.colh i{width:8px;height:8px;border-radius:2px;background:var(--red);flex:none}
-.colh.b i{background:var(--blue)}
+.colh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere;padding-bottom:5px;border-bottom:2px solid var(--ca)}
+.colh.b{border-bottom-color:var(--cb)}
+.colh i{width:8px;height:8px;border-radius:2px;background:var(--ca);flex:none}
+.colh.b i{background:var(--cb)}
 .legend{font-size:12px;color:var(--muted);margin-top:14px}
 
 /* tab bar + slip bar */

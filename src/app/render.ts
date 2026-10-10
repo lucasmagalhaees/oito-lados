@@ -4,10 +4,10 @@ import { CASH_WHY, cashoutOf } from './cashout';
 import { $, CUR, WEIGHT, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, money, part, pctText, rateText, signed, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
 import { canBet, inUnits, priceOf, setStakeMoney, slipCalc, wallet } from './helpers';
-import { TIP_MODE, renderImport } from './import';
+import { renderImport } from './import';
 import { repeatable } from './repeat';
 import { legOut, resultText } from './settle';
-import { D, S, bankEmpty, imp, saveCache, saveS, slip, ui } from './state';
+import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
 import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
 import type { Bet, Currency, Fight, FightEvent, Leg, Option, Outcome, Side } from '../core';
@@ -69,11 +69,11 @@ function vLutas(): string {
   return h;
 }
 // the mark in front of a selection's name: the corner colour for a fighter's, the arrow for an over or an under
-export const sideDot = (key: string): string => { const sd = Core.sideOf(key), ou = Core.overUnder(key); return sd ? `<i class="sd ${sd}"></i>` : ou ? `<i class="ou ${ou}"></i>` : ''; };
+export const sideDot = (key: string, weight?: string): string => { const sd = Core.sideOf(key), ou = Core.overUnder(key); return sd ? `<i class="sd ${sd}"${cornersAttr(weight)}></i>` : ou ? `<i class="ou ${ou}"></i>` : ''; };
 function optBtn(f: Fight, x: Option, cls?: string): string {
   const on = slip.sels.some(s => s.fid === f.id && s.key === x.key);
   const side = cls === 'ml' ? null : Core.sideOf(x.key);        // the winner buttons already sit on the fighter's own row
-  const whose = side ? ` title="${esc(f[side].name)} · canto ${side === 'a' ? 'vermelho' : 'azul'}"` : '';
+  const whose = side ? ` title="${esc(f[side].name)} · canto ${cornerSet(f.weight)[side]}"` : '';
   const ou = Core.overUnder(x.key);
   return `<button class="opt ${cls || ''} ${side ? 's' + side : ''} ${ou ? 'x' + ou : ''} ${on ? 'on' : ''}" data-act="pick" data-fid="${esc(f.id)}" data-key="${esc(x.key)}" aria-pressed="${on}"${whose}>${cls === 'ml' ? '' : `<span class="ol">${esc(x.label)}</span>`}<span class="ov">${x.src === 'est' ? '<i class="est" title="odd estimada">≈</i>' : ''}${fo(x.odd)}</span></button>`;
 }
@@ -88,7 +88,7 @@ function fightCard(f: Fight, isMain: boolean): string {
     const right = can && ml ? optBtn(f, ml, 'ml') : ml ? `<button class="opt ml" disabled><span class="ov">${fo(ml.odd)}</span></button>` : f.state === 'pre' ? '<span class="noodds">sem odds ainda</span>' : '';
     return `<div class="row ${k}"><i class="corner"></i><div class="who"><b>${esc(x.last)}</b><span>${esc(first)}${x.record ? ' · ' + esc(x.record) : ''}${f.state === 'post' && f.winner === k ? ' · <span class="w">venceu</span>' : ''}</span></div>${right}</div>`;
   };
-  let h = `<article class="fight"><div class="fh">${isMain ? '<span class="tag">Luta principal</span>' : ''}<span>${esc(WEIGHT[f.weight] || f.weight)} · ${f.rounds} rounds</span>${state}</div>${side('a')}${side('b')}`;
+  let h = `<article class="fight"${cornersAttr(f.weight)}><div class="fh">${isMain ? '<span class="tag">Luta principal</span>' : ''}<span>${esc(WEIGHT[f.weight] || f.weight)} · ${f.rounds} rounds</span>${state}</div>${side('a')}${side('b')}`;
   if (f.state === 'post') h += `<div class="result">${esc(resultText(f, res))}</div>`;
   else if (f.state === 'in' && D.td[f.id]) h += `<div class="result">Quedas até agora: ${esc(f.a.last)} ${D.td[f.id].a} · ${esc(f.b.last)} ${D.td[f.id].b}</div>`;
   if (can && p) {
@@ -131,7 +131,7 @@ function vApostas(): string {
       } else if (f && f.state === 'post') line2 = `<span>${esc(resultText(f, D.results[l.fid]))}</span>`;
       else if (!isOpen && l.res) line2 = `<span>${esc(l.res)}</span>`;
       else line2 = `<span>${esc(dWhen.format(l.date))}</span>`;
-      h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${sideDot(l.key)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
+      h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${sideDot(l.key, l.weight || D.fights.get(l.fid)?.weight)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
     }
     const profit = b.payout - b.stake;
     h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b>${b.unit && b.unit > 0 ? `<span class="un">${fu(b.stake / b.unit)}</span>` : ''}</div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
@@ -202,7 +202,8 @@ function vCarteira(w: Wallet): string {
   h += `<section class="card"><span class="label">Depositar dinheiro de mentira</span>
     <div class="segm cur" role="group" aria-label="Moeda do depósito">${(Object.keys(CUR) as Currency[]).map(c => `<button class="${dc === c ? 'on' : ''}" data-act="depcur" data-c="${c}" aria-pressed="${dc === c}" ${ui.fxBusy ? 'disabled' : ''}>${esc(symbolOf(c))} ${CUR[c]}</button>`).join('')}</div>
     <div class="field"><span>${esc(symbolOf(dc))}</span><input id="dep" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(ui.dep)}" aria-label="Valor do depósito"></div>
-    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>`;
+    <div class="quick">${[100, 500, 1000, 5000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>
+    <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="depq" data-v="${v}">${df.format(v).replace(',00', '')}</button>`).join('')}</div>`;
   if (conv && ui.fxBusy) h += '<p class="hint" id="fxinfo">Buscando a cotação…</p>';
   else if (conv && rate && FX) h += `<p class="hint" id="fxinfo">Passar para ${CUR[dc]} troca a moeda da banca e converte tudo (depósitos e apostas) por <b>${esc(rateText(cur, dc, rate))}</b>, cotação de ${esc(dateBR(FX.date))}. Seu saldo de ${money(w.balance)} vira ${df.format(Core.r2(w.balance * rate))}.</p>`;
   else if (other && !conv) h += `<p class="hint" id="fxinfo">A banca passa a ser em ${CUR[dc]}.</p>`;
@@ -229,25 +230,22 @@ function vCarteira(w: Wallet): string {
     <p class="hint">${pctText(w.unitPct)}% da banca de ${money(w.bank)} (saldo mais o que está em jogo). Muda sozinha quando a banca muda.</p>
     <div class="field"><input id="unitpct" inputmode="decimal" autocomplete="off" value="${esc(pctText(w.unitPct))}" aria-label="Porcentagem da banca que vale uma unidade"><span>% da banca</span></div>
     <button class="btn ghost block" data-act="unit">Aplicar</button></section>`;
-  const th = S.theme === 'light' || S.theme === 'dark' ? S.theme : 'auto';
+  const th = S.theme === 'light' || S.theme === 'dark' ? S.theme : 'auto', cm = cornerSetOf('men'), cw = cornerSetOf('women');
   h += `<section class="card" id="themecard"><span class="label">Aparência</span>
     <div class="segm cur" role="group" aria-label="Tema do app">${([['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']] as const).map(([k, t]) => `<button class="${th === k ? 'on' : ''}" data-act="theme" data-m="${k}" aria-pressed="${th === k}">${t}</button>`).join('')}</div>
-    <p class="hint">${th === 'auto' ? 'Automático segue o modo claro ou escuro do aparelho.' : th === 'dark' ? 'Sempre escuro, mesmo com o aparelho no modo claro.' : 'Sempre claro, mesmo com o aparelho no modo escuro.'}</p></section>`;
+    <p class="hint">${th === 'auto' ? 'Automático segue o modo claro ou escuro do aparelho.' : th === 'dark' ? 'Sempre escuro, mesmo com o aparelho no modo claro.' : 'Sempre claro, mesmo com o aparelho no modo escuro.'}</p>
+    <span class="label">Cores dos cantos</span>
+    <div class="pairs">${([['men', 'Lutas masculinas'], ['women', 'Lutas femininas']] as const).map(([g, t]) => { const cs = cornerSetOf(g); return `<span>${t}</span><div class="segm cur" role="group" aria-label="Cores dos cantos nas ${t.toLowerCase()}">${CORNER_SETS.map(c => `<button class="${cs.id === c.id ? 'on' : ''}" data-act="corners" data-g="${g}" data-m="${c.id}" aria-pressed="${cs.id === c.id}" aria-label="${c.a} e ${c.b}"><i class="sw ${c.id} a"></i><i class="sw ${c.id} b"></i></button>`).join('')}</div>`; }).join('')}</div>
+    <p class="hint" id="cornershow">${cm.id === cw.id ? `Todas as lutas em ${cm.a} e ${cm.b}.` : `Masculinas em ${cm.a} e ${cm.b}, femininas em ${cw.a} e ${cw.b}.`} A primeira cor é a de quem aparece em cima na luta.</p></section>`;
   const su = S.stakeIn === 'units';
   h += `<section class="card" id="stakecard"><span class="label">Valor das apostas</span>
-    <p class="hint">Vale pra todas as apostas: é assim que o cupom pede o valor.</p>
+    <p class="hint">Vale pra todas as apostas: é assim que o cupom pede o valor e é o que entra quando você copia um print.</p>
     <div class="segm" role="group" aria-label="Como informar o valor das apostas"><button class="${su ? '' : 'on'}" data-act="stakein" data-m="money" aria-pressed="${!su}">Em ${esc(sym())}</button><button class="${su ? 'on' : ''}" data-act="stakein" data-m="units" aria-pressed="${su}">Em unidades</button></div>
     <p class="hint" id="stakehow">${!su ? `Você digita o valor em ${esc(sym())}. Os atalhos de 0,5u a 3u continuam no cupom.`
       : w.unit > 0 ? `Você digita quantas unidades quer apostar. Hoje 1u = ${money(w.unit)}.`
-      : 'Ainda não há unidade, porque a banca está vazia. Até o primeiro depósito, o cupom pede o valor em dinheiro.'}</p></section>`;
-  const tc = Core.tipCfg(S.tip), ex = tc.srcUnit || 1750, exStake = Core.tipStake({ kind: 'money', money: ex }, tc, w.unit);
-  h += `<section class="card" id="tipcard"><span class="label">Ao copiar um print</span>
-    <p class="hint">Print ou texto que fala em unidades ("Stake 1 unidade") sempre entra com as mesmas unidades, na sua unidade. A escolha abaixo vale pra print que traz o valor em dinheiro.</p>
-    <div class="segm" role="group" aria-label="O que copiar de um print em dinheiro">${Core.TIP_MODES.map(m => `<button class="${tc.mode === m ? 'on' : ''}" data-act="tipmode" data-m="${m}" aria-pressed="${tc.mode === m}">${TIP_MODE[m]}</button>`).join('')}</div>`;
-  if (tc.mode === 'units') h += `<div class="field"><span>1u do print =</span><input id="tipsrc" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(tc.srcUnit ? Core.moneyText(tc.srcUnit) : '')}" aria-label="Quanto vale uma unidade de quem fez o print"></div><button class="btn ghost block" data-act="tipsave">Aplicar</button>`;
-  h += `<p class="hint" id="tiphow">${tc.mode === 'same' ? `Um print de ${money(ex)} vira uma aposta de ${money(exStake.value)}.`
-    : !tc.srcUnit ? 'Pra copiar a stake de um print em dinheiro, diz quanto quem fez o print aposta por unidade. Sem isso, a aposta copiada usa o mesmo valor do print.'
-    : `Um print de ${money(ex)} é ${fu(exStake.units || 0)} de quem fez, então vira ${fu(exStake.units || 0)} sua: ${money(exStake.value)}.`}</p></section>`;
+      : 'Ainda não há unidade, porque a banca está vazia. Até o primeiro depósito, o cupom pede o valor em dinheiro.'}</p>
+    <p class="hint" id="tiphow">${!su ? `Ao copiar um print: mesmo valor. Um print de ${money(1750)} vira uma aposta de ${money(1750)}. Se o original só falar em unidades, entram essas unidades na sua unidade.`
+      : `Ao copiar um print: mesma stake. "Stake 2 unidades" vira ${fu(2)} sua${w.unit > 0 ? ` (${money(Core.r2(2 * w.unit))})` : ''}. Print que só traz dinheiro entra com o mesmo valor, mostrado em unidades.`}</p></section>`;
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
@@ -273,7 +271,7 @@ export function renderSheet(): void {
   for (const g of c.groups) {
     const f = g.f, names = f ? `${f.a.last} x ${f.b.last}` : 'Luta fora do card';
     for (const r of g.rs)
-      h += `<div class="sel"><div class="t">${r.x ? `<b>${sideDot(r.s.key)}${esc(r.x.sel)}</b><span>${esc(r.x.market)} · ${esc(names)}</span>` : `<b>${esc(names)}</b><span class="bad">Mercado fechado. Remove pra continuar.</span>`}</div>${r.x ? `<span class="o">${r.x.src === 'est' ? '≈' : ''}${fo(r.x.odd)}</span>` : ''}<button class="x" data-act="unpick" data-fid="${esc(r.s.fid)}" data-key="${esc(r.s.key)}" aria-label="Remover seleção">×</button></div>`;
+      h += `<div class="sel"><div class="t">${r.x ? `<b>${sideDot(r.s.key, r.f && r.f.weight)}${esc(r.x.sel)}</b><span>${esc(r.x.market)} · ${esc(names)}</span>` : `<b>${esc(names)}</b><span class="bad">Mercado fechado. Remove pra continuar.</span>`}</div>${r.x ? `<span class="o">${r.x.src === 'est' ? '≈' : ''}${fo(r.x.odd)}</span>` : ''}<button class="x" data-act="unpick" data-fid="${esc(r.s.fid)}" data-key="${esc(r.s.key)}" aria-label="Remover seleção">×</button></div>`;
     if (g.combo && !g.ok) h += `<div class="combo bad"><span>${g.why === 'impossible' ? `As seleções de ${esc(names)} não podem acontecer juntas. Tira uma pra combinar.` : `Em ${esc(names)}, uma seleção já garante a outra. Tira uma pra combinar.`}</span></div>`;
     else if (g.combo && slip.mode === 'multi') h += `<div class="combo"><span>Juntas em ${esc(names)}${g.same ? ` · mesmo que "${esc(g.same)}"` : ''}</span><b>${g.same ? '' : '≈'}${fo(g.odd)}</b></div>`;
   }
@@ -327,7 +325,7 @@ export async function place(): Promise<void> {
   if (c.total > c.balance + 0.004) { renderSheet(); return; }
   const now = Date.now();
   // c.ok above means every selection has its fight and its price
-  const leg = (r: Resolved): Leg => { const f = r.f!, x = r.x!; return { fid: f.id, eid: f.eventId, key: r.s.key, market: x.market, sel: x.sel, cat: x.cat, fight: `${f.a.last} x ${f.b.last}`, event: f.eventName, date: f.date, odd: x.odd, src: x.src, out: null }; };
+  const leg = (r: Resolved): Leg => { const f = r.f!, x = r.x!; return { fid: f.id, eid: f.eventId, key: r.s.key, market: x.market, sel: x.sel, cat: x.cat, weight: f.weight, fight: `${f.a.last} x ${f.b.last}`, event: f.eventName, date: f.date, odd: x.odd, src: x.src, out: null }; };
   const unit = c.unit;                              // the unit in force when the bet is placed; the history is measured with it
   const mk = (type: Bet['type'], legs: Leg[], i: number, odd: number, sgp: Record<string, number> | null): Bet => ({ id: 'b' + now.toString(36) + i + Math.random().toString(36).slice(2, 6), t: now, type, stake: c.stake, unit, odd, sgp, legs, status: 'open', payout: 0, settledAt: null });
   if (slip.mode === 'multi') {

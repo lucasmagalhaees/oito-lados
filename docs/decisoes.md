@@ -33,6 +33,9 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 2. Pedido das 07:45, com um print do mercado "Total de rounds": faltou esquema de cores ali; um jeito de lembrar quem é azul e quem é vermelho sem rolar a tela de volta; dinheiro ou unidades como configuração e não por aposta; ver o que dá para guardar do app para abrir mais rápido, o modo offline, e avisar quando sai versão nova.
 3. Duas perguntas feitas antes de implementar. Cores no total de rounds: criar um mercado por lutador ou dar cores próprias a + e −? Resposta: "quero o 2" (D34). Tema: quer escolher dentro do app? Resposta: "sim, quero dark mode no app" (D38).
 4. Feito num PR só: D34 a D38.
+5. PR #10 mesclado às 09:36; o workflow `Produção` passou no commit `bcbf6c1`. Pedido seguinte, às 10:30: "faltou opções de depósito de milhares, e milhão" (D39).
+6. Entre 10:31 e 10:38, com o app já publicado na mão: as cores de + e − nas quedas "não ficaram boas, estão destoando do tom de vermelho e azul" (D41); "quero opções de temas de cores para os corners, pode ser azul × vermelho, verde × rosa, roxo × laranja", com padrão separado para lutas femininas e masculinas (D40); "a mesma stake não precisa desse campo para inserir valor" e "sempre que eu escolher mesmo valor, fixa a opção acima para reais; se escolher mesma stake, fica a opção acima para unidades" (D42).
+7. O Lucas pediu para revisar se as alterações faziam sentido e um code review "como se fosse análise de negócio e como se fosse tech lead". A revisão está no PR; dois achados viraram código (a tela de copiar diz o que ficou de fora quando o original traz unidades e dinheiro; a lista de configurações passou a existir num lugar só).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -267,6 +270,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Interpretações que seguem valendo:** a configuração é uma só para todos os prints (não há unidade de origem por canal ou por pessoa).
 - **Limite conhecido:** o leitor não considera a moeda do print. Com a banca em dólar, um print de R$ 250,00 no modo "mesmo valor" vira US$ 250,00.
 - **Consequência:** quem tinha salvo o modo "Fixo" volta para "Mesmo valor" (`Core.tipCfg` não reconhece mais o modo).
+- **Revista pela D42** (10/10/2026): a configuração separada e o campo "1u do print" saíram. Mesmo valor ou mesma stake passou a ser a própria escolha de dinheiro ou unidades.
 
 ## D30. Valor da aposta em dinheiro ou em unidades, e atalhos altos
 
@@ -275,7 +279,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
   - Os atalhos de 0,5u a 3u já existiam; entendi o pedido como poder **digitar** qualquer quantidade de unidades.
   - Em unidades, os atalhos de dinheiro saem da tela e ficam só os de unidade e o "Tudo".
-  - Os atalhos altos são do cupom. Os do depósito continuam em 100, 500, 1.000 e 5.000.
+  - Os atalhos altos são do cupom. Os do depósito continuam em 100, 500, 1.000 e 5.000. **Interpretação errada, corrigida pela D39:** ele queria os altos no depósito também.
 - **Descartado:** trocar o padrão para unidades sem ele pedir.
 - **Revista pela D36** (10/10/2026): a chave saiu do cupom e virou configuração na Carteira.
 
@@ -324,6 +328,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - Vale também para o total de quedas, que usa o mesmo + e −.
   - As duas cores (um azul-petróleo e um violeta) fui eu que escolhi, longe do vermelho e do azul dos cantos e do verde e vermelho de ganho e perda.
 
+- **Revista pela D41** (mesmo dia): as duas cores que escolhi destoaram do vermelho e do azul. + e − ficaram neutros.
+
 ## D35. Legenda dos cantos presa na tela
 
 - **Contexto (10/10/2026):** "poderia ter um tooltip ou algum mecanismo para me lembrar quem é azul e quem é vermelho sem ter que scrollar tudo de novo".
@@ -362,6 +368,42 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Decisão:** cartão "Aparência" nas configurações, com Automático, Claro e Escuro. A escolha fica salva (`theme`) e sobrevive a backup, restauração e a zerar a simulação.
 - **Interpretação que precisou ser feita (confirmar com o Lucas):** o padrão continua sendo Automático. Não troquei o padrão para escuro.
 
+## D39. Atalhos altos também no depósito
+
+- **Contexto (10/10/2026):** "faltou opções de depósito de milhares, e milhão". Na D30 eu tinha posto os atalhos altos só no cupom e anotado isso como interpretação a confirmar; a resposta é que faltaram no depósito.
+- **Decisão:** o cartão de depósito ganhou uma segunda linha de atalhos, 10.000, 100.000 e 1.000.000, na moeda escolhida para o depósito. Somam ao que está no campo, como os outros.
+- **Interpretação que precisou ser feita:** usei os mesmos três valores do cupom. A primeira linha (100, 500, 1.000 e 5.000) ficou como estava.
+
+## D40. Pares de cor para os cantos, por luta masculina e feminina
+
+- **Contexto (10/10/2026):** "quero opções de temas de cores para os corners, pode ser azul × vermelho, verde × rosa, roxo × laranja" e, em seguida, "o esquema de cores pode ficar na parte de configurações e eu poderia definir o padrão das lutas femininas e masculinas".
+- **Decisão:** três pares (vermelho e azul, rosa e verde, laranja e roxo). No cartão "Aparência" há uma escolha para as lutas masculinas e outra para as femininas. Tudo que leva cor de canto segue o par da luta: a linha do lutador, as opções, a legenda, e a marca da seleção no cupom, na tela de copiar e na lista de apostas.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - A cor quente fica sempre com o lutador de cima (o `a`): vermelho, rosa, laranja. A fria com o de baixo.
+  - O padrão das duas escolhas é vermelho e azul. Não presumi rosa para as femininas.
+  - Os tons fui eu que escolhi: verde puxado para o limão, para não parecer o verde de "ganhou", e laranja mais fechado que o dourado de seleção.
+- **Como a luta feminina é reconhecida:** pela categoria da ESPN começando com "W " ("W Flyweight"), que é o que aparece nas respostas reais gravadas. **Limite:** um peso casado feminino vem como "Catchweight" e sai no par das masculinas. Não foi visto como a ESPN escreve esse caso.
+- **Consequência:** a perna da aposta passou a guardar a categoria (`weight`). Aposta antiga, sem ela, usa a categoria da luta enquanto estiver no placar e depois o par das masculinas.
+
+## D41. + e − neutros (revê a D34)
+
+- **Contexto (10/10/2026):** "as cores das quedas na luta não ficaram boas, estão destoando do tom de vermelho e azul". O azul-petróleo e o violeta da D34 tinham sido escolha minha.
+- **Decisão:** + e − passam a ser montados como a opção de um lutador (barra lateral e fundo leve), mas em tons neutros do tema: + mais forte, − mais claro, com ▲ e ▼.
+- **Por que neutros e não outras duas cores:** com três pares nos cantos (D40), seis matizes já têm dono. Qualquer cor em + e − bateria com algum par; o violeta bateria com o roxo.
+- **O que continua da D34:** + e − não usam cor de canto, a seta distingue os dois sem depender de cor, e vale para rounds e para quedas.
+
+## D42. Copiar print: uma configuração só, sem a unidade de quem fez o print (revê a D29)
+
+- **Contexto (10/10/2026):** "a mesma stake não precisa desse campo para inserir valor, você já sabe quanto vale minha unidade" e "sempre que eu escolher mesmo valor, fixa a opção acima para reais; se escolher mesma stake, fica a opção acima para unidades".
+- **O que expliquei antes de mexer:** o campo não era a unidade dele, era a de quem fez o print; sem ela, um print só em dinheiro não diz quantas unidades aquilo era. Resposta: "ou aposta a mesma stake que ele, ou o mesmo valor. Não preciso replicar a banca do cara".
+- **Decisão:** as duas escolhas ligadas viram uma. O cartão "Ao copiar um print" e o campo "1u do print" saíram. "Valor das apostas" (Em R$ ou Em unidades) decide também o que entra de um print:
+  - **Em R$ (mesmo valor):** o dinheiro do original. Se o original só fala em unidades, entram essas unidades na unidade dele.
+  - **Em unidades (mesma stake):** as unidades que o original diz. Se o original só traz dinheiro, entra o mesmo dinheiro, mostrado em unidades.
+  - **Original com os dois** ("Stake 2u" junto de R$ 250,00): a configuração escolhe. Antes as unidades ganhavam sempre.
+- **O que se perde, sabido e aceito:** ajustar a aposta de um tipster à banca do Lucas a partir de um print só em dinheiro.
+- **Acréscimo da revisão:** quando o original traz os dois, a tela de copiar diz qual ficou de fora ("o original também fala em 2u"). Em R$, um texto de canal que cite um valor qualquer junto da stake em unidades copiaria esse valor; a linha deixa isso à vista antes de ir para o cupom.
+- **Consequência:** o `tip` salvo por versão antiga é descartado na carga, e a escolha de dinheiro ou unidades fica como estava. Quem tinha "Mesma stake" com a unidade de origem preenchida perde a conversão.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -371,7 +413,9 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
-| Confirmar as cores escolhidas para + e − e que valem também para quedas (D34), e o padrão Automático do tema (D38) | Lucas |
+| Confirmar o padrão Automático do tema (D38) | Lucas |
+| Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |
+| Ver como a ESPN escreve um peso casado feminino, para a cor do canto (D40) | Quem vir um no card |
 | Abrir o app no iPhone depois deste PR: ver se abre sem internet (modo avião) e se o aviso de versão nova aparece no merge seguinte (D37) | Lucas |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |

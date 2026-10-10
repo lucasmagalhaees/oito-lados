@@ -6,10 +6,10 @@ import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './help
 import { closeImport, importImage, importToSlip, renderImport, runImport } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
-import { S, applyTheme, bankEmpty, curNow, imp, saveCache, saveS, setCurrency, setS, slip, ui, validState } from './state';
+import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
-import type { Currency, TipCfg } from '../core';
+import type { Currency } from '../core';
 import type { Slip, Ui } from './state';
 
 /* ================= events ================= */
@@ -114,15 +114,8 @@ document.addEventListener('click', e => {
   else if (a === 'docash') doCashout(d.id);
   else if (a === 'again') repeatBet(d.id);
   else if (a === 'depq') { ui.dep = Core.moneyText(parseMoney(ui.dep) + Number(d.v)); const el = $<HTMLInputElement>('#dep'); if (el) el.value = ui.dep; }
-  else if (a === 'tipmode') { S.tip = Object.assign(Core.tipCfg(S.tip), { mode: Core.TIP_MODES.includes(d.m as TipCfg['mode']) ? d.m as TipCfg['mode'] : 'same' }); saveS(); blurField(); render(); }
-  else if (a === 'tipsave') {
-    const c = Core.tipCfg(S.tip), v = parseMoney(valOf('#tipsrc'));
-    if (!v) { toast('Digita quanto vale 1u de quem fez o print.'); return; }
-    c.srcUnit = v;
-    S.tip = Core.tipCfg(c); saveS(); blurField(); render();
-    toast(`Mesma stake do print: 1u de quem fez = ${money(S.tip.srcUnit)}.`);
-  }
   else if (a === 'theme') { if (d.m === 'light' || d.m === 'dark') S.theme = d.m; else delete S.theme; saveS(); applyTheme(); render(); }
+  else if (a === 'corners') { const c = cleanCorners({ ...S.corners, [d.g === 'women' ? 'women' : 'men']: d.m }); if (c) S.corners = c; else delete S.corners; saveS(); render(); }
   else if (a === 'update') applyUpdate();
   else if (a === 'checkupdate') checkNow();
   else if (a === 'depcur') pickDepCur(d.c);
@@ -137,18 +130,17 @@ document.addEventListener('click', e => {
   else if (a === 'dorestore') {
     let s: unknown = null; try { s = JSON.parse(valOf('#rs') || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
-    setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) });
-    S.unitPct = Core.unitPct(s.unitPct); if (s.tip) S.tip = Core.tipCfg(s.tip); if (s.stakeIn === 'units') S.stakeIn = 'units'; if (s.theme === 'light' || s.theme === 'dark') S.theme = s.theme; if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); applyTheme(); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
+    setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0), ...settingsOf(s) });
+    if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); applyTheme(); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct, ...(S.tip ? { tip: S.tip } : {}), ...(S.stakeIn ? { stakeIn: S.stakeIn } : {}), ...(S.theme ? { theme: S.theme } : {}) }); saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, ...settingsOf(S) }); saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 document.addEventListener('input', e => {
   const t = e.target as HTMLInputElement, typed = (e as InputEvent).data;
   if (t.id === 'stake') { setStakeMoney(parseMoney(applyMask(t, typed))); slip.stake = t.value; ui.msg = ''; slipSummary(); }
   else if (t.id === 'stakeu') { const u = Core.maskUnits(t.value); if (t.value !== u) t.value = u; setStakeUnits(Core.parseUnits(u)); slip.units = u; ui.msg = ''; slipSummary(); }
   else if (t.id === 'dep') ui.dep = applyMask(t, typed);
-  else if (t.id === 'tipsrc') applyMask(t, typed);
   else if (t.id === 'imptext') imp.text = t.value;
 });
 document.addEventListener('change', e => { const t = e.target as HTMLInputElement; if (t.id === 'impfile') importImage(t.files && t.files[0]); });
@@ -161,7 +153,6 @@ document.addEventListener('keydown', e => {
   const id = (e.target as HTMLElement).id, press = (act: string): void => { const b = document.querySelector<HTMLElement>(`[data-act="${act}"]`); if (b) b.click(); };
   if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); }
   if (e.key === 'Enter' && id === 'unitpct') press('unit');
-  if (e.key === 'Enter' && id === 'tipsrc') press('tipsave');
   if (e.key === 'Enter' && id === 'dep') press('deposit');
 });
 }

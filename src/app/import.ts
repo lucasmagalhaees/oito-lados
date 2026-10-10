@@ -1,10 +1,10 @@
 import { Core } from '../core';
 import { loadOdds } from './api';
 import { $, esc, fo, fu, money, part } from './format';
-import { canBet, priceOf, setStakeMoney, wallet } from './helpers';
+import { canBet, priceOf, setStakeMoney, setStakeUnits, wallet } from './helpers';
 import { render, renderSheet, sideDot } from './render';
 import { D, S, imp, slip, ui } from './state';
-import type { Fight, Priced, Tip, TipItem, TipProblem, TipStake, TipStakeIn } from '../core';
+import type { Fight, Priced, Tip, TipItem, TipProblem, TipStake } from '../core';
 
 /* ================= copy a bet from a print or a pasted text ================= */
 // The image is read on the device: the OCR library is fetched from a CDN only when a picture is chosen, and the picture
@@ -44,20 +44,20 @@ const TIP_WHY: Record<TipProblem['code'], (f?: Fight) => string> = {
   nomarket: (f?: Fight) => `Achei ${f ? f.a.last + ' x ' + f.b.last : 'a luta'}, mas não entendi qual é a aposta.`
 };
 // what the parser understood, checked against what can be bet on right now
-interface Resolved { ok: { it: TipItem; f: Fight; x: Priced }[]; notes: string[]; value: number; how: TipStake['how']; units: number | null; unit: number; st: TipStakeIn }
+interface Resolved { ok: { it: TipItem; f: Fight; x: Priced }[]; notes: string[]; value: number; how: TipStake['how']; units: number | null; unit: number; also: string }
 function impResolve(res: Tip): Resolved {
   const w = wallet(), ok: Resolved['ok'] = [], notes = res.problems.map(p => (TIP_WHY[p.code] || TIP_WHY.nofight)(p.fid ? D.fights.get(p.fid) : undefined));
   for (const it of res.items) {
     const f = D.fights.get(it.fid), p = f && canBet(f) ? priceOf(f) : null, x = p && p.map[it.key];
     if (f && x) ok.push({ it, f, x }); else notes.push(`${f ? f.a.last + ' x ' + f.b.last : 'Uma luta'}: essa aposta não tem odd agora.`);
   }
-  const st = res.stake, ts = Core.tipStake(st, S.tip, w.unit);
-  return { ok, notes, value: ts.value, how: ts.how, units: ts.units, unit: w.unit, st };
+  const st = res.stake, ts = Core.tipStake(st, S.stakeIn, w.unit);
+  // an original that states both units and money: say which one was left out, so the choice the setting made is visible
+  const also = st.kind === 'units' && st.money ? (ts.how === 'same' ? `o original também fala em ${fu(st.units)}` : `o original também traz ${money(st.money)}`) : '';
+  return { ok, notes, value: ts.value, how: ts.how, units: ts.units, unit: w.unit, also };
 }
-// the mode that is really in force: "units" only works once the value of the source's unit has been given
-export const tipEffective = (): 'same' | 'units' => { const c = Core.tipCfg(S.tip); return c.mode === 'units' && !c.srcUnit ? 'same' : c.mode; };
-export const TIP_HINT = { same: 'o valor é o mesmo do print.', units: 'a stake é a mesma do print, na sua unidade.' };
-export const TIP_MODE = { same: 'Mesmo valor', units: 'Mesma stake' };
+// what is copied from the original follows the one setting for stakes (money: the same amount; units: the same stake)
+export const TIP_HINT = { money: 'o valor é o mesmo do print.', units: 'a stake é a mesma do print, na sua unidade.' };
 export async function runImport(text: string): Promise<void> {
   imp.text = text; imp.err = ''; imp.res = null;
   const pre = [...D.fights.values()].filter(f => f.state === 'pre' && !f.canceled);
@@ -81,7 +81,7 @@ export async function importImage(file: File | null | undefined): Promise<void> 
 export function renderImport(): void {
   part('sheet').hidden = false; part('slipbar').hidden = true;
   let h = `<div class="ph"><h3>Copiar aposta</h3><button class="x" data-act="impclose" aria-label="Fechar">×</button></div>
-    <p class="hint">Cola o texto de uma aposta ou escolhe o print. Vale pra luta que ainda não começou. A odd é a de agora; ${TIP_HINT[tipEffective()]}</p>
+    <p class="hint">Cola o texto de uma aposta ou escolhe o print. Vale pra luta que ainda não começou. A odd é a de agora; ${TIP_HINT[S.stakeIn === 'units' ? 'units' : 'money']}</p>
     <textarea id="imptext" placeholder="Ex.: Fulano vs. Beltrano · Fulano para vencer a luta · Stake 1 unidade" aria-label="Texto da aposta">${esc(imp.text)}</textarea>
     <div class="rowbtns"><button class="btn" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><label class="btn ghost" for="impfile">Escolher imagem</label><input type="file" id="impfile" accept="image/*" hidden ${imp.busy ? 'disabled' : ''}></div>
     <p class="hint" id="impstatus">${esc(impStatus())}</p>`;
@@ -91,10 +91,9 @@ export function renderImport(): void {
     if (r.ok.length) {
       h += '<div id="impres">';
       for (const { it, f, x } of r.ok)
-        h += `<div class="sel"><div class="t"><b>${sideDot(it.key)}${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span></div></div>`;
-      const u = r.units || 0, printed = r.st.kind === 'money' ? r.st.money : 0;
-      const how = { units: `${fu(u)} do print`, same: 'mesmo valor do print', conv: `mesma stake do print: ${money(printed)} ÷ ${money(Core.tipCfg(S.tip).srcUnit)} por unidade = ${fu(u)}`, default: 'o print não diz o valor, considerei 1u' }[r.how];
-      h += `</div><dl class="sum" style="margin-top:10px"><dt>Valor</dt><dd id="impvalue">${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${how}</dd></dl>`;
+        h += `<div class="sel"><div class="t"><b>${sideDot(it.key, f.weight)}${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span></div></div>`;
+      const how = { units: `${fu(r.units || 0)} do print`, same: 'mesmo valor do print', default: 'o print não diz o valor, considerei 1u' }[r.how];
+      h += `</div><dl class="sum" style="margin-top:10px"><dt>Valor</dt><dd id="impvalue">${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${how}${r.also ? ` · ${r.also}` : ''}</dd></dl>`;
       if (!(r.value > 0)) h += '<p class="msg">Sem banca não dá pra calcular a unidade. Deposita primeiro; as seleções vão pro cupom sem valor.</p>';
     }
     for (const n of r.notes) h += `<p class="msg">${esc(n)}</p>`;
@@ -107,7 +106,7 @@ export function importToSlip(): void {
   const r = impResolve(imp.res); if (!r.ok.length) return;
   slip.sels = r.ok.map(o => ({ fid: o.f.id, key: o.it.key }));
   slip.mode = r.ok.length > 1 ? 'multi' : 'single';
-  setStakeMoney(r.value);
+  if (r.how !== 'same' && r.units && r.unit > 0) setStakeUnits(r.units); else setStakeMoney(r.value);      // units stay exact units
   imp.open = false; imp.res = null; imp.text = ''; ui.msg = ''; ui.sheet = true;
   renderSheet(); render();
 }

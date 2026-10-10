@@ -237,6 +237,8 @@ JS = r"""
   eq('which way an over/under goes', ['tot:o:2.5', 'tot:u:2.5', 'td:o:1.5', 'td:u:0.5'].map(Core.overUnder), ['o', 'u', 'o', 'u']);
   eq('every other selection is neither over nor under', ['ml:a', 'mov:b:ko', 'fm:dec', 'dist:yes', 'rnd:1', 'wr:a:2', 'tda:a:yes', 'tot:x:1', 'x', ''].map(Core.overUnder), [null, null, null, null, null, null, null, null, null, null]);
   eq('no selection is both a fighter\'s and an over/under', Object.keys(M).some(k => Core.sideOf(k) && Core.overUnder(k)), false);
+  eq("women's weight classes, as ESPN names them", ['W Strawweight', 'W Flyweight', 'W Bantamweight', 'W Featherweight'].map(Core.isWomens), [true, true, true, true]);
+  eq("everything else is not a women's class", ['Welterweight', 'Flyweight', 'Heavyweight', 'Catchweight', 'w flyweight', '', undefined, null].map(Core.isWomens), [false, false, false, false, false, false, false, false]);
   eq('every priced selection either has a side or is about the fight', Object.keys(M).every(k => [null, 'a', 'b'].includes(Core.sideOf(k))), true);
   eq('over and under rounds read as + and −', [M['tot:o:3.5'].sel, M['tot:u:3.5'].sel, M['tot:o:1.5'].sel], ['+3.5 rounds', '−3.5 rounds', '+1.5 rounds']);
   eq('over and under takedowns read as + and −', Object.keys(M).filter(k => k.startsWith('td:')).every(k => M[k].sel === (k.split(':')[1] === 'o' ? '+' : '−') + k.split(':')[2] + ' quedas na luta'), true);
@@ -249,23 +251,19 @@ JS = r"""
   eq('units as text', [2, 2.5, 0.25, 1.005, 10, 0, -1, NaN].map(Core.unitsText), ['2', '2,5', '0,25', '1,01', '10', '', '', '']);
   eq('typed units times the unit', Core.r2(Core.parseUnits('2,5') * Core.unitValue(1000, 10)), 250);
 
-  /* ---- the stake of a copied bet: units stay units; what an amount of money becomes is a setting ---- */
-  eq('tip setting: default', Core.tipCfg(undefined), { mode: 'same', srcUnit: 0 });
-  eq('tip setting: cleaned', Core.tipCfg({ mode: 'units', srcUnit: '1750.004', fixU: 500 }), { mode: 'units', srcUnit: 1750 });
-  eq('tip setting: junk falls back', Core.tipCfg({ mode: 'whatever', srcUnit: -3 }), { mode: 'same', srcUnit: 0 });
-  eq('tip setting: a saved "fixed" mode, which no longer exists, reads as same', Core.tipCfg({ mode: 'fixed', srcUnit: 1000, fixU: 1.5 }), { mode: 'same', srcUnit: 1000 });
-  eq('tip setting: not an object', Core.tipCfg('units'), { mode: 'same', srcUnit: 0 });
-  const MONEY = { kind: 'money', money: 1750 }, MYU = 100;
-  eq('copied stake: same amount by default', Core.tipStake(MONEY, undefined, MYU), { how: 'same', units: null, value: 1750 });
-  eq('copied stake: same stake, by the unit of the source', Core.tipStake(MONEY, { mode: 'units', srcUnit: 1750 }, MYU), { how: 'conv', units: 1, value: 100 });
-  eq('copied stake: half a unit of the source', Core.tipStake({ kind: 'money', money: 875 }, { mode: 'units', srcUnit: 1750 }, MYU), { how: 'conv', units: 0.5, value: 50 });
-  eq('copied stake: same stake without the unit of the source keeps the amount', Core.tipStake(MONEY, { mode: 'units' }, MYU), { how: 'same', units: null, value: 1750 });
-  for (const mode of Core.TIP_MODES) {
-    eq(`copied stake: a tip in units keeps its units (${mode})`, Core.tipStake({ kind: 'units', units: 0.5 }, { mode, srcUnit: 1750 }, MYU), { how: 'units', units: 0.5, value: 50 });
-    eq(`copied stake: no stake in the tip is one unit (${mode})`, Core.tipStake({ kind: 'default', units: 1 }, { mode, srcUnit: 1750 }, MYU), { how: 'default', units: 1, value: 100 });
-  }
-  eq('copied stake: no bankroll, no unit', Core.tipStake(MONEY, { mode: 'units', srcUnit: 1750 }, 0).value, 0);
-  eq('the two modes', Core.TIP_MODES, ['same', 'units']);
+  /* ---- the stake of a copied bet: the money-or-units setting decides between the same amount and the same stake ---- */
+  const MONEY = { kind: 'money', money: 1750 }, UNITS = { kind: 'units', units: 0.5 }, BOTH = { kind: 'units', units: 2, money: 1750 }, NONE = { kind: 'default', units: 1 }, MYU = 100;
+  eq('copied stake, in money: the same amount', Core.tipStake(MONEY, 'money', MYU), { how: 'same', units: 17.5, value: 1750 });
+  eq('copied stake, in money: an original that states both brings its money', Core.tipStake(BOTH, 'money', MYU), { how: 'same', units: 17.5, value: 1750 });
+  eq('copied stake, in money: an original with units only brings those units', Core.tipStake(UNITS, 'money', MYU), { how: 'units', units: 0.5, value: 50 });
+  eq('copied stake, in units: the same stake', Core.tipStake(UNITS, 'units', MYU), { how: 'units', units: 0.5, value: 50 });
+  eq('copied stake, in units: an original that states both brings its units', Core.tipStake(BOTH, 'units', MYU), { how: 'units', units: 2, value: 200 });
+  eq('copied stake, in units: an original with money only brings that money, counted in my units', Core.tipStake(MONEY, 'units', MYU), { how: 'same', units: 17.5, value: 1750 });
+  for (const mode of ['money', 'units', undefined, 'whatever'])
+    eq(`copied stake: no stake in the original is one unit (${mode})`, Core.tipStake(NONE, mode, MYU), { how: 'default', units: 1, value: 100 });
+  eq('copied stake: anything that is not "units" is money', [undefined, null, 'same', 7].map(m => Core.tipStake(BOTH, m, MYU).value), [1750, 1750, 1750, 1750]);
+  eq('copied stake: no bankroll, no unit', [Core.tipStake(UNITS, 'units', 0), Core.tipStake(MONEY, 'units', 0), Core.tipStake(NONE, 'money', 0)], [{ how: 'units', units: 0.5, value: 0 }, { how: 'same', units: null, value: 1750 }, { how: 'default', units: 1, value: 0 }]);
+  eq('the setting that used to say what a unit of the source is worth is gone', [typeof Core.tipCfg, typeof Core.TIP_MODES], ['undefined', 'undefined']);
 
   /* ---- copying a bet from a pasted tip or from the text read off a print ---- */
   const card = [
@@ -304,7 +302,8 @@ JS = r"""
   eq('tip: no stake means one unit', tip("Almeida x Dunne\nAlmeida para vencer").stake, DEF);
   for (const [txt, units] of [['2u', 2], ['0,5u', 0.5], ['1.5 un', 1.5], ['3 unidades', 3], ['Stake - 1 unidade', 1], ['2 units', 2]])
     eq(`tip: stake "${txt}"`, tip("Almeida x Dunne\nAlmeida para vencer\n" + txt).stake, U(units));
-  eq('tip: units win over a money amount', tip("R$ 100,00\nAlmeida x Dunne\nAlmeida para vencer\n1u").stake, U(1));
+  eq('tip: units and money in the same original are both kept', tip("R$ 100,00\nAlmeida x Dunne\nAlmeida para vencer\n1u").stake, { kind: 'units', units: 1, money: 100 });
+  eq('tip: half a unit next to an amount', tip("Almeida x Dunne\nAlmeida para vencer\nmeia unidade\nR$ 75,50").stake, { kind: 'units', units: 0.5, money: 75.5 });
   eq('tip: the odd is not mistaken for the stake or the line', tip("Almeida x Dunne\nMais de 2.5 rounds 1.54\nR$ 30,00"), { items: one('f3', 'tot:o:2.5', 1.54), stake: { kind: 'money', money: 30 }, problems: [] });
   eq('tip: fight not on the card', tip("Fulano x Beltrano\nFulano para vencer"), { items: [], stake: DEF, problems: [{ code: 'nofight' }] });
   eq('tip: one fighter of each of two fights', tip("Dunne e Teles").problems, [{ code: 'ambiguous' }]);
