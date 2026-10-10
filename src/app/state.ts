@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { isCurrency, setFmt } from './format';
-import type { AppState, AthleteStats, CornerPair, Currency, Fight, FightEvent, Odds, Result, Takedowns, Tip, TipPick, TipStakeIn } from '../core';
+import type { AppState, AthleteStats, CornerPair, Currency, Fight, FightEvent, Odds, Period, Result, Takedowns, Tip, TipPick, TipStakeIn } from '../core';
 
 /* ================= persistent state ================= */
 export const LS = {
@@ -13,6 +13,8 @@ const saved: unknown = LS.get('oitolados.v1');
 /** Everything the person owns. Other modules read it through the live binding; replacing the whole state goes through setS. */
 export let S: AppState = validState(saved) ? saved : { v: 1, deposits: [], bets: [] };
 delete (S as { tip?: unknown }).tip;          // the separate setting for copied prints, gone since money-or-units decides it
+// what closed before this moment has been seen: a state from before this existed must not announce its whole history
+if (!(Number(S.seen) > 0)) S.seen = Date.now();
 export const saveS = (): boolean => LS.set('oitolados.v1', S);
 export function setS(next: AppState): void { S = next; }
 /** The currency of the bankroll. It is always set once the page has loaded; the fallback only satisfies the type. */
@@ -43,10 +45,11 @@ export function cleanCorners(c: unknown): AppState['corners'] {
 }
 /** The settings in a saved state, cleaned. They are what a reset keeps and what comes back with a backup: a new
  *  setting goes here once, instead of in each of those places. */
-export function settingsOf(s: unknown): Pick<AppState, 'unitPct' | 'stakeIn' | 'theme' | 'corners'> {
+export const isDrop = (x: unknown): x is NonNullable<AppState['copyDrop']> => x === 3 || x === 5 || x === 10;
+export function settingsOf(s: unknown): Pick<AppState, 'unitPct' | 'stakeIn' | 'theme' | 'corners' | 'copyDrop'> {
   const o = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>, corners = cleanCorners(o.corners);
   return { unitPct: Core.unitPct(o.unitPct), ...(o.stakeIn === 'units' ? { stakeIn: 'units' as const } : {}),
-    ...(o.theme === 'light' || o.theme === 'dark' ? { theme: o.theme } : {}), ...(corners ? { corners } : {}) };
+    ...(o.theme === 'light' || o.theme === 'dark' ? { theme: o.theme } : {}), ...(corners ? { corners } : {}), ...(isDrop(o.copyDrop) ? { copyDrop: o.copyDrop } : {}) };
 }
 /** Light, dark, or whatever the device asks for (no attribute): the stylesheet does the rest. */
 export function applyTheme(): void {
@@ -76,8 +79,12 @@ export interface Ui {
   tab: 'lutas' | 'apostas' | 'carteira'; eventId: string | null; open: Set<string>; filter: 'open' | 'done'; sheet: boolean;
   reset: boolean; restore: boolean; backup: string | null; dep: string; placing: boolean; msg: string;
   cash: string | null; cashing: boolean; cashMsg: string; depCur: string | null; fxBusy: boolean; fxMsg: string; fxRate: number | null;
+  /** The bets list shows one origin only ('' is the bets with none); null shows all. */
+  origin: string | null;
+  /** Which closed bets the wallet's numbers cover. */
+  period: Period;
 }
-export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null };
+export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all' };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */
@@ -88,9 +95,16 @@ export const slip: Slip = { sels: [], mode: 'single', stake: '', units: '', unit
 /** One bet read in the copy screen: from the text field, or from one picture. */
 export interface ImportOp {
   id: number; src: 'text' | 'image'; name: string; res: Tip;
+  /** The text it was read from: what the OCR got out of the picture, or what was typed. */
+  text: string;
   /** What the person changed in it: selections chosen for fights the original names without a bet (`src` is the item of
    *  the list they were taken from), fights not to fill in automatically, a value typed, and single or multiple. */
   picks: (TipPick & { src?: number })[]; noauto: string[]; stake: TipStakeIn | null; mode: Slip['mode'] | null;
+  /** Corrections to what was read, by the position of the selection in `res.items`: another selection of that fight,
+   *  or null for one taken out. `swap` is the selection whose choices are open on screen. */
+  edits: Record<number, string | null>; swap: number | null;
+  /** "Bet it anyway": the person saw the warning (already bet, or the odd fell) and wants it in the batch. */
+  force: boolean;
 }
 /** The copy screen. `ops` is the list of bets read so far; `at` and `of` count the pictures while they are being read. */
 export interface ImportState { open: boolean; text: string; busy: boolean; pct: number; at: number; of: number; ops: ImportOp[]; err: string; msg: string; placing: boolean; from: string }

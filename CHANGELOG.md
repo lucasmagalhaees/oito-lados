@@ -2,6 +2,22 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.0] - 2026-10-10
+
+### Adicionado
+- Aviso de aposta repetida ao copiar: a que já está aberta e a que aparece duas vezes na lista ficam fora do "apostar todas" até o toque em "Apostar mesmo assim".
+- Odd mínima ao copiar (desligada, 3%, 5% ou 10%): a aposta cuja odd caiu mais que o limite em relação ao print fica fora do lote, com o quanto caiu.
+- Corrigir o que foi lido: trocar ou tirar uma seleção, ver o texto que saiu de cada foto e levá-lo ao campo de texto.
+- Quanto já está em jogo na luta, na tela de copiar e no cupom, e o aviso de que a aposta nova vai contra uma que já existe.
+- Origens já usadas como botões na tela de copiar, renomear ou juntar origens na Carteira, filtro por origem na aba Apostas e a odd contra o print de cada origem.
+- Período na Carteira: tudo, 30 dias ou último evento.
+- Faixa "Desde a última vez", com as apostas que fecharam sozinhas, o resultado e a quebra por origem.
+
+### Alterado
+- O leitor aceita a odd que o leitor de imagem leu com dois-pontos ("1:13"), no fim da linha.
+- A lista de fotos recomeça a contagem ("Foto 1") quando fica sem foto.
+- Uma lista de seleções com valor digitado, igual ao acumulador que ela completou, deixou de entrar no lote como aposta a mais.
+
 ## [0.8.0] - 2026-10-10
 
 ### Adicionado

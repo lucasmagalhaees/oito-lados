@@ -149,6 +149,22 @@ check('a slip started by hand, emptied or repeated is not a copy', html.count('s
 check('the printed odd is compared in the core, with tests', 'export function printedEdge' in html and 'export function edgeSummary' in html and 'export function completeTip' in html and 'Core.printedEdge' in read('tests/unit.py') and 'Core.completeTip' in read('tests/unit.py'))
 check('the wallet breaks results down by origin', "'Sem origem'" in html and 'por origem' in spec)
 
+# 5d1c. warnings before the batch, corrections, origins, period and what closed since last time
+hist = read('src/core/history.ts'); rnd = read('src/app/render.ts'); unit_src = read('tests/unit.py')
+check('a warning keeps a bet out of the batch until the person says so', "const held = (dups.length > 0 || !!twin || low) && !o.force;" in imp_src and "&& !held;" in imp_src and 'sem aviso pendente' in spec and '"Apostar mesmo assim"' in spec)
+check('the odd floor offers what the spec says, and is off until chosen', '[0, 3, 5, 10].map(' in rnd and 'x === 3 || x === 5 || x === 10' in html and 'entre desligada, 3%, 5% e 10%' in spec and "copyDrop?: 3 | 5 | 10" in html)
+check('the odd floor is a setting: kept by a reset and by a backup', "isDrop(o.copyDrop) ? { copyDrop: o.copyDrop }" in html and '`unitPct`, `stakeIn`, `theme`, `corners` e `copyDrop`' in spec)
+check('only open bets make a bet "already placed"', "const open = bets.filter(b => b.status === 'open');" in hist and 'Aposta encerrada não conta' in spec)
+check('the period of 30 days goes by when the bet closed', "(b.settledAt || 0) > now - 30 * 24 * 3600e3" in hist and '30 dias conta pela data em que a aposta fechou' in spec)
+check('the three periods are the ones the spec names', "{ all: 'Tudo', '30d': '30 dias', event: 'Último evento' }" in rnd and all(w in spec for w in ('"Tudo"', '"30 dias"', '"Último evento"')))
+check('a cashout is not in "since last time"', "(b.status === 'won' || b.status === 'lost' || b.status === 'void') && (b.settledAt || 0) > t" in hist and 'Cashout fica de fora' in spec)
+check('what closed is acknowledged by saving the moment', rnd.count('data-act="sinceok"') == 1 and "S.seen = Date.now(); saveS();" in read('src/app/events.ts') and '`S.seen`' in spec)
+check('an old state does not announce its whole history', "if (!(Number(S.seen) > 0)) S.seen = Date.now();" in html and 'recebe o instante da carga' in spec)
+check('without a new name an origin is not renamed', "if (!from || !name || name === from) return { bets, n: 0 };" in hist and 'sem nome novo nada muda' in spec)
+check('an odd with a colon needs one digit before it, the end of the line and no date', r"oddColon: /(?:^|\s)(\d)[:;](\d{2,3})\s*$/" in html and 'TIP.date.test(line) ? null' in html and 'com um dígito antes dos dois-pontos' in spec)
+check('the questions asked of the history have tests', all(('Core.' + f) in unit_src for f in ('selSig', 'dupBets', 'exposure', 'copyDrop', 'byOrigin', 'renameOrigin', 'periodBets', 'sinceSummary')))
+check('a bet against an open one is told by the joint model', 'p.J.prob([...mine, ...h.keys]) < 1e-9' in html and 'não têm desfecho em comum' in spec)
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

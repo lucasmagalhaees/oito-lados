@@ -3,14 +3,14 @@ import { loadBoard, loadOdds, openBets } from './api';
 import { CASH_WHY, cashoutOf } from './cashout';
 import { $, CUR, WEIGHT, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, money, part, pctText, rateText, signed, signedPct, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
-import { canBet, inUnits, priceOf, setStakeMoney, slipCalc, wallet } from './helpers';
+import { canBet, exposureNotes, inUnits, priceOf, setStakeMoney, slipCalc, statsOf, wallet } from './helpers';
 import { renderImport } from './import';
 import { repeatable } from './repeat';
 import { legOut, resultText } from './settle';
 import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
 import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
-import type { Bet, Currency, Fight, FightEvent, Leg, Option, Outcome, Side } from '../core';
+import type { Bet, Currency, Fight, FightEvent, Leg, Option, Outcome, Period, Side } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
 import type { CopyMeta, Slip } from './state';
 
@@ -31,10 +31,18 @@ export function render(): void {
     `<button class="tab ${ui.tab === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ''}>${ico[k]}${t}${k === 'apostas' && nOpen ? `<span class="badge">${nOpen}</span>` : ''}</button>`).join('');
   const v = part('view'), ae = document.activeElement;
   if (!(ae && v.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName))) {       // never yank a field the person is typing in
-    v.innerHTML = ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w);
+    v.innerHTML = sinceHtml() + (ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w));
     if (ui.tab === 'carteira') bindChart();
   }
   renderSlipBar();
+}
+const originName = (k: string): string => k || 'Sem origem';
+/** What closed by itself since the person last looked: how many bets, the result, and the same by origin. It stays
+ *  until it is acknowledged, whichever tab is open. */
+function sinceHtml(): string {
+  const s = Core.sinceSummary(S.bets, S.seen); if (!s.n) return '';
+  const by = s.by.some(r => r.k) ? `<span>${s.by.map(r => `${esc(originName(r.k))}: ${r.n}, ${signed(r.pnl)}`).join(' · ')}</span>` : '';
+  return `<div class="since" id="since"><div><b>Desde a última vez: ${s.n} ${s.n > 1 ? 'apostas fecharam' : 'aposta fechou'} · <span class="${s.pnl > 0.004 ? 'pos' : s.pnl < -0.004 ? 'neg' : ''}">${signed(s.pnl)}</span></b>${by}</div><div class="rowbtns"><button class="btn ghost" data-act="sinceview">Ver</button><button class="btn ghost" data-act="sinceok">Ok</button></div></div>`;
 }
 export function renderSlipBar(): void {
   const n = slip.sels.length, bar = part('slipbar');
@@ -113,10 +121,15 @@ const isCombo = (b: Bet): boolean => b.type === 'multi' && new Set(b.legs.map(l 
 const GLY: Record<Outcome, string> = { won: '✓', lost: '✕', void: '↺' };
 const PILL: Record<Bet['status'], string> = { open: 'Aberta', won: 'Ganhou', lost: 'Perdeu', void: 'Anulada', cashed: 'Cashout' };
 function vApostas(): string {
-  const open = openBets().sort((a, b) => b.t - a.t), done = S.bets.filter(b => b.status !== 'open').sort((a, b) => (b.settledAt || 0) - (a.settledAt || 0));
+  // one origin at a time, when any bet has one ('' is the bets with none)
+  const origins = [...new Set(S.bets.map(b => b.from || ''))].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, 'pt-BR')));
+  if (ui.origin != null && !origins.includes(ui.origin)) ui.origin = null;
+  const mine = (b: Bet): boolean => ui.origin == null || (b.from || '') === ui.origin;
+  const open = openBets().filter(mine).sort((a, b) => b.t - a.t), done = S.bets.filter(b => b.status !== 'open' && mine(b)).sort((a, b) => (b.settledAt || 0) - (a.settledAt || 0));
   const list = ui.filter === 'open' ? open : done;
   let h = `<div class="filter"><button class="${ui.filter === 'open' ? 'on' : ''}" data-act="filter" data-f="open">Abertas (${open.length})</button><button class="${ui.filter === 'done' ? 'on' : ''}" data-act="filter" data-f="done">Encerradas (${done.length})</button></div>`;
-  if (!list.length) return h + `<p class="empty">${ui.filter === 'open' ? 'Nenhuma aposta aberta. Escolhe uma odd em Lutas pra montar o cupom.' : 'Nada encerrado ainda. As apostas fecham sozinhas quando sai o resultado oficial.'}</p>`;
+  if (origins.some(Boolean)) h += `<div class="quick froms" id="byorigin" role="group" aria-label="Mostrar apostas de uma origem"><button class="${ui.origin == null ? 'on' : ''}" data-act="origin" aria-pressed="${ui.origin == null}">Todas</button>${origins.map(k => `<button class="${ui.origin === k ? 'on' : ''}" data-act="origin" data-v="${esc(k)}" aria-pressed="${ui.origin === k}">${esc(originName(k))}</button>`).join('')}</div>`;
+  if (!list.length) return h + `<p class="empty">${ui.origin != null ? `Nenhuma aposta ${ui.filter === 'open' ? 'aberta' : 'encerrada'} ${ui.origin ? 'de ' + esc(ui.origin) : 'sem origem'}.` : ui.filter === 'open' ? 'Nenhuma aposta aberta. Escolhe uma odd em Lutas pra montar o cupom.' : 'Nada encerrado ainda. As apostas fecham sozinhas quando sai o resultado oficial.'}</p>`;
   for (const b of list) {
     const isOpen = b.status === 'open';
     const anyLive = isOpen && b.legs.some(l => { const f = D.fights.get(l.fid); return f && f.state === 'in'; });
@@ -158,7 +171,7 @@ function vApostas(): string {
 function series(done: Bet[]): { y: number; b: Bet }[] { let c = 0; return done.slice().sort((a, b) => (a.settledAt || 0) - (b.settledAt || 0)).map(b => { c = Core.r2(c + b.payout - b.stake); return { y: c, b }; }); }
 function bindChart(): void {
   const box = $('#chart'); if (!box) return;
-  const pts = series(wallet().done), n = pts.length; if (!n) return;
+  const pts = series(Core.periodBets(wallet().done, ui.period, Date.now()).bets), n = pts.length; if (!n) return;
   const W = Math.max(280, box.clientWidth), Hh = 200, L = 6, R = 10, T = 26, B = 24;
   const ys = [0, ...pts.map(p => p.y)], lo = Math.min(...ys), hi = Math.max(...ys), span = (hi - lo) || 1;
   const X = (i: number): number => L + (W - L - R) * (i / n), Y = (v: number): number => T + (Hh - T - B) * (1 - (v - lo) / span);
@@ -189,6 +202,7 @@ function bindChart(): void {
   const out = (): void => { tip.hidden = true; cx.setAttribute('visibility', 'hidden'); cd.setAttribute('visibility', 'hidden'); };
   svg.addEventListener('pointermove', move); svg.addEventListener('pointerdown', move); svg.addEventListener('pointerleave', out);
 }
+const PERIODS: Record<Period, string> = { all: 'Tudo', '30d': '30 dias', event: 'Último evento' };
 interface Row { k: string; n: number; st: number; ret: number }
 function breakdown(done: Bet[], keyOf: (b: Bet) => string): Row[] {
   const m = new Map<string, Row>();
@@ -200,11 +214,9 @@ function tblHtml(title: string, rows: Row[]): string {
 }
 // who the copied bets came from: staked, result, return on what was staked and hit rate (voided and cashed-out bets are not hits or misses)
 function originHtml(done: Bet[]): string {
-  const m = new Map<string, { k: string; n: number; st: number; ret: number; won: number; dec: number }>();
-  for (const b of done) { const k = b.from || 'Sem origem', r = m.get(k) || { k, n: 0, st: 0, ret: 0, won: 0, dec: 0 }; r.n++; r.st += b.stake; r.ret += b.payout; if (b.status === 'won' || b.status === 'lost') { r.dec++; if (b.status === 'won') r.won++; } m.set(k, r); }
-  const rows = [...m.values()].sort((a, b) => b.st - a.st);
-  // four columns are what a phone holds: how many bets and how much was staked go under the name
-  return `<div class="tbl" id="origins"><table><thead><tr><th>Origem</th><th>Resultado</th><th>ROI</th><th>Acerto</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(r.k)}<small>${r.n} ${r.n > 1 ? 'apostas' : 'aposta'} · ${money(r.st)}</small></td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}</td><td>${r.st ? signedPct(p / r.st) : '—'}</td><td>${r.dec ? `${r.won}/${r.dec}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
+  const rows = Core.byOrigin(done, S.bets);
+  // four columns are what a phone holds: how many bets, how much was staked and the odd against the print go under the name
+  return `<div class="tbl" id="origins"><table><thead><tr><th>Origem</th><th>Resultado</th><th>ROI</th><th>Acerto</th></tr></thead><tbody>${rows.map(r => { const p = r.ret - r.st; return `<tr><td>${esc(originName(r.k))}<small>${r.n} ${r.n > 1 ? 'apostas' : 'aposta'} · ${money(r.st)}${r.k && r.edge.n ? ` · odd ${signedPct(r.edge.avg)} contra o print` : ''}</small></td><td class="${p > 0.004 ? 'pos' : p < -0.004 ? 'neg' : ''}">${signed(p)}</td><td>${r.st ? signedPct(p / r.st) : '—'}</td><td>${r.dec ? `${r.won}/${r.dec}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 function vCarteira(w: Wallet): string {
   let h = `<section class="hero"><span class="label">Saldo fictício</span><div class="n">${money(w.balance)}</div><p>${w.open.length ? `${money(w.atRisk)} em jogo em ${w.open.length} ${w.open.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ` : ''}${money(w.dep)} depositados no total</p></section>`;
@@ -221,17 +233,21 @@ function vCarteira(w: Wallet): string {
   h += `<button class="btn block" data-act="deposit" ${ui.fxBusy || (conv && !rate) ? 'disabled' : ''}>${conv ? 'Converter a banca e depositar' : 'Depositar'}</button>`;
   if (other) h += `<button class="btn ghost block" data-act="convonly" ${ui.fxBusy || (conv && !rate) ? 'disabled' : ''}>${conv ? 'Só converter a banca, sem depositar' : `Só trocar a moeda para ${CUR[dc]}`}</button>`;
   h += '</section>';
-  const roi = w.staked ? w.pnl / w.staked * 100 : null;
+  // the figures cover a period of the closed bets; the balance above and the deposits below never do
+  const per = Core.periodBets(w.done, ui.period, Date.now()), pd = per.bets, st = ui.period === 'all' ? w : statsOf(pd);
+  const roi = st.staked ? st.pnl / st.staked * 100 : null;
   h += `<section class="card"><span class="label">Ganhos e perdas · apostas encerradas</span>
-    <div class="pnl ${w.pnl > 0 ? 'pos' : w.pnl < 0 ? 'neg' : ''}">${signed(w.pnl)}</div>
-    ${w.unitBets ? `<p class="hint" id="pnlu">${signedU(w.units)} em unidades, cada aposta medida pela unidade do dia em que foi feita.</p>` : ''}
-    <div class="kpis"><div><small>Apostado</small><b>${money(w.staked)}</b></div><div><small>Retornado</small><b>${money(w.ret)}</b></div><div><small>ROI</small><b>${roi == null ? '—' : (roi > 0 ? '+' : '') + roi.toFixed(1).replace('.', ',') + '%'}</b></div><div><small>Acerto</small><b>${w.decided ? `${w.won}/${w.decided} · ${Math.round(w.won / w.decided * 100)}%` : '—'}</b></div></div>`;
-  if (w.done.length) {
+    ${w.done.length ? `<div class="segm cur" id="period" role="group" aria-label="Período">${(Object.keys(PERIODS) as Period[]).map(k => `<button class="${ui.period === k ? 'on' : ''}" data-act="period" data-m="${k}" aria-pressed="${ui.period === k}">${PERIODS[k]}</button>`).join('')}</div>` : ''}
+    ${ui.period === 'event' && per.event ? `<p class="hint" id="periodev">${esc(evLabel({ name: per.event }).main)}: o evento da aposta que fechou por último.</p>` : ui.period === '30d' ? '<p class="hint" id="periodev">Apostas que fecharam nos últimos 30 dias.</p>' : ''}
+    <div class="pnl ${st.pnl > 0 ? 'pos' : st.pnl < 0 ? 'neg' : ''}">${signed(st.pnl)}</div>
+    ${st.unitBets ? `<p class="hint" id="pnlu">${signedU(st.units)} em unidades, cada aposta medida pela unidade do dia em que foi feita.</p>` : ''}
+    <div class="kpis"><div><small>Apostado</small><b>${money(st.staked)}</b></div><div><small>Retornado</small><b>${money(st.ret)}</b></div><div><small>ROI</small><b>${roi == null ? '—' : (roi > 0 ? '+' : '') + roi.toFixed(1).replace('.', ',') + '%'}</b></div><div><small>Acerto</small><b>${st.decided ? `${st.won}/${st.decided} · ${Math.round(st.won / st.decided * 100)}%` : '—'}</b></div></div>`;
+  if (pd.length) {
     h += `<span class="label">Resultado acumulado, aposta a aposta</span><div class="chart" id="chart"></div>`;
-    h += tblHtml('Mercado', breakdown(w.done, b => isCombo(b) ? 'Combinada' : b.type === 'multi' ? 'Múltipla' : b.legs[0].cat));
-    h += tblHtml('Evento', breakdown(w.done, b => { const s = new Set(b.legs.map(l => l.event)); return s.size === 1 ? evLabel({ name: [...s][0] }).main : 'Vários eventos'; }));
-    if (w.done.some(b => b.from)) h += originHtml(w.done);
-  } else h += '<p class="hint">O gráfico e a quebra por mercado aparecem quando a primeira aposta for encerrada.</p>';
+    h += tblHtml('Mercado', breakdown(pd, b => isCombo(b) ? 'Combinada' : b.type === 'multi' ? 'Múltipla' : b.legs[0].cat));
+    h += tblHtml('Evento', breakdown(pd, b => { const s = new Set(b.legs.map(l => l.event)); return s.size === 1 ? evLabel({ name: [...s][0] }).main : 'Vários eventos'; }));
+    if (pd.some(b => b.from)) h += originHtml(pd);
+  } else h += `<p class="hint">${w.done.length ? 'Nenhuma aposta fechou nesse período.' : 'O gráfico e a quebra por mercado aparecem quando a primeira aposta for encerrada.'}</p>`;
   const eg = Core.edgeSummary(S.bets);
   if (eg.n) h += `<p class="hint" id="edge">Odd contra o print: em ${eg.n} ${eg.n > 1 ? 'apostas copiadas' : 'aposta copiada'} com odd no original, você pegou em média ${signedPct(eg.avg)} em relação ao print (${eg.ahead} acima).</p>`;
   h += '</section>';
@@ -259,6 +275,17 @@ function vCarteira(w: Wallet): string {
       : 'Ainda não há unidade, porque a banca está vazia. Até o primeiro depósito, o cupom pede o valor em dinheiro.'}</p>
     <p class="hint" id="tiphow">${!su ? `Ao copiar um print: mesmo valor. Um print de ${money(1750)} vira uma aposta de ${money(1750)}. Se o original só falar em unidades, entram essas unidades na sua unidade.`
       : `Ao copiar um print: mesma stake. "Stake 2 unidades" vira ${fu(2)} sua${w.unit > 0 ? ` (${money(Core.r2(2 * w.unit))})` : ''}. Print que só traz dinheiro entra com o mesmo valor, mostrado em unidades.`}</p></section>`;
+  const cd = S.copyDrop || 0, froms = [...new Set(S.bets.map(b => b.from).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  h += `<section class="card" id="copycard"><span class="label">Ao copiar apostas</span>
+    <span class="label">Odd mínima</span>
+    <div class="segm four" role="group" aria-label="Quanto a odd pode ter caído em relação ao print">${[0, 3, 5, 10].map(v => `<button class="${cd === v ? 'on' : ''}" data-act="copydrop" data-m="${v}" aria-pressed="${cd === v}">${v ? '−' + v + '%' : 'Desligada'}</button>`).join('')}</div>
+    <p class="hint" id="drophow">${cd ? `Se a odd de agora estiver mais de ${cd}% abaixo da odd do print, a aposta fica de fora do "apostar todas" até você mandar apostar mesmo assim.` : 'Desligada: a aposta entra no "apostar todas" com a odd de agora, qualquer que seja a do print.'}</p>`;
+  if (froms.length) h += `<span class="label">Origens</span>
+    <div class="field"><select id="orgfrom" aria-label="Origem a renomear">${froms.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
+    <div class="field"><input id="orgto" maxlength="40" autocomplete="off" placeholder="novo nome" aria-label="Novo nome da origem"></div>
+    <button class="btn ghost block" data-act="orgrename">Renomear</button>
+    <p class="hint">Dar a uma origem o nome de outra junta as duas.</p>`;
+  h += '</section>';
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
@@ -298,6 +325,7 @@ export function renderSheet(): void {
     <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="stq" data-v="${v}">+${Core.moneyText(v)}</button>`).join('')}</div>`}
     <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}${iu ? '<button data-act="stq" data-v="max">Tudo</button>' : ''}</div>
     <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'} · Valor em ${iu ? 'unidades' : 'dinheiro'}: <button data-act="tab" data-tab="carteira" style="text-decoration:underline">mudar nas configurações</button></p>
+    ${c.ok ? exposureNotes(slip.sels).map(n => `<p class="hint slipexpo">${esc(n)}</p>`).join('') : ''}
     ${slip.copy ? `<p class="hint" id="slipcopy">Aposta copiada${slip.copy.from ? ` de ${esc(slip.copy.from)}` : ''}: a origem e a odd do print ficam guardadas com ela.</p>` : ''}
     <div id="slipsum"></div>`;
   part('panel').innerHTML = h;

@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { openBets } from './api';
-import { $, H, parseMoney } from './format';
+import { $, H, money, parseMoney } from './format';
 import { D, S, slip } from './state';
 import type { Bet, Fight, FightStats, Priced, Pricing } from '../core';
 
@@ -11,14 +11,18 @@ export interface Wallet {
   dep: number; open: Bet[]; done: Bet[]; atRisk: number; staked: number; ret: number; pnl: number; decided: number; won: number;
   balance: number; bank: number; unitPct: number; unit: number; units: number; unitBets: number;
 }
-export function wallet(): Wallet {
-  const dep = sum(S.deposits, d => d.v), open = openBets(), done = S.bets.filter(b => b.status !== 'open');
+/** The numbers of a set of closed bets: all of them for the balance, or the ones of a period for the wallet's figures. */
+export type Stats = Pick<Wallet, 'staked' | 'ret' | 'pnl' | 'decided' | 'won' | 'units' | 'unitBets'>;
+export function statsOf(done: Bet[]): Stats {
   const staked = sum(done, b => b.stake), ret = sum(done, b => b.payout);
   const decided = done.filter(b => b.status === 'won' || b.status === 'lost'), won = decided.filter(b => b.status === 'won').length;   // voided and cashed-out bets are not hits or misses
-  const atRisk = sum(open, b => b.stake), balance = Core.r2(dep - sum(S.bets, b => b.stake) + ret), bank = Core.r2(balance + atRisk);
   const inUnits = done.filter(b => (b.unit || 0) > 0);            // result in units, each bet measured by the unit it was placed with
-  return { dep, open, done, atRisk, staked, ret, pnl: Core.r2(ret - staked), decided: decided.length, won, balance, bank,
-    unitPct: Core.unitPct(S.unitPct), unit: Core.unitValue(bank, S.unitPct), units: sum(inUnits, b => (b.payout - b.stake) / b.unit!), unitBets: inUnits.length };
+  return { staked, ret, pnl: Core.r2(ret - staked), decided: decided.length, won, units: sum(inUnits, b => (b.payout - b.stake) / b.unit!), unitBets: inUnits.length };
+}
+export function wallet(): Wallet {
+  const dep = sum(S.deposits, d => d.v), open = openBets(), done = S.bets.filter(b => b.status !== 'open'), st = statsOf(done);
+  const atRisk = sum(open, b => b.stake), balance = Core.r2(dep - sum(S.bets, b => b.stake) + st.ret), bank = Core.r2(balance + atRisk);
+  return { dep, open, done, atRisk, ...st, balance, bank, unitPct: Core.unitPct(S.unitPct), unit: Core.unitValue(bank, S.unitPct) };
 }
 export const statsFor = (f: Fight): FightStats => ({ a: D.astats[f.a.id], b: D.astats[f.b.id] });
 export const canBet = (f: Fight): boolean => f.state === 'pre' && !f.canceled && !!D.odds[f.id] && Date.now() < f.date + 8 * H;
@@ -70,4 +74,18 @@ export function slipCalc(): SlipCalc {
   const total = slip.mode === 'multi' ? stake : Core.r2(stake * n);
   const ret = !ok ? 0 : slip.mode === 'multi' ? Core.r2(stake * odd) : Core.r2(sum(rs, r => stake * r.x!.odd));
   return { rs, ok, groups, multiOk, sameFight: groups.length === 1 && n > 1, stake, n, odd, total, ret, balance: w.balance, unit: w.unit, unitPct: w.unitPct };
+}
+
+/** What a new bet meets in the fights it touches: the money already at stake there in open bets, and the open bets it
+ *  cannot win together with (their selections in that fight and the new ones have no outcome in common). */
+export function exposureNotes(sels: { fid: string; key: string }[]): string[] {
+  const notes: string[] = [];
+  for (const fid of [...new Set(sels.map(s => s.fid))]) {
+    const f = D.fights.get(fid), ex = Core.exposure(S.bets, fid); if (!f || !ex.n) continue;
+    const mine = sels.filter(s => s.fid === fid).map(s => s.key), p = priceOf(f), names = `${f.a.last} x ${f.b.last}`;
+    const against = p ? ex.held.filter(h => p.J.prob([...mine, ...h.keys]) < 1e-9) : [];
+    notes.push(`Você já tem ${money(ex.stake)} em jogo em ${names}, em ${ex.n} ${ex.n > 1 ? 'apostas abertas' : 'aposta aberta'}.` +
+      (against.length ? ` Esta vai contra ${against.length > 1 ? 'algumas delas' : 'ela'}: ${against.map(h => h.sel).join('; ')}.` : ''));
+  }
+  return notes;
 }

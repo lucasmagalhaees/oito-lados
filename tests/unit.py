@@ -347,7 +347,7 @@ JS = r"""
   eq('tip: names stacked, then the market line with the names again', read("urc UFC Fight Night. 10.10.26\n10/10/2026 (18:00)\nMarina Teles\nJoana Prado Jr.\n1X2: V2: Marina Teles - Joana Prado Ir. 1.98\nStatus O Não processado\nPlacar atual v\nusc UFC Fight Night. 10.10.26\n10/10/2026 (18:30)\nCaio Brandt\nDario Kessler\n1X2: V1: Caio Brandt - Dario Kessler 1.71\nStatus O Não processado\nPlacar atual v\nurc UFC Fight Night. 10.10.26\n10/10/2026 (21:40)\nConnor Lee Dunne\nRafael Almeida\n1X2: V1: Connor Lee Dunne - Rafael Almeida 1.66\nStatus O Não processado"),
      { items: [['f1', 'ml:b', 1.98, false], ['f3', 'ml:b', 1.66, false], ['f2', 'ml:a', 1.71, false]], odd: null, kind: null, legs: null, problems: [] });
   eq('tip: names stacked, then a market line without them', read("216740. UFC Fight Night. 10.10.26\nRafael Almeida\nConnor Lee Dunne\n1X2:V1 1.232\nO Não processado\n216771. UFC Fight Night. 10.10.26\nDario Kessler\nCaio Brandt\n1X2:V2 1.26\nO Não processado\n216730. UFC Fight Night. 10.10.26\nMarina Teles\nJoana Prado Jr.\nTotal Acima de (1.5) 1:13\nO Não processado"),
-     { items: [['f1', 'tot:o:1.5', null, false], ['f3', 'ml:a', 1.232, false], ['f2', 'ml:a', 1.26, false]], odd: null, kind: null, legs: null, problems: [] });
+     { items: [['f1', 'tot:o:1.5', 1.13, false], ['f3', 'ml:a', 1.232, false], ['f2', 'ml:a', 1.26, false]], odd: null, kind: null, legs: null, problems: [] });       // the OCR read "1.13" as "1:13"
   eq('tip: a total stays a total when only one name is whole on its line', read("Almeida x Dunne\nTotal Abaixo de (2.5): Rafael Almeida - Connor Lee").items, [['f3', 'tot:u:2.5', null, false]]);
   eq('tip: a fighter and a rounds line said together is still the fighter', read("Almeida x Dunne\nAlmeida vence e mais de 1.5 rounds").items, [['f3', 'ml:a', null, false]]);
   eq('tip: an odd with three decimals', read("Almeida x Dunne\nDunne para vencer 1.875").items, [['f3', 'ml:b', 1.875, false]]);
@@ -404,6 +404,53 @@ JS = r"""
   eq('tip: under written with a minus sign', tip("Almeida x Dunne\n−2.5 rounds").items, one('f3', 'tot:u:2.5', null));
   eq('tip: under written with a hyphen', tip("Teles x Prado Jr.\n-1.5 quedas").items, one('f1', 'td:u:1.5', null));
   eq('tip: a dash used as a separator is not a minus', tip("Almeida x Dunne\nAlmeida para vencer\nOdd - 1.50").items, one('f3', 'ml:a', 1.5));
+  /* an odd the OCR read with a colon in place of the point, and what is a time of day instead */
+  eq('tip: an odd read with a colon at the end of the line', tip("Almeida x Dunne\nDunne para vencer 1:44").items, one('f3', 'ml:b', 1.44));
+  eq('tip: an odd read with a semicolon', tip("Almeida x Dunne\nDunne para vencer 2;05").items, one('f3', 'ml:b', 2.05));
+  eq('tip: a time of day is not an odd', ["Almeida x Dunne\nDunne para vencer 21:40", "Almeida x Dunne\nDunne para vencer (9:30)", "Almeida x Dunne\nDunne para vencer 10/10 9:30", "Almeida x Dunne\nDunne para vencer 9:30 da noite"].map(t => tip(t).items[0][2]), [null, null, null, null]);
+  eq('tip: a real odd on the line wins over a colon', tip("Almeida x Dunne\nDunne para vencer 1.90 1:44").items, one('f3', 'ml:b', 1.9));
+
+  /* questions asked of the bet history */
+  const hl = (fid, key, extra) => Object.assign({ fid, key, sel: 'sel ' + key, eid: 'e1', event: 'UFC 1: Almeida vs. Dunne', date: 100, odd: 2 }, extra || {});
+  const hb = (id, type, status, stake, payout, legs, extra) => Object.assign({ id, t: 1000, type, status, stake, payout, odd: 2, legs, settledAt: status === 'open' ? null : 5000 }, extra || {});
+  eq('history: the selections of a bet read the same in any order', [Core.selSig([{ fid: 'f2', key: 'ml:a' }, { fid: 'f1', key: 'ml:b' }]), Core.selSig([{ fid: 'f1', key: 'ml:b' }, { fid: 'f2', key: 'ml:a' }])], ['f1|ml:b,f2|ml:a', 'f1|ml:b,f2|ml:a']);
+  const book = [hb('m1', 'multi', 'open', 50, 0, [hl('f1', 'ml:a'), hl('f2', 'ml:b')]), hb('m2', 'multi', 'lost', 50, 0, [hl('f1', 'ml:a'), hl('f3', 'ml:b')]), hb('s1', 'single', 'open', 30, 0, [hl('f3', 'ml:a')]), hb('s2', 'single', 'won', 30, 60, [hl('f2', 'ml:a')])];
+  const ids = bs => bs.map(b => b.id);
+  eq('history: the same multiple already open, whatever the order', ids(Core.dupBets(book, [{ fid: 'f2', key: 'ml:b' }, { fid: 'f1', key: 'ml:a' }], 'multi')), ['m1']);
+  eq('history: a closed bet is not a bet already placed', ids(Core.dupBets(book, [{ fid: 'f1', key: 'ml:a' }, { fid: 'f3', key: 'ml:b' }], 'multi')), []);
+  eq('history: a multiple with one more selection is another bet', ids(Core.dupBets(book, [{ fid: 'f1', key: 'ml:a' }, { fid: 'f2', key: 'ml:b' }, { fid: 'f3', key: 'ml:a' }], 'multi')), []);
+  eq('history: singles are looked up one by one', ids(Core.dupBets(book, [{ fid: 'f3', key: 'ml:a' }, { fid: 'f1', key: 'ml:a' }], 'single')), ['s1']);
+  eq('history: a selection inside an open multiple is not that single', ids(Core.dupBets(book, [{ fid: 'f1', key: 'ml:a' }], 'single')), []);
+  eq('history: one selection asked as a multiple is a single', ids(Core.dupBets(book, [{ fid: 'f3', key: 'ml:a' }], 'multi')), ['s1']);
+  eq('history: what is at stake on a fight', Core.exposure(book, 'f1'), { n: 1, stake: 50, held: [{ id: 'm1', stake: 50, keys: ['ml:a'], sel: 'sel ml:a' }] });
+  eq('history: open bets only, each with what it holds there', (e => [e.n, e.stake, e.held.map(h => h.id)])(Core.exposure(book.concat(hb('s3', 'single', 'open', 20.5, 0, [hl('f3', 'mov:b:ko')])), 'f3')), [2, 50.5, ['s1', 's3']]);
+  eq('history: nothing at stake', Core.exposure(book, 'f9'), { n: 0, stake: 0, held: [] });
+  eq('odd drop: the whole bet against the odd the original gives for it', Core.copyDrop(1.614, [{ fid: 'f1', printed: null, now: 1.2 }, { fid: 'f2', printed: null, now: 1.29 }]), -0.0397);       // 1.55 / 1.614
+  eq('odd drop: with an odd on every selection, they are multiplied', Core.copyDrop(null, [{ fid: 'f1', printed: 1.232, now: 1.2 }, { fid: 'f2', printed: 1.31, now: 1.29 }]), -0.0397);          // 1.55 / 1.614
+  eq('odd drop: one selection', [Core.copyDrop(null, [{ fid: 'f1', printed: 2.7, now: 2.5 }]), Core.copyDrop(null, [{ fid: 'f1', printed: 2, now: 2.1 }])], [-0.0741, 0.05]);
+  eq('odd drop: with only some of them printed, the one that fell the most', Core.copyDrop(null, [{ fid: 'f1', printed: 2, now: 1.9 }, { fid: 'f2', printed: null, now: 1.5 }, { fid: 'f3', printed: 3, now: 2.4 }]), -0.2);
+  eq('odd drop: selections of the same fight are not multiplied', Core.copyDrop(3.3, [{ fid: 'f1', printed: 1.5, now: 1.6 }, { fid: 'f1', printed: 2.2, now: 1.98 }]), -0.1);       // multiplied it would be 3.17 / 3.3, -0.0394
+  eq('odd drop: nothing printed, or no price now', [Core.copyDrop(null, [{ fid: 'f1', printed: null, now: 2 }]), Core.copyDrop(2, [{ fid: 'f1', printed: 2, now: 0 }]), Core.copyDrop(2, [])], [null, null, null]);
+  const closed = [hb('a', 'single', 'won', 100, 250, [hl('f1', 'ml:a', { printed: 2 })], { from: 'Canal A', odd: 2.2 }), hb('b', 'single', 'lost', 300, 0, [hl('f2', 'ml:a', { printed: 2 })], { from: 'Canal B', odd: 1.8 }),
+    hb('c', 'single', 'void', 40, 40, [hl('f3', 'ml:a')], { from: 'Canal A' }), hb('d', 'single', 'cashed', 60, 60, [hl('f3', 'ml:b')]), hb('e', 'single', 'won', 10, 30, [hl('f1', 'ml:b')])];
+  eq('origin: results by who the bets came from, the one with the most money first', Core.byOrigin(closed).map(r => [r.k, r.n, r.st, r.ret, r.won, r.dec, r.edge.n, r.edge.avg]), [['Canal B', 1, 300, 0, 0, 1, 1, -0.1], ['Canal A', 2, 140, 290, 1, 1, 1, 0.1], ['', 2, 70, 90, 1, 1, 0, 0]]);
+  eq('origin: the odd against the print counts the open bets too, when they are given', Core.byOrigin(closed, closed.concat(hb('f', 'single', 'open', 10, 0, [hl('f2', 'ml:b', { printed: 2 })], { from: 'Canal A', odd: 1.8 }))).find(r => r.k === 'Canal A').edge, { n: 2, avg: 0, ahead: 1 });
+  const ren = Core.renameOrigin(closed, 'Canal A', '  Canal   Alfa ');
+  eq('origin: renamed', [ren.n, ren.bets.map(b => b.from || null), closed.map(b => b.from || null)], [2, ['Canal Alfa', 'Canal B', 'Canal Alfa', null, null], ['Canal A', 'Canal B', 'Canal A', null, null]]);
+  eq('origin: named after another one, the two are joined', Core.byOrigin(Core.renameOrigin(closed, 'Canal A', 'Canal B').bets).map(r => [r.k, r.n]), [['Canal B', 3], ['', 2]]);
+  eq('origin: nothing to rename, and no new name changes nothing', [Core.renameOrigin(closed, 'Canal X', 'Y').n, Core.renameOrigin(closed, 'Canal A', 'Canal A').n, Core.renameOrigin(closed, '', 'Y').n, Core.renameOrigin(closed, 'Canal B', '   ').n, Core.renameOrigin(closed, 'Canal B', '   ').bets === closed, Core.renameOrigin(closed, 'Canal A', 'x'.repeat(60)).bets[0].from.length], [0, 0, 0, 0, true, 40]);
+  const DAYMS = 24 * 3600e3, NOW = 100 * DAYMS;
+  const past = [hb('old', 'single', 'won', 10, 20, [hl('f1', 'ml:a', { eid: 'e1', event: 'UFC 1: Almeida vs. Dunne', date: 60 * DAYMS })], { settledAt: 61 * DAYMS }),
+    hb('mid', 'single', 'lost', 10, 0, [hl('f2', 'ml:a', { eid: 'e2', event: 'UFC 2: Teles vs. Prado', date: 90 * DAYMS })], { settledAt: 91 * DAYMS }),
+    hb('x', 'multi', 'won', 10, 40, [hl('f2', 'ml:b', { eid: 'e2', event: 'UFC 2: Teles vs. Prado', date: 90 * DAYMS }), hl('f5', 'ml:a', { eid: 'e3', event: 'UFC 3: Brandt vs. Kessler', date: 97 * DAYMS })], { settledAt: 98 * DAYMS }),
+    hb('new', 'single', 'lost', 10, 0, [hl('f6', 'ml:a', { eid: 'e3', event: 'UFC 3: Brandt vs. Kessler', date: 97 * DAYMS })], { settledAt: 97.5 * DAYMS })];
+  eq('period: everything', (r => [ids(r.bets), r.event])(Core.periodBets(past, 'all', NOW)), [['old', 'mid', 'x', 'new'], null]);
+  eq('period: the last 30 days, by when the bet closed', ids(Core.periodBets(past, '30d', NOW).bets), ['mid', 'x', 'new']);
+  eq('period: the event of the bet that closed last, by its latest fight', (r => [ids(r.bets), r.event])(Core.periodBets(past, 'event', NOW)), [['x', 'new'], 'UFC 3: Brandt vs. Kessler']);
+  eq('period: nothing closed, or a period that does not exist', [Core.periodBets([], 'event', NOW), ids(Core.periodBets(past, 'banana', NOW).bets).length], [{ bets: [], event: null }, 4]);
+  eq('since: what closed by itself after a moment, with the result by origin', Core.sinceSummary(closed.concat(hb('late', 'single', 'lost', 25, 0, [hl('f1', 'ml:a')], { from: 'Canal A', settledAt: 9000 }), hb('op', 'single', 'open', 5, 0, [hl('f1', 'ml:a')])), 4000),
+    { n: 5, pnl: -155, by: [{ k: 'Canal A', n: 3, pnl: 125 }, { k: '', n: 1, pnl: 20 }, { k: 'Canal B', n: 1, pnl: -300 }] });                 // the cashout is not there: the person did that one
+  eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, by: [] }, 4]);
   eq('tip: empty', tip("  \n ").problems, [{ code: 'empty' }]);
   eq('tip: a name inside another word is not a match', tip("Almeidas x Dunnes\nvence").problems, [{ code: 'nofight' }]);
   return { n, fails };

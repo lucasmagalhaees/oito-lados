@@ -38,6 +38,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 7. O Lucas pediu para revisar se as alterações faziam sentido e um code review "como se fosse análise de negócio e como se fosse tech lead". A revisão está no PR; dois achados viraram código (a tela de copiar diz o que ficou de fora quando o original traz unidades e dinheiro; a lista de configurações passou a existir num lugar só).
 8. PR #11 mesclado às 11:06; o workflow `Produção` passou no commit `3331e05`. Às 14:54, usando o app com apostas de verdade para copiar: a "dupla" de um canal não foi reconhecida como múltipla, a foto de um cupom não foi reconhecida, e os pedidos de mandar várias fotos e fazer várias operações de uma vez, de um botão para limpar a tela de copiar, e de o leitor entender dupla, tripla, quádrupla e quíntupla, e simples contra múltipla (D43, D44). O Lucas mandou cinco prints reais para testar.
 9. PR #12 mesclado às 15:23; o workflow `Produção` passou no commit `228792e`. O Lucas pediu "propõe melhorias, 10 melhorias"; das dez propostas, respondeu "faz o 1 a 5": completar o acumulador na própria tela, juntar duas fotos numa aposta só, editar valor e tipo na lista, guardar de quem veio a aposta e medir por origem, e guardar a odd do print (D45 a D48). Mandou de novo os cinco prints como massa de teste e três capturas do iPhone, das 15:30, com a versão do PR #12 em produção: as fotos escolhidas de uma vez viraram lista com o card de verdade, os dois acumuladores ficaram com "só uma seleção lida" e cada foto aparecia com o nome de arquivo que o iPhone dá (um código de 36 caracteres).
+10. PR #13 mesclado às 16:01; o workflow `Produção` passou no commit `6886992`. O Lucas pediu "mais melhorias"; das dez propostas, respondeu "faz todos menos o 3" (ficou de fora guardar a odd de fechamento): D49 a D56. No meio, perguntou se dava para ter um retrospecto das últimas lutas de cada atleta, guardado no aparelho, e qual o peso disso na performance. Respondido com o que a ESPN oferece e o custo em chamadas (anotado na D57); **o retrospecto não foi implementado e espera ele mandar**.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -478,6 +479,88 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **O que a comparação não diz:** a diferença mistura a casa (o print é de outra casa; aqui a odd é a da ESPN, ou estimada) com o tempo entre a publicação e a cópia. Combinada na mesma luta sem odd da aposta inteira fica fora da conta, porque multiplicar as pernas não é o preço dela (D6).
 - **Interpretação (confirmar com o Lucas):** a média da Carteira é simples, uma aposta um voto, sem pesar pelo valor apostado.
 
+## D49. Aviso de aposta repetida ao copiar
+
+- **Contexto (10/10/2026):** item 1 da segunda leva de melhorias. No mesmo dia o Lucas mandou as mesmas cinco fotos duas vezes; com o lote, a segunda vez gravaria tudo em dobro.
+- **Decisão:** a tela de copiar avisa, e deixa fora do "apostar todas", a aposta que já está aberta com exatamente as mesmas seleções, feita do mesmo jeito (`Core.dupBets`), e a que repete um item anterior da lista. "Apostar mesmo assim" libera; "desfazer" volta atrás.
+- **Onde não vale:** no cupom. Repetir uma aposta de propósito já existe ("Repetir aposta"), e ali a pessoa está olhando para o que vai apostar.
+- **Interpretações (confirmar com o Lucas):**
+  - Só aposta **aberta** conta. A encerrada (inclusive por cashout) pode ser copiada de novo sem aviso.
+  - "A mesma" é o mesmo conjunto de seleções e o mesmo tipo. A mesma dupla com outro valor é a mesma aposta; uma tripla que contém a dupla, não.
+  - Com um item só na tela não há lote: o aviso aparece e a aposta segue para o cupom.
+- **Teste que mudou de propósito:** no `tests/e2e.py`, a lista de seleções que ganhava um valor virava a quarta aposta do lote. Ela é exatamente a aposta do acumulador que completou, então agora fica de fora com "Igual à foto 3" até o toque. O texto colado igual à primeira foto também: o total deixou de contar a mesma aposta duas vezes (R$ 730,00 virou R$ 480,00).
+
+## D50. Odd mínima ao copiar
+
+- **Contexto (10/10/2026):** item 2. Copiar um canal tarde demais é apostar numa odd pior que a publicada; hoje isso só aparece depois, na comparação com o print (D48).
+- **Decisão:** uma configuração no cartão "Ao copiar apostas": desligada, 3%, 5% ou 10% (`S.copyDrop`). Com ela ligada, a aposta cuja odd de agora está mais que isso abaixo da odd do print fica fora do lote, com o quanto caiu, até "Apostar mesmo assim".
+- **Como compara** (`Core.copyDrop`): a aposta inteira quando o original dá a odd dela (ou a de todas as seleções, cada uma de uma luta); senão, a seleção que mais caiu. Simples são comparadas uma a uma. Sem odd no print, não há comparação nem aviso.
+- **Interpretações (confirmar com o Lucas):** começa **desligada**, para não mudar o comportamento sem ele escolher; os degraus são fixos em vez de um campo livre; vale só para o lote, não para o cupom.
+- **O que a comparação não separa:** casa diferente e tempo passado (mesmo limite da D48). Um print de casa com odd melhor que a da ESPN vai sempre parecer "caiu".
+
+## D51. Corrigir o que foi lido
+
+- **Contexto (10/10/2026):** item 4. Dava para completar o que faltava (D45), não para consertar o que o leitor entendeu errado. Com várias fotos nem dava para ver o texto que saiu de cada uma.
+- **Decisão:** cada seleção lida tem "trocar", que abre os mercados daquela luta e a opção de tirar a seleção. Cada foto tem "Ver o texto lido" e "Corrigir no campo de texto", que leva o texto para o campo e tira a foto da lista.
+- **Interpretações (confirmar com o Lucas):**
+  - A seleção trocada perde a odd do print: ela era da seleção lida. A odd da aposta inteira, se o original dá, continua.
+  - Trocar é dentro da mesma luta. Trocar de luta é corrigir o texto.
+  - A correção feita numa lista de seleções vale para o acumulador que ela completa.
+  - Corrigir uma seleção desfaz o "apostar mesmo assim", porque a aposta passou a ser outra.
+
+## D52. Odd lida com dois-pontos
+
+- **Contexto (10/10/2026):** item 5. No print real da lista de seleções o leitor de imagem leu "1.13" como "1:13", e aquela seleção ficava sem odd do print.
+- **Decisão:** um dígito, dois-pontos (ou ponto e vírgula) e dois ou três dígitos, **no fim da linha**, numa linha sem data e sem outra odd, vale como odd.
+- **Risco aceito:** uma hora escrita assim ("9:30") no fim da linha da seleção viraria odd 9.30. Nos cupons vistos a hora vem como "(14:14)" ou com dois dígitos antes dos dois-pontos, e não passa. Quando o cupom dá a odd da aposta, a conferência da D45 denuncia a leitura errada.
+- **Teste que mudou de propósito:** o caso da lista com "1:13" em `tests/unit.py` esperava a seleção sem odd; agora espera 1.13.
+- **Conferido com o print real:** com a lista de seleções do Lucas, o segundo acumulador passou a mostrar "1.13 × 1.26 = 1.424, bate com o cupom" (ver `verificacao.md`).
+
+## D53. Origens: botões, renomear e juntar, filtro e odd por origem
+
+- **Contexto (10/10/2026):** itens 6 e 8. A origem é texto livre (D47), então duas grafias viram duas origens, e a lista de sugestões usava um recurso do navegador que nem foi visto no iPhone.
+- **Decisão:**
+  - Na tela de copiar, as origens já usadas viram **botões** abaixo do campo. Um toque escolhe, outro tira.
+  - No cartão "Ao copiar apostas", **renomear** uma origem (`Core.renameOrigin`). Dar o nome de outra junta as duas.
+  - Na aba Apostas, um **filtro por origem**, que aparece quando alguma aposta tem origem.
+  - Na tabela por origem, a **odd contra o print** de cada origem, embaixo do nome.
+- **Mudou em relação à proposta:** deixar o nome em branco tiraria a origem das apostas. Saiu: um toque em "Renomear" com o campo vazio apagaria a origem de todas sem aviso. Sem nome novo, nada muda.
+- **Interpretação (confirmar com o Lucas):** a odd contra o print por origem conta todas as apostas copiadas daquela origem, abertas ou não, e não segue o período da Carteira (a comparação de odd não depende de a luta ter acabado).
+
+## D54. Quanto já está em jogo na luta
+
+- **Contexto (10/10/2026):** item 7. Copiando de vários canais, dá para empilhar apostas na mesma luta, ou apostar nos dois lados, sem perceber.
+- **Decisão:** na tela de copiar e no cupom, uma linha por luta que já tem aposta aberta: "Você já tem R$ X em jogo em A x B, em N apostas abertas", e "Esta vai contra ela" quando a aposta nova e a que existe não podem ganhar juntas.
+- **Como decide o "contra":** as seleções das duas naquela luta não têm desfecho em comum no `jointModel`, o mesmo modelo que bloqueia combinada impossível (D6). Pega lados opostos, e também pares como "vai até a decisão" contra "menos de 1.5 rounds".
+- **Interpretações (confirmar com o Lucas):** é aviso e não bloqueia (apostar contra pode ser proteção); a múltipla conta com o valor inteiro, porque todo ele depende daquela luta também; quando a aposta é idêntica a uma aberta, quem fala é o aviso da D49.
+
+## D55. Período na Carteira
+
+- **Contexto (10/10/2026):** item 9. A Carteira só mostrava o acumulado de tudo.
+- **Decisão:** três períodos para os números de ganhos e perdas: Tudo, 30 dias e Último evento. Saldo e depósitos não seguem o período.
+- **Interpretações (confirmar com o Lucas):**
+  - 30 dias conta pela data em que a aposta **fechou**.
+  - "Último evento" é o evento da aposta que fechou por último; uma múltipla entre eventos conta se tem seleção nele. A proposta dizia "este evento"; ficou "último" porque o evento que está na tela de Lutas costuma ser o próximo, sem nada encerrado.
+  - A escolha não fica guardada: o app abre em Tudo.
+
+## D56. Resumo do que fechou desde a última vez
+
+- **Contexto (10/10/2026):** item 10. As apostas fecham sozinhas quando o app reabre, e o que avisava era um aviso de 4 segundos.
+- **Decisão:** uma faixa no topo de qualquer aba: "Desde a última vez: N apostas fecharam · resultado", com a quebra por origem quando alguma tem origem. Fica até o toque em "Ok" ou em "Ver" (que abre as encerradas).
+- **Interpretações (confirmar com o Lucas):** cashout não entra, porque foi a própria pessoa que fez e viu; a faixa também aparece para o que fecha com o app aberto, e some só com o toque; "a última vez" é o último toque em Ok ou Ver, guardado em `S.seen`.
+- **Consequência:** um estado salvo por versão antiga, sem `seen`, recebe o instante da carga, para não anunciar o histórico inteiro. Zerar e restaurar fazem o mesmo.
+
+## D57. Retrospecto dos lutadores: o que dá, e o custo (não implementado)
+
+- **Contexto (10/10/2026):** "tem como eu ter um retrospecto das últimas lutas dos atletas? e isso ficar cacheado? tipo últimas 3 lutas? quantas decisões, quantos TKO, quantas subs, em quanto tempo terminou as lutas?" e depois "qual o peso disso na performance?".
+- **O que foi visto na ESPN em 10/10/2026**, pelo resumo de uma ferramenta de leitura de páginas, **sem amostra gravada**:
+  - `CORE/../athletes/{id}/eventlog`: a lista de lutas do atleta, da mais recente para a mais antiga, cada uma com a referência do evento e da luta e um `played`.
+  - A luta (`events/{ev}/competitions/{luta}`) traz `winner` em cada competidor; o método, o round e o tempo estão no `status` dela, no formato que o app já lê.
+  - A chamada de estatísticas do atleta, que o app já faz para a média de quedas, também traz `koPercentage`, `tkoPercentage` e `decisionPercentage` (esses três estão na amostra gravada em `tests/fixtures/espn/athlete_statistics.json`).
+- **Custo estimado:** 7 chamadas por lutador para 3 lutas (1 da lista, 2 por luta), 14 por luta do card e umas 170 para um card de 12 lutas. Por isso a proposta é carregar só ao abrir os mercados de uma luta. Luta passada não muda, então fica guardada de vez; uns 400 bytes por lutador. O nome do adversário custaria mais uma chamada por luta passada.
+- **Não sabido:** o tamanho de cada resposta e se a ESPN limita rajada de chamadas.
+- **Decisão:** nenhuma ainda. O Lucas disse que avisa quando for para implementar. Antes do código, a regra 2 do `CLAUDE.md`: gravar a resposta real e pôr o caso em `tests/contract.py`.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -489,6 +572,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar as interpretações do leitor (várias seleções sem tipo dito viram múltipla; "simples" com várias vira várias simples) e do lote (D43, D44) | Lucas |
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
+| Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
+| Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
 | Confirmar o padrão Automático do tema (D38) | Lucas |
 | Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |
