@@ -506,6 +506,22 @@ export default function cases(Core) {
   eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, units: 0, unitBets: 0, by: [] }, 4]);
   eq('since: the result in units too, each bet by the unit it was placed with', (r => [r.n, r.pnl, r.units, r.unitBets])(Core.sinceSummary([hb('w', 'single', 'won', 100, 300, [hl('f1', 'ml:a')], { unit: 50 }), hb('l', 'single', 'lost', 1000, 0, [hl('f2', 'ml:a')], { unit: 500 }),
     hb('n', 'single', 'won', 20, 50, [hl('f3', 'ml:a')]), hb('k', 'single', 'cashed', 60, 90, [hl('f3', 'ml:b')], { unit: 10 })], 0)), [3, -770, 2, 2]);       // +4u and -2u; the bet with no unit only counts in money
+  /* the latest fights of an athlete (invented answers, in the shape of the recorded ones) */
+  const logOf = items => ({ events: { items } }), refTo = id => ({ $ref: 'http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/9/competitions/' + id + '?lang=en' });
+  eq('event log: nothing, or something that is not a list of fights', [Core.normEventlog(null), Core.normEventlog({}), Core.normEventlog(logOf([{ played: true }, { competition: {} }, null]))], [[], [], []]);
+  eq('event log: the id comes from the address, and a fight not fought yet says so', Core.normEventlog(logOf([{ competition: refTo('77'), played: false }, { competition: refTo('76'), played: true }, { competition: refTo('75') }])).map(x => [x.id, x.played, x.competition.slice(0, 8)]), [['77', false, 'https://'], ['76', true, 'https://'], ['75', false, 'https://']]);
+  const pc = (winA, winB) => ({ id: 'p1', date: '2026-01-02T03:00Z', type: { abbreviation: 'Lightweight' }, format: { regulation: { periods: 5 } }, competitors: [{ id: '10', winner: winA }, { id: '20', winner: winB }], status: { $ref: 'http://x/status' } });
+  const ps = (name, display, period, clock) => ({ period, displayClock: clock, result: { name, displayName: display } });
+  eq('past fight: a decision, seen by the winner and by the loser', ['10', '20'].map(a => (f => [f.won, f.method, f.round, f.clock, f.rounds, f.weight])(Core.normPastFight(pc(true, false), ps('decision---unanimous', 'Decision - Unanimous', 5, '5:00'), a))), [[true, 'dec', 5, '5:00', 5, 'Lightweight'], [false, 'dec', 5, '5:00', 5, 'Lightweight']]);
+  eq('past fight: nobody wins a draw or a no contest, whatever is marked', [Core.normPastFight(pc(false, false), ps('draw', 'Draw', 3, '5:00'), '10').won, Core.normPastFight(pc(true, false), ps('no-contest', 'No Contest', 1, '2:00'), '10').won, Core.normPastFight(pc(true, false), ps('no-contest', 'No Contest', 1, '2:00'), '10').method], [null, null, 'nc']);
+  eq('past fight: with no result published the winner still counts, and the method is not made up', (f => [f.won, f.method, f.round, f.clock, f.time])(Core.normPastFight(pc(false, true), { period: 2 }, '20')), [true, 'unknown', 0, '', null]);
+  eq('past fight: no winner marked on either side is not a loss', Core.normPastFight(pc(false, false), ps('kotko', 'KO/TKO', 1, '1:00'), '10').won, null);
+  eq('past fight: an answer that is not a fight', [Core.normPastFight(null, null, '10'), Core.normPastFight({}, {}, '10')], [null, null]);
+  eq('past fight: where the status is asked for, by https', [Core.statusRef(pc(true, false)), Core.statusRef({}), Core.statusRef(null)], ['https://x/status', '', '']);
+  const pf = (won, method, round, time) => ({ won, method, round, time });
+  eq('form: wins, losses, the ones nobody won, and how the fights ended whoever won them', Core.formSummary([pf(true, 'ko', 1, 60), pf(false, 'dec', 3, 300), pf(null, 'draw', 3, 300), pf(true, 'sub', 2, 100), pf(false, 'unknown', 0, null)]), { n: 5, won: 2, lost: 2, other: 1, ko: 1, sub: 1, dec: 1 });
+  eq('form: no fights', Core.formSummary([]), { n: 0, won: 0, lost: 0, other: 0, ko: 0, sub: 0, dec: 0 });
+  eq('form: how long a fight lasted, and nothing when the round or the time is not told', [pf(true, 'ko', 1, 60), pf(false, 'dec', 3, 300), pf(true, 'sub', 2, 100), pf(false, 'unknown', 0, null), pf(true, 'ko', 2, null)].map(Core.fightSeconds), [60, 900, 400, null, null]);
   /* the card of an event: its parts by the hour, and finding a fight by a fighter's name */
   const cf = (id, date, idx, a, b) => ({ id, date, idx, a: { name: a }, b: { name: b } });
   const night = [cf('c1', 100, 0, 'Ana Souza', 'Bia Moura'), cf('c2', 100, 1, 'José Aldana', 'Leo Vance'), cf('c3', 200, 2, 'Caio Brandt', 'Dario Kessler'), cf('c4', 200, 3, 'Igor Sampaio', 'Otto Farias'),

@@ -2,6 +2,12 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.17.0] - 2026-10-10
+
+### Adicionado
+- Últimas 3 lutas de cada lutador nos detalhes da luta: vitória ou derrota, como acabou, round e tempo. Buscadas na ESPN só ao abrir os mercados da luta, e guardadas no aparelho.
+- `scripts/capture_espn.py` e a entrada `capture` no workflow `ESPN contract`, para gravar amostras reais da ESPN de onde ela não é alcançada.
+
 ## [0.16.0] - 2026-10-10
 
 ### Adicionado

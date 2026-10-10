@@ -233,6 +233,16 @@ check('the paste button reads an image on the clipboard before falling back to t
 
 check('a fight in progress is blue in both themes, never the red of a loss', css_src.count('--live:#0b6fb8;') == 1 and css_src.count('--live:#49c2ff;') == 2 and 'nunca vermelha' in spec)
 
+# 5d1k. the latest fights of each athlete: read from recorded answers, asked for only when a fight is opened, and kept
+api_src2 = read('src/app/api.ts'); espn_src = read('src/core/espn.ts'); contract_src = read('tests/contract.py'); flow = read('.github/workflows/espn-contract.yml')
+check('the readers of an athlete\'s fights are checked against recorded answers', all((ROOT / 'tests' / 'fixtures' / 'espn' / f).exists() for f in ('athlete_eventlog.json', 'past_competitions.json', 'past_statuses.json', 'status_draw.json')) and all(w in contract_src for w in ('FX.athlete_eventlog', 'FX.past_competitions', 'FX.past_statuses', 'FX.status_draw', 'Core.normEventlog', 'Core.normPastFight')))
+check('the fields read from the event log and from a past fight are the ones the spec lists', all(w in espn_src for w in ('i.competition.$ref', 'i.played', 'c.status.$ref', 'c.format.regulation.periods', 'c.type.abbreviation', 'x.winner === true')) and '`events.items[]`: `competition.$ref`, `played`' in spec)
+check('three fights for each athlete, kept for a week, as the spec says', 'export const FORM_FIGHTS = 3, FORM_TTL = 7 * DAY;' in api_src2 and 'as 3 primeiras já lutadas (`FORM_FIGHTS`)' in spec and 'vale por 7 dias (`FORM_TTL`)' in spec)
+check('the latest fights are asked for when a fight is opened, and nowhere else', html.count('loadForm(') == 2 and "ui.open.add(id); if (f) loadForm([f.a.id, f.b.id])" in read('src/app/events.ts') and 'loadForm' not in read('src/app/sync.ts') and 'nunca no laço de sincronização' in spec)
+check('an athlete whose fights could not all be read keeps none', "} catch (e) { formFailed.add(id); }" in api_src2 and 'D.form[id] = { ts: now, fights };' in api_src2 and 'Tudo ou nada' in spec)
+check('what was read is kept with the rest of the cache', 'form: D.form }); }' in read('src/app/state.ts') and 'form: c.form || {}' in read('src/app/state.ts') and '(`form`)' in spec)
+check('the capture runs with the honest agent, never on main, and commits to the branch', "AGENT = 'oito-lados-contract-check/1.0" in read('scripts/capture_espn.py') and "github.ref_name != 'main'" in flow and 'python scripts/capture_espn.py' in flow and 'nunca na `main`' in spec)
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

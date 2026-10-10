@@ -165,6 +165,32 @@ with sync_playwright() as p:
     ESPN['next'] = False; pg.click('[data-act=refresh]'); pg.wait_for_function('window.__OL.D.events.length === 1'); assert nfights() == 3 and pg.locator('.events .ev').count() == 1
     pick = lambda fid, key: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
+    # the details of a fight bring the three latest fights of each of the two: won or lost, how and when each one ended
+    pg.wait_for_function('document.querySelectorAll(".fcol").length === 6 && ![...document.querySelectorAll(".fcol")].some(e => e.textContent.includes("Buscando"))')
+    fcol = lambda aid: pg.locator(f'.fcol[data-athlete="{aid}"]')
+    rows = lambda aid: [[li.locator('i').inner_text(), li.locator('span b').inner_text(), re.sub(r'\s+', ' ', li.locator('span').inner_text().replace(li.locator('small').inner_text(), '')).strip()] for li in fcol(aid).locator('li').all()]
+    assert txt('.form[data-fid=f1] h4').upper().startswith('ÚLTIMAS 3 LUTAS') and fcol('101').locator('.fname').inner_text().upper() == 'TELES', txt('.form[data-fid=f1]')
+    assert fcol('101').locator('.fsum').inner_text() == '2V 1D' and fcol('101').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 1 por finalização, 1 por decisão' and rows('101') == [['V', 'KO/TKO', 'KO/TKO · R1 2:10'], ['V', 'Decisão', 'Decisão · 3 rounds'], ['D', 'Finalização', 'Finalização · R2 3:45']], (fcol('101').inner_text(), rows('101'))          # she has four: only the latest three
+    assert all(re.fullmatch(r'[a-zç]{3}/\d\d', t) for t in fcol('101').locator('li small').all_inner_texts()), fcol('101').locator('li small').all_inner_texts()
+    assert fcol('102').locator('.fsum').inner_text() == '0V 1D' and fcol('102').locator('.fends').inner_text() == 'Como acabaram: 1 por decisão' and len(rows('102')) == 1, 'an athlete with one fight shows one'
+    assert 'Nenhuma luta anterior na ESPN.' in fcol('201').inner_text() and fcol('201').locator('li').count() == 0, 'a debut has nothing to show, and says so'
+    assert fcol('202').locator('.fsum').inner_text() == '1V 0D 2E' and fcol('202').locator('.fends').count() == 0 and rows('202') == [['E', 'Empate', 'Empate · 3 rounds'], ['–', 'No contest', 'No contest · R1 2:00'], ['V', 'resultado não informado', 'resultado não informado']], (fcol('202').inner_text(), rows('202'))
+    assert fcol('301').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por finalização' and fcol('302').locator('.fsum').inner_text() == '2V 1D' and fcol('302').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por decisão' and rows('302')[1] == ['V', 'Decisão', 'Decisão · 5 rounds']
+    assert pg.evaluate('getComputedStyle(document.querySelector(".fcol li.w > i")).backgroundColor !== getComputedStyle(document.querySelector(".fcol li.l > i")).backgroundColor') and all(e.is_visible() for e in pg.locator('.fcol').all())
+    # it costs one call for the list and two for each fight, once: what was read is kept and not asked for again
+    logs = lambda: sum(1 for u in calls if '/eventlog' in u); past = lambda: sum(1 for u in calls if re.search(r'/competitions/p\w+', u))
+    assert (logs(), past()) == (6, 26), (logs(), past())          # six athletes; 3 + 1 + 0 + 3 + 3 + 3 fights, two calls each
+    pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_timeout(300); assert (logs(), past()) == (6, 26) and fcol('101').locator('li').count() == 3, 'closing and opening the fight asks for nothing'
+    assert pg.evaluate('JSON.parse(localStorage.getItem("oitolados.cache.v1")).form["101"].fights.length') == 3, 'and it is kept on the device with the rest of what was read'
+    # after a week the list is asked for again, and the fights already read are not
+    pg.evaluate('window.__OL.D.form["101"].ts = 0'); pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_function('window.__OL.D.form["101"].ts > 0')
+    assert (logs(), past()) == (7, 26) and fcol('101').locator('li').count() == 3, (logs(), past())
+    # when the source cannot be reached it says so, keeps nothing half read, and a new opening of the fight tries again
+    pg.evaluate('delete window.__OL.D.form["101"]'); ESPN['formdown'] = True; pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]')
+    pg.wait_for_function('document.querySelector(\'.fcol[data-athlete="101"]\').textContent.includes("Não deu pra buscar agora")'); assert pg.evaluate('window.__OL.D.form["101"]') is None and fcol('102').locator('li').count() == 1
+    ESPN['formdown'] = False; pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_function('document.querySelectorAll(\'.fcol[data-athlete="101"] li\').length === 3')
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0
+    pg.locator('.form[data-fid=f1]').scroll_into_view_if_needed(); shot('s44-ultimas-lutas.png'); window_top = pg.evaluate('window.scrollTo(0, 0)')
     shot('s2-markets.png', True)
     # a legend of the corner colours stays in view while the markets of a fight scroll
     key = pg.locator('.fight:has([data-fid="f3"]) .corners')

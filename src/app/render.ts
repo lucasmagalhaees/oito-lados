@@ -1,7 +1,7 @@
 import { Core } from '../core';
-import { loadBoard, loadOdds, openBets } from './api';
+import { FORM_FIGHTS, formBusy, formFailed, loadBoard, loadOdds, openBets } from './api';
 import { CASH_WHY, cashoutOf } from './cashout';
-import { $, CUR, WEIGHT, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, money, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
+import { $, CUR, WEIGHT, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, money, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
 import { canBet, exposureNotes, inUnits, priceOf, setStakeMoney, slipCalc, statsOf, wallet } from './helpers';
 import { renderImport } from './import';
@@ -124,6 +124,26 @@ function optBtn(f: Fight, x: Option, cls?: string): string {
   const ou = Core.overUnder(x.key);
   return `<button class="opt ${cls || ''} ${side ? 's' + side : ''} ${ou ? 'x' + ou : ''} ${on ? 'on' : ''}" data-act="pick" data-fid="${esc(f.id)}" data-key="${esc(x.key)}" aria-pressed="${on}"${whose}>${cls === 'ml' ? '' : `<span class="ol">${esc(x.label)}</span>`}<span class="ov">${x.src === 'est' ? '<i class="est" title="odd estimada">≈</i>' : ''}${fo(x.odd)}</span></button>`;
 }
+/** The latest fights of the two athletes of a fight, side by side: won or lost, how and when each one ended. */
+function formHtml(f: Fight): string {
+  const col = (k: Side): string => {
+    const x = f[k], got = D.form[x.id];
+    let body: string;
+    if (!got) body = `<p class="hint">${formBusy.has(x.id) ? 'Buscando na ESPN…' : formFailed.has(x.id) ? 'Não deu pra buscar agora. Fecha e abre de novo pra tentar.' : '—'}</p>`;
+    else if (!got.fights.length) body = '<p class="hint">Nenhuma luta anterior na ESPN.</p>';
+    else {
+      const s = Core.formSummary(got.fights), ends = ([['ko', 'por KO/TKO'], ['sub', 'por finalização'], ['dec', 'por decisão']] as const).filter(([m]) => s[m]).map(([m, t]) => `${s[m]} ${t}`);
+      body = `<p class="fsum"><b>${s.won}V ${s.lost}D${s.other ? ` ${s.other}E` : ''}</b></p>${ends.length ? `<p class="fends">Como acabaram: ${ends.join(', ')}</p>` : ''}<ul>${got.fights.map(p => {
+        const res = p.won === true ? ['w', 'V', 'Vitória'] : p.won === false ? ['l', 'D', 'Derrota'] : ['n', p.method === 'draw' ? 'E' : '–', p.method === 'draw' ? 'Empate' : p.method === 'nc' ? 'No contest' : 'Sem vencedor informado'];
+        const how = p.method === 'unknown' ? (p.label || 'resultado não informado') : p.method === 'draw' ? 'Empate' : p.method === 'nc' ? 'No contest' : Core.ML[p.method];
+        const when = p.method === 'dec' || p.method === 'draw' ? (p.round ? `${p.round} rounds` : '') : p.round ? `R${p.round} ${esc(p.clock)}` : '';
+        return `<li class="${res[0]}"><i aria-label="${res[2]}">${res[1]}</i><span><b>${esc(how)}</b>${when ? ` · ${when}` : ''}<small>${p.date ? esc(monthYear(p.date)) : ''}</small></span></li>`;
+      }).join('')}</ul>`;
+    }
+    return `<div class="fcol ${k}" data-athlete="${esc(x.id)}"><span class="fname"><i></i>${esc(x.last)}</span>${body}</div>`;
+  };
+  return `<div class="form" data-fid="${esc(f.id)}"><h4><span class="label">Últimas ${FORM_FIGHTS} lutas</span><em>de cada um, pela ESPN</em></h4><div class="fcols">${col('a')}${col('b')}</div></div>`;
+}
 function fightCard(f: Fight, isMain: boolean): string {
   const p = priceOf(f), can = canBet(f), res = D.results[f.id];
   const state = f.canceled ? '<span class="chip">Cancelada</span>'
@@ -145,7 +165,7 @@ function fightCard(f: Fight, isMain: boolean): string {
     h += `<button class="more" data-act="more" data-fid="${esc(f.id)}" aria-expanded="${open}"><span>${open ? 'Fechar mercados' : `Método, rounds e quedas (+${extra} mercados)`}</span><span>${open ? '−' : '+'}</span></button>`;
     if (open) {
       // stays in view while the markets scroll, so the corner colours can be read without going back up to the names
-      h += `<div class="mk"><div class="corners" aria-label="Cores dos cantos"><span class="a"><i></i>${esc(f.a.last)}</span><span class="b"><i></i>${esc(f.b.last)}</span></div>`;
+      h += `<div class="mk"><div class="corners" aria-label="Cores dos cantos"><span class="a"><i></i>${esc(f.a.last)}</span><span class="b"><i></i>${esc(f.b.last)}</span></div>${formHtml(f)}`;
       for (const g of p.groups.slice(1)) {
         h += `<h4><span class="label">${esc(g.title)}</span>${g.note ? `<em>${esc(g.note)}</em>` : ''}</h4><div class="grid g${g.cols}">`;
         if (g.heads) h += `<div class="colh"><i></i>${esc(f.a.last)}</div><div class="colh b"><i></i>${esc(f.b.last)}</div>`;

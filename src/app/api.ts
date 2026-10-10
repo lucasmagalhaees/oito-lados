@@ -12,6 +12,33 @@ export async function getJSON(url: string, ms?: number): Promise<Json> {
   finally { clearTimeout(t); }
 }
 export async function pool(jobs: (() => Promise<void>)[], n: number): Promise<void> { let i = 0; const run = async () => { while (i < jobs.length) { const j = jobs[i++]; try { await j(); } catch (e) { /* one failed call must not sink the batch */ } } }; await Promise.all(Array.from({ length: Math.min(n, jobs.length) }, run)); }
+const ATHLETES = 'https://sports.core.api.espn.com/v2/sports/mma/athletes';
+/** The latest fights of the two athletes of a fight: how many are read for each, and for how long what was read stands. */
+export const FORM_FIGHTS = 3, FORM_TTL = 7 * DAY;
+/** What is being asked for right now, and what could not be read the last time it was asked (by athlete id). Not saved. */
+export const formBusy = new Set<string>(), formFailed = new Set<string>();
+/** Reads the latest fights of these athletes: the event log of each, then each fight and its status. A fight already
+ *  read is not asked for again, since a past fight does not change; what was read stands for a week. Either all the
+ *  fights of an athlete are read or none is kept, so that a list is never one fight short without saying so. */
+export async function loadForm(ids: string[]): Promise<void> {
+  const now = Date.now(), todo = ids.filter(id => id && !formBusy.has(id) && !(D.form[id] && now - D.form[id].ts < FORM_TTL));
+  if (!todo.length) return;
+  for (const id of todo) { formBusy.add(id); formFailed.delete(id); }
+  await Promise.all(todo.map(async id => {
+    try {
+      const had = (D.form[id] && D.form[id].fights) || [];
+      const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`)).filter(x => x.played).slice(0, FORM_FIGHTS);
+      const fights = await Promise.all(log.map(async it => {
+        const known = had.find(x => x.id === it.id && x.method !== 'unknown'); if (known) return known;
+        const c = await getJSON(it.competition), f = Core.normPastFight(c, await getJSON(Core.statusRef(c)), id);
+        if (!f) throw new Error('not a fight');
+        return f;
+      }));
+      D.form[id] = { ts: now, fights };
+    } catch (e) { formFailed.add(id); }
+    finally { formBusy.delete(id); }
+  }));
+}
 export const ymd = (t: number): string => { const d = new Date(t); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
 export const openBets = (): Bet[] => S.bets.filter(b => b.status === 'open');
 export const openLegs = (): Leg[] => openBets().flatMap(b => b.legs);

@@ -38,6 +38,9 @@ const nodot = (f: Intl.DateTimeFormat) => ({ format: (t: number): string => f.fo
 export const dWhen = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 export const dDay = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
 export const dTime = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const dMon = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
+/** A month and a year, short: "mar/26". */
+export const monthYear = (t: number): string => dMon.format(t).replace('.', '') + '/' + String(new Date(t).getFullYear()).slice(-2);
 export const WEIGHT: Record<string, string> = { 'Strawweight': 'Peso-palha', 'Flyweight': 'Peso-mosca', 'Bantamweight': 'Peso-galo', 'Featherweight': 'Peso-pena', 'Lightweight': 'Peso-leve', 'Welterweight': 'Meio-médio', 'Middleweight': 'Peso-médio', 'Light Heavyweight': 'Meio-pesado', 'Heavyweight': 'Peso-pesado', 'W Strawweight': 'Palha feminino', 'W Flyweight': 'Mosca feminino', 'W Bantamweight': 'Galo feminino', 'W Featherweight': 'Pena feminino', 'Catchweight': 'Peso casado' };
 export const parseMoney = Core.parseMoney;
 export const H = 3600e3, DAY = 24 * H;

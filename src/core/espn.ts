@@ -1,7 +1,7 @@
 /* ---------- normalising ESPN payloads ----------
    The only place that knows what ESPN sends. If the API changes shape, this is where to look. */
 import { am2dec, devig } from './odds';
-import type { Fight, FightEvent, Fighter, FightState, Json, MethodOdds, Odds, Result } from './types';
+import type { Fight, FightEvent, Fighter, FightState, Json, MethodOdds, Odds, PastFight, Result } from './types';
 
 function lastName(x: Json): string {
   const s = (x.athlete && x.athlete.shortName) || '';
@@ -80,6 +80,28 @@ export function normResult(s: Json): Result | null {
   const mm = /^(\d+):(\d{2})$/.exec(String(s.displayClock || '').trim());
   const time = mm ? (+mm[1]) * 60 + (+mm[2]) : (typeof s.clock === 'number' ? s.clock : null);
   return { method, label: r.displayName || '', desc: r.displayDescription || r.description || '', round: s.period || 0, time, clock: s.displayClock || '' };
+}
+// the API links its own resources by http; a page served by https may only ask by https
+const https = (u: unknown): string => String(u || '').replace(/^http:/, 'https:');
+/** The fights in an athlete's event log, as the source lists them (the latest first, a fight still to come included):
+ *  the id of each, where to ask for it, and whether it has been fought. */
+export function normEventlog(j: Json): { id: string; competition: string; played: boolean }[] {
+  const items = ((j && j.events && j.events.items) || []) as Json[];
+  return items.map(i => { const url = https(i && i.competition && i.competition.$ref), m = /\/competitions\/(\w+)/.exec(url); return { id: m ? m[1] : '', competition: url, played: !!(i && i.played) }; }).filter(x => x.id);
+}
+/** Where to ask for the status of a fight read from the API, which is where its result is. */
+export const statusRef = (c: Json): string => https(c && c.status && c.status.$ref);
+/** One past fight of an athlete, from the fight itself (the date, the category, who won) and from its status (how and
+ *  when it ended, read as every other result is). Null when the answer is not a fight. */
+export function normPastFight(c: Json, s: Json, athlete: string): PastFight | null {
+  if (!c || !c.id) return null;
+  const sides = (c.competitors || []) as Json[], me = sides.find(x => String(x.id) === String(athlete)), r = normResult(s);
+  const nobody = !!r && (r.method === 'draw' || r.method === 'nc');
+  return {
+    id: String(c.id), date: Date.parse(c.date) || 0, weight: (c.type && c.type.abbreviation) || '', rounds: (c.format && c.format.regulation && c.format.regulation.periods) || 0,
+    won: me && !nobody && sides.some(x => x.winner === true) ? me.winner === true : null,
+    method: r ? r.method : 'unknown', label: r ? r.label : '', round: r ? r.round : 0, clock: r ? r.clock : '', time: r ? r.time : null
+  };
 }
 export function statValue(j: Json, name: string): number | null {
   const cats = (j && j.splits && j.splits.categories) || [];

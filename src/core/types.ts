@@ -24,6 +24,9 @@ export interface Odds {
   book: string; props: string; ml: Record<Side, number>; method: Record<Side, MethodOdds> | null;
   total: { line: number; over: number; under: number } | null; dist: { yes: number; no: number } | null; ts: number;
 }
+/** One fight an athlete has had, as the record of latest fights shows it. `won` is null when nobody won (a draw, a no
+ *  contest) or when the source marks no winner. */
+export interface PastFight { id: string; date: number; weight: string; rounds: number; won: boolean | null; method: Result['method']; label: string; round: number; clock: string; time: number | null }
 export interface Result {
   method: Finish | 'nc' | 'draw' | 'unknown'; label: string; desc: string; round: number; time: number | null; clock: string;
   /** set by the app when the takedown statistics never showed up */
