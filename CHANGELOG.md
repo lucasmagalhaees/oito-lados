@@ -2,6 +2,13 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] - 2026-10-09
+
+### Alterado
+- O código passou do `index.html` para TypeScript em módulos (`src/core/` e `src/app/`), com build pelo Vite. Nenhuma mudança no produto: o que é publicado continua sendo um arquivo só.
+- O `verify.sh` e o CI conferem os tipos e fazem o build antes dos testes, e os testes abrem a página gerada.
+- A checagem de produção passou a ler o commit carimbado na página, em vez de comparar o arquivo.
+
 ## [0.3.1] - 2026-10-09
 
 ### Adicionado

@@ -33,6 +33,8 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 
 É uma página estática, sem backend. O navegador consulta a API pública da ESPN para montar o card, ler as odds e acompanhar status, resultado e estatísticas.
 
+O código é TypeScript em módulos (`src/`). O build do Vite gera um único `dist/index.html`, com script e estilo dentro, que é o que os testes abrem e o que vai para o ar.
+
 | | De onde vem |
 |---|---|
 | Vencedor, método por lutador, vai até a decisão, linha principal de rounds | Odds publicadas pela casa (hoje DraftKings), via ESPN |
@@ -46,20 +48,22 @@ A especificação completa (endpoints, formato dos dados, modelo de preço e reg
 
 ## Rodando local
 
-Não tem build nem dependência.
+Precisa de Node 22 ou mais novo.
 
 ```bash
-python3 -m http.server 8000
-# abra http://localhost:8000
+npm ci
+npm run dev      # servidor de desenvolvimento; abra o endereço que ele mostrar
+npm run build    # gera dist/index.html, a página que é publicada
 ```
 
 ## Testes
 
 ```bash
+npm ci                      # Vite e TypeScript
 pip install -r tests/requirements.txt
 playwright install chromium
 npm ci --prefix tests       # arquivos do leitor de imagem usados no teste
-scripts/verify.sh           # roda tudo
+scripts/verify.sh           # confere os tipos, faz o build e roda tudo contra a página gerada
 ```
 
 | Teste | O que confere |
@@ -70,7 +74,7 @@ scripts/verify.sh           # roda tudo
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
 | `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
 | `tests/contract_live.py` | A API real da ESPN e o serviço de câmbio. Roda toda semana no GitHub Actions e avisa se o formato mudar |
-| `scripts/check_production.py` | Depois de cada merge, se a produção está servindo o `index.html` da `main` e continua servindo |
+| `scripts/check_production.py` | Depois de cada merge, se a produção está no commit da `main` e continua nele |
 
 Tudo, menos os dois últimos, roda no GitHub Actions em cada PR e em cada push na `main`. Se mesclar vários PRs, faça um por vez e espere o deploy: merges em sequência já deixaram a produção numa versão antiga.
 
@@ -86,7 +90,7 @@ O projeto é mantido com ajuda de IA e tem um harness para ela não afirmar o qu
 
 Configuração, uma vez só:
 
-- **Vercel:** importar este repositório em um projeto novo. O `vercel.json` já diz que é um site estático, sem framework, sem instalação e sem build. A partir daí o deploy é automático.
+- **Vercel:** importar este repositório em um projeto novo. O `vercel.json` já diz como construir (`npm ci`, `npm run build`, publicar `dist/`). A partir daí o deploy é automático.
 - **GitHub:** em Settings → Branches, proteger a `main` exigindo PR e os checks `checks`, `e2e (dark)` e `e2e (light)`. Assim só código testado chega à produção.
 
 No iPhone: abra a URL de produção no Safari, toque em Compartilhar e em Adicionar à Tela de Início.
@@ -94,8 +98,14 @@ No iPhone: abra a URL de produção no Safari, toque em Compartilhar e em Adicio
 ## Estrutura
 
 ```
-index.html                           o app inteiro (HTML, CSS e JS)
-vercel.json                          publicação como site estático
+index.html                           esqueleto da página, entrada do build
+src/core/                            lógica pura: odds, leitores da ESPN, preço, liquidação, cashout
+src/app/                             a página: estado, rede, telas e eventos
+src/main.ts                          ponto de entrada
+package.json                         Vite e TypeScript, em versões exatas
+vite.config.js                       build em um arquivo só
+tsconfig.json                        TypeScript em modo strict
+vercel.json                          como a Vercel constrói e publica
 scripts/verify.sh                    comando único de verificação
 scripts/check_production.py          confere a produção contra a main
 tests/unit.py                        testes do núcleo (preço e liquidação)

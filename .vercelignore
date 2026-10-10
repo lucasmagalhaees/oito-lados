@@ -1,4 +1,4 @@
-# only index.html is the site; keep repo files out of the deployment
+# the host only needs what the build reads (index.html, src/, package files, vite and ts config); the rest stays out
 .github
 docs
 tests

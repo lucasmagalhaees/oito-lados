@@ -1,4 +1,4 @@
-"""Code coverage of index.html's script, measured by the browser itself (V8 precise coverage over CDP).
+"""Code coverage of the built page's script (dist/index.html), measured by the browser itself (V8 precise coverage over CDP).
 
 The test scripts call start(page) before loading the app and stop(page, name) when done; both do nothing unless
 OL_COVERAGE=1. Each run leaves tests/.coverage/<name>.json, and `python3 tests/cov.py` merges them and reports:
@@ -44,8 +44,8 @@ def stop(page, name):
     (OUT / f'{name}.json').write_text(json.dumps(scripts))
 
 def report(min_functions=None, min_chars=None, show=40):
-    html = (ROOT / 'index.html').read_text(encoding='utf-8')
-    a = html.index('<script>') + len('<script>'); b = html.rindex('</script>')
+    html = (ROOT / 'dist' / 'index.html').read_text(encoding='utf-8')         # the built page: what the tests load and what ships
+    a = html.index('<script type="module">') + len('<script type="module">'); b = html.index('</script>', a)
     src = html[a:b]                                 # V8 reports offsets inside the inline script, not inside the page
     runs = sorted(OUT.glob('*.json')) if OUT.exists() else []
     if not runs:
@@ -58,7 +58,7 @@ def report(min_functions=None, min_chars=None, show=40):
             for fn in sorted(script['functions'], key=lambda f: (f['ranges'][0]['startOffset'], -f['ranges'][0]['endOffset'])):
                 first = fn['ranges'][0]
                 if first['endOffset'] > len(src) + 1:
-                    print(f'cobertura: {run.name} foi medido com outra versão do index.html; apague tests/.coverage e rode de novo'); return 1
+                    print(f'cobertura: {run.name} foi medido com outro build de dist/index.html; apague tests/.coverage e rode de novo'); return 1
                 if fn['functionName'] or first['startOffset'] > 0:      # the script's own top-level wrapper is not a function to cover
                     key = (fn['functionName'], first['startOffset'], first['endOffset'])
                     functions[key] = functions.get(key, False) or first['count'] > 0
@@ -71,7 +71,7 @@ def report(min_functions=None, min_chars=None, show=40):
     called = sum(1 for v in functions.values() if v)
     pf, pc = 100 * called / max(1, len(functions)), 100 * hit / max(1, len(code))
     line = lambda off: html.count('\n', 0, a + off) + 1
-    print(f'cobertura do index.html ({len(runs)} execuções: {", ".join(r.stem for r in runs)})')
+    print(f'cobertura de dist/index.html ({len(runs)} execuções: {", ".join(r.stem for r in runs)})')
     print(f'  funções chamadas: {called}/{len(functions)} ({pf:.1f}%)')
     print(f'  código executado: {pc:.1f}% dos caracteres do script')
     never = sorted((k for k, v in functions.items() if not v), key=lambda k: k[1])

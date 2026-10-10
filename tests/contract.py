@@ -74,7 +74,7 @@ with sync_playwright() as p:
     page = browser.new_page()
     page.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())
     cov.start(page)
-    page.goto((ROOT / 'index.html').as_uri())
+    page.goto((ROOT / 'dist' / 'index.html').as_uri())
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS, FX)
     cov.stop(page, 'contract')

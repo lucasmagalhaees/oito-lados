@@ -16,9 +16,9 @@ Idioma da interface: português do Brasil, informal. Comentários no código: in
 
 Decisão do Lucas em 09/10/2026: **MVP para um usuário**, simples de propósito. Validar hipóteses usando de verdade e só depois escalar, se for preciso. Portanto:
 
-- Não adicionar backend, login, banco, framework ou etapa de build sem ele pedir.
-- Não quebrar o `index.html` em módulos por conta própria.
-- O plano de escala (hipóteses a validar, gatilhos, etapas, modelo de dados, fonte de dados, pontos jurídicos) está em [`docs/escala.md`](docs/escala.md). Consultar antes de propor qualquer mudança de arquitetura.
+- Não adicionar backend, login nem banco sem ele pedir. O app continua sendo uma página estática.
+- No mesmo dia ele pediu a etapa 1 do plano de escala: código em TypeScript, em módulos, com build pelo Vite (D33). Isso organiza o código e não muda o produto.
+- O plano de escala (hipóteses a validar, gatilhos, etapas, modelo de dados, fonte de dados, pontos jurídicos, custos) está em [`docs/escala.md`](docs/escala.md). Consultar antes de propor qualquer mudança de arquitetura.
 
 ## Regras contra alucinação (valem para qualquer IA trabalhando aqui)
 
@@ -27,7 +27,7 @@ A ordem de confiança é: **código e testes rodando agora** > amostras reais gr
 1. **Não diga que funciona sem rodar.** Antes de afirmar que algo está certo, rode `scripts/verify.sh` e mostre a saída. Sem saída, a frase certa é "não verifiquei".
 2. **Não invente campo da ESPN.** O app só pode ler campos que aparecem em `tests/fixtures/espn/`. Precisa de um campo novo? Capture a resposta real, grave a amostra, acrescente o caso em `tests/contract.py`, e só então escreva o código.
 3. **Separe sempre o verificado do suposto.** Em resposta, commit e PR, diga o que foi testado e o que não foi. O registro oficial é [`docs/verificacao.md`](docs/verificacao.md): um item só sobe para "Verificado" com comando e data.
-4. **Número mora no código.** Margens, limites, intervalos e prazos citados aqui são conferidos contra o `index.html` por `tests/docs_check.py`. Mudou um, mude o outro no mesmo commit.
+4. **Número mora no código.** Margens, limites, intervalos e prazos citados aqui são conferidos contra o código em `src/` por `tests/docs_check.py`. Mudou um, mude o outro no mesmo commit.
 5. **Decisão de produto não se presume.** O que já foi decidido, e por quê, está em [`docs/decisoes.md`](docs/decisoes.md). O que não está lá, pergunte ao Lucas. Decisão nova entra lá com data.
 6. **Fato de terceiro tem data.** Limite de hospedagem, preço, comportamento de API: tudo isso envelhece. Cite a data em que foi conferido e reconfira antes de depender.
 7. **Resultado inventado só com nome inventado.** `tests/mock_espn.py` usa lutadores fictícios. Amostra real fica em `tests/fixtures/espn/` e não é editada à mão.
@@ -46,21 +46,25 @@ O que cada peça do harness cobre:
 | `tests/e2e.py` | Tudo passar isolado e o fluxo real pela interface estar quebrado |
 | `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
 | `scripts/check_production.py` (workflow `Produção`, depois de cada merge) | CI verde e deploy feito, mas a produção servindo outra versão |
+| `tsc` em modo `strict` (primeiro passo do `verify.sh`) | Chamar função com o dado errado, ou ler um campo que pode não existir |
 | Hook de parada (`.claude/hooks/verify-on-stop.sh`) | Encerrar a tarefa com checagem falhando |
 | `docs/verificacao.md` | Tratar suposição como fato |
 | `docs/decisoes.md` | Depender da memória de uma conversa |
 
 ## Estado atual
 
-- `index.html`: o app inteiro. HTML + CSS + JS num arquivo só, sem build, sem dependências, sem backend. Ícone embutido em base64.
+- `src/`: o app, em TypeScript. `src/core/` é a lógica pura; `src/app/` é a página (estado, rede, telas, eventos). Detalhes em "Arquitetura".
+- `index.html`: o esqueleto da página que o build usa como entrada (cabeçalho, ícone embutido em base64, as partes fixas da tela).
+- `dist/index.html`: o que o build gera e o que vai para o ar. Um arquivo só, com script e estilo dentro. Não é versionado.
+- `package.json`, `package-lock.json`, `vite.config.js`, `tsconfig.json`: o build. Sem framework e sem dependência em tempo de execução.
 - `scripts/verify.sh`: o comando único de verificação.
-- `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção serve o `index.html` da `main`.
+- `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção está no commit da `main`.
 - `tests/unit.py`: testes do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação).
 - `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
 - `tests/e2e.py` + `tests/mock_espn.py`: teste ponta a ponta com Playwright e a ESPN simulada.
-- `tests/cov.py`: cobertura de código do `index.html`, medida pelo próprio navegador durante os testes.
+- `tests/cov.py`: cobertura de código da página gerada, medida pelo próprio navegador durante os testes.
 - `tests/package.json`: cópias locais dos arquivos do leitor de imagem, para o teste de OCR rodar sem internet.
 - CI em `.github/workflows/ci.yml`: roda tudo isso (menos o ao vivo) em cada PR e em cada push na `main`.
 - `.claude/settings.json` + `.claude/hooks/verify-on-stop.sh`: hook de parada do Claude Code.
@@ -89,11 +93,11 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
-## Por que um arquivo estático chamando a ESPN direto
+## Por que uma página estática chamando a ESPN direto
 
 Tempo real exige que o navegador consulte a fonte. A API pública da ESPN aceita chamadas de navegador vindas de outra origem (testado a partir de `example.com`), não pede chave e traz odds, status ao vivo, resultado e estatísticas. Então não precisa de servidor.
 
-Risco conhecido: a API não é oficial nem documentada e pode mudar sem aviso. Todo acesso a ela passa pelas funções `norm*` em `Core`, que é onde mexer se o formato mudar.
+Risco conhecido: a API não é oficial nem documentada e pode mudar sem aviso. Todo acesso a ela passa pelas funções `norm*` de `src/core/espn.ts`, que é onde mexer se o formato mudar.
 
 ## Fonte de dados (ESPN)
 
@@ -125,18 +129,49 @@ Detalhes que já morderam:
 - A ESPN recusa navegador headless (403, sem cabeçalho de CORS). Por isso nenhum teste automatizado chama a ESPN pelo Chromium, e o script de conferência não se disfarça de navegador comum.
 - Em 09/10/2026 a ESPN listava duas lutas já encerradas com `format.regulation.periods: 4`. O app usa o número como vem; não foi visto em luta agendada.
 
-## Arquitetura do `index.html`
+## Arquitetura
 
-Um IIFE com blocos nesta ordem:
+TypeScript em módulos, build pelo Vite 8.3.3 com TypeScript 7.0.2 (versões exatas no `package.json`). O build junta tudo num arquivo só, `dist/index.html`, com o script e o estilo dentro (plugin `single-file` no `vite.config.js`) e **sem minificar**: o que os testes medem, por nome de função e linha, é o arquivo que vai para o ar. A página gerada leva o commit de origem em `<meta name="ol-commit">`.
 
-1. **`Core`**: funções puras, sem DOM. Conversão de odds, normalização da ESPN, modelo de preço, liquidação. É o que testar e o que reaproveitar se o projeto ganhar backend.
-2. **Formatação**: moeda da banca, datas pt-BR, tradução de categorias de peso.
-3. **Estado persistente**: `S` (carteira e apostas), `D` (cache de dados da ESPN) e `FX` (cotação guardada, com `loadFx`).
-4. **API**: `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`.
-5. **Liquidação**: `legOut`, `settle`, `resultText`.
-6. **Laço de sincronização**: `sync`, `schedule`.
-7. **Renderização**: `render` e as três telas (`vLutas`, `vApostas`, `vCarteira`), cupom (`renderSheet`, `slipSummary`), gráfico (`bindChart`).
-8. **Eventos**: um listener de clique delegado por `data-act`.
+`npm run typecheck` roda o `tsc` em modo `strict`, com `noUnusedLocals`. Nenhum módulo usa `@ts-nocheck` ou `@ts-ignore` (o `docs_check.py` confere). O único `any` é o tipo `Json`, para o que vem da ESPN e do serviço de câmbio, que não é nosso nem documentado, e o objeto do leitor de imagem.
+
+### `src/core/`: lógica pura
+
+Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que testar primeiro e o que reaproveitar se o projeto ganhar backend.
+
+| Módulo | O que tem |
+|---|---|
+| `src/core/types.ts` | As formas dos dados: `Fight`, `Odds`, `Result`, `Bet`, `Leg`, `AppState`, `Pricing`, `Cashout`, `Tip` e as demais |
+| `src/core/odds.ts` | `r2`, `clamp`, `am2dec`, `devig`, `mo` (odd estimada com margem), mistura histórica por categoria |
+| `src/core/espn.ts` | Os leitores da ESPN: `normEvent`, `normOdds`, `attachDistance`, `normResult`, `statValue`. Único lugar que conhece o formato da API |
+| `src/core/pricing.ts` | `probs`, `jointModel`, `combo`, `price`, `sideOf` |
+| `src/core/settlement.ts` | `legOutcome`, `betResult` |
+| `src/core/cashout.ts` | `cashout`, `CASHOUT_MARGIN` |
+| `src/core/money.ts` | Máscara e leitura de valores, unidade (`unitPct`, `unitValue`), valor em unidades |
+| `src/core/fx.ts` | `normFx`, `fxRate`, `convertState`, `balanceOf` |
+| `src/core/tip.ts` | `parseTip`, `tipCfg`, `tipStake` |
+| `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
+
+### `src/app/`: a página
+
+| Módulo | O que tem |
+|---|---|
+| `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS` |
+| `src/app/format.ts` | Moeda da banca, datas pt-BR, categorias de peso, `esc`, e os acessos ao DOM (`$`, `part`, `valOf`, `blurField`) |
+| `src/app/api.ts` | `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd` |
+| `src/app/fx.ts` | `FX` (cotação guardada) e `loadFx` |
+| `src/app/settle.ts` | `legOut`, `settle`, `resultText` |
+| `src/app/cashout.ts` | `cashoutOf`, `chanceNow`, as mensagens de cada motivo |
+| `src/app/repeat.ts` | `repeatBet`, `doCashout` |
+| `src/app/import.ts` | Copiar aposta: leitor de imagem, `runImport`, `renderImport` |
+| `src/app/sync.ts` | `sync`, `schedule`, `pickEvent` |
+| `src/app/helpers.ts` | `wallet`, `priceOf`, `slipCalc`, valor do cupom em dinheiro e em unidades |
+| `src/app/render.ts` | `render` e as três telas, cupom (`renderSheet`, `slipSummary`), gráfico, `place` |
+| `src/app/events.ts` | Um listener delegado por `data-act`, depósito e troca de moeda |
+| `src/main.ts` | Entrada: liga os listeners, expõe `window.__OL` e dispara a primeira sincronização |
+| `src/env.d.ts`, `src/styles.d.ts` | Declarações de tipo de `window.__OL`, do leitor de imagem e do import de CSS |
+
+Os módulos de `src/app/` se importam em círculo (a tela chama ações, ações repintam a tela). Funciona porque nada é chamado enquanto os módulos carregam: o que roda na carga fica em `src/app/state.ts` (ler o que está salvo) e em `src/main.ts`. Código novo não deve chamar função de outro módulo no nível de cima do arquivo.
 
 `window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, S, FX}` para teste.
 
@@ -288,7 +323,7 @@ Regra do Lucas em 09/10/2026 (D28): **a moeda se troca no cartão de depósito, 
 
 Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colado, imagem escolhida e imagem colada da área de transferência.
 
-- **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` do `index.html`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
+- **Imagem:** lida no próprio aparelho por OCR, com a Tesseract.js 7.0.0 e o modelo de português. A biblioteca só é baixada (da jsDelivr, uns 5 MB) quando a pessoa escolhe uma imagem; a imagem não sai do aparelho. As versões ficam na constante `OCR` de `src/app/import.ts`, o script principal é carregado com hash de integridade (`OCR_SRI`), e `tests/package.json` fixa as mesmas versões para o teste rodar com cópias locais.
 - **Texto:** `Core.parseTip(text, fights)` procura, entre as lutas que ainda não começaram, a luta citada (nome completo ou sobrenome, sem depender de acento ou caixa), a seleção, a odd impressa e o valor. Devolve `{ items: [{ fid, key, printedOdd, assumed }], stake, problems }`.
 - **Mercados que entende:** vencedor ("para ganhar/vencer a luta", "ML", "vence"), método por lutador ("por KO/TKO", "por finalização", "por decisão"), vencedor e round, como a luta termina, vai ou não até a decisão, mais/menos de X.5 rounds, mais/menos de X.5 quedas (também escritos como "+2.5" e "−2.5"; um traço seguido de espaço é separador, não sinal) e round em que acaba. Só o nome do lutador, sem mercado, vira vencedor e é avisado como presumido.
 - **Valor** (`Core.tipStake`): se o original fala em unidades ("1 unidade", "2u", "meia unidade"), aplica essa quantidade da unidade atual, sempre. Se não diz nada, considera 1u. Se traz um valor em dinheiro (o primeiro do texto, que no print é a aposta, não o retorno), vale a escolha do cartão "Ao copiar um print", na Carteira (`S.tip`, limpo por `Core.tipCfg`). São só duas, por decisão do Lucas (D29): ou copia o mesmo valor, ou copia a mesma stake.
@@ -327,36 +362,42 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 ## Testes
 
 ```bash
+npm ci                       # Vite e TypeScript
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: docs, unit, contract, autoteste da checagem de produção, e2e claro e escuro e cobertura
+scripts/verify.sh            # tudo: tipos, build, docs, unit, contract, autoteste da checagem de produção, e2e claro e escuro e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
+npm run dev                  # servidor de desenvolvimento do Vite
 ```
-`unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro.
+O `verify.sh` começa pelo `tsc` e pelo build; se um dos dois falha, os testes nem rodam. **Todo teste abre `dist/index.html`**, a página gerada, e não o código-fonte: o que é testado é o que é publicado.
+
+`unit.py` carrega a página com a rede bloqueada e exercita `window.__OL.Core` com tabelas de casos. Regra nova de preço ou de liquidação entra ali primeiro. Os mesmos casos ainda rodam pelo navegador; passá-los para um executor de testes de TypeScript, sem navegador, é o próximo passo natural e não foi feito (ver `docs/escala.md`).
 
 `contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio): as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
-`docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código.
+`docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código em `src/`, e também a configuração do build (versões exatas, modo `strict`, núcleo sem DOM, módulos documentados).
 
-**Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do `index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%).
+**Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%).
 
 `e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 O fixture inventa resultados, então usa só lutadores fictícios. As telas do README saem dele: `OL_EVENT_NAME='UFC Fight Night: Almeida vs. Dunne' python3 tests/e2e.py dark` e copiar de `tests/shots/` para `docs/screenshots/`.
 
-Para testar contra a ESPN de verdade, servir a pasta (`python3 -m http.server`) e abrir no navegador.
+Para testar contra a ESPN de verdade: `npm run dev` e abrir o endereço que o Vite mostrar.
 
 ## Publicação
 
-Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. Não há etapa de build: o `vercel.json` fixa o projeto como site estático (`"framework": null`, instalação vazia) e o `.vercelignore` deixa só o `index.html` no site. Sem o `vercel.json`, a Vercel escolheu sozinha o preset "FastHTML" (Python) na importação e o primeiro deploy falhou procurando um `main.py`.
+Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. O `vercel.json` manda a Vercel fazer o mesmo que o `verify.sh` e o CI fazem: `npm ci`, `npm run build`, publicar `dist/`. O `.vercelignore` deixa de fora o que o build não lê (testes, documentação). A primeira importação do projeto, ainda sem `vercel.json`, falhou porque a Vercel escolheu sozinha o preset "FastHTML" (Python) e procurou um `main.py`.
+
+O build grava o commit em `<meta name="ol-commit">`. Na Vercel ele vem da variável `VERCEL_GIT_COMMIT_SHA`; fora dela, do `git`.
 
 A Vercel publica o que chegar na `main` sem olhar o CI. Quem garante que só entra código testado é a proteção do branch `main` exigindo os checks `checks`, `e2e (dark)` e `e2e (light)`.
 
 **Merges em sequência podem deixar a produção numa versão antiga.** Em 09/10/2026 os PRs #4, #5, #6 e #7 foram mesclados em menos de um minuto. A Vercel fez um deploy por merge, o do #4 terminou por último e ficou com o endereço de produção: CI verde, quatro deploys com sucesso, e o app no ar sem nada dos outros três PRs (D32). Por isso:
 
 - Mesclar um PR por vez e esperar o deploy, ou mesclar só o último quando um PR já contém os anteriores.
-- O workflow `Produção` roda `scripts/check_production.py` depois de cada push na `main`: espera a produção servir exatamente o `index.html` do commit (comparação por sha256) e **continua olhando por 5 min**, porque o deploy errado pode chegar depois do certo. Falhou: na Vercel, promover o deploy do commit mais recente da `main`, ou fazer um novo merge.
+- O workflow `Produção` roda `scripts/check_production.py` depois de cada push na `main`: espera a produção mostrar o carimbo do commit que entrou e **continua olhando por 5 min**, porque o deploy errado pode chegar depois do certo. Falhou: na Vercel, promover o deploy do commit mais recente da `main`, ou fazer um novo merge.
 - Em PR o mesmo script só informa qual commit a produção está servindo (`--report`) e nunca falha. `--selftest` testa o script contra um servidor local e roda no `verify.sh`.
 
 No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Início.
@@ -364,6 +405,7 @@ No iPhone: abrir a URL no Safari → Compartilhar → Adicionar à Tela de Iníc
 ## Ideias para depois
 
 - PWA de verdade: `manifest.json`, ícone em arquivo, service worker para abrir offline.
+- Rodar os casos de `tests/unit.py` num executor de testes de TypeScript, sem navegador.
 - Linhas alternativas de quedas por lutador (hoje só "pelo menos 1").
 - Notificação quando uma aposta fecha (exige service worker e permissão).
 - Mostrar quedas no resultado de todas as lutas, não só das que têm aposta.

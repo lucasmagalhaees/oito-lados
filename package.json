@@ -1,0 +1,21 @@
+{
+  "name": "oito-lados",
+  "private": true,
+  "version": "0.4.0",
+  "description": "Simulador de apostas de UFC com dinheiro fictício e odds reais.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.3.3"
+  }
+}

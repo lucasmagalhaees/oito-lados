@@ -1,4 +1,4 @@
-"""End-to-end run of index.html against a mocked ESPN API.
+"""End-to-end run of the built page (dist/index.html) against a mocked ESPN API.
 
 Usage: python3 tests/e2e.py [dark|light]   (needs: pip install -r tests/requirements.txt && playwright install chromium)
 Walks one fictional card through pre-fight -> live -> final, places singles, parlays and same-fight combos through the UI,
@@ -27,7 +27,7 @@ with sync_playwright() as p:
     pg.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_())
     ctx.route('https://cdn.jsdelivr.net/**', local_cdn); pg.route('https://cdn.jsdelivr.net/**', local_cdn)
     cov.start(pg)
-    pg.goto((ROOT / 'index.html').as_uri())
+    pg.goto((ROOT / 'dist' / 'index.html').as_uri())
     pg.wait_for_selector('.fight .opt.ml')
     pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     assert pg.evaluate('document.querySelector(".ev b b") === null'), 'event name was rendered as HTML'
