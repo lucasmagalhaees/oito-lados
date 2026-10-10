@@ -24,6 +24,28 @@ export function exposure(bets: Bet[], fid: string): { n: number; stake: number; 
   return { n: held.length, stake: r2(held.reduce((a, h) => a + h.stake, 0)), held };
 }
 
+/** The open bets grouped by event, in the order the fights happen: the event that starts first, and inside it the bet
+ *  whose first fight comes first (`order` breaks ties between fights of the same hour: the place of the fight on the
+ *  card). A multiple across events goes in a group of its own, with no event. `ret` is what the group pays if every
+ *  bet in it wins, which bets against each other cannot all do. */
+export interface OpenGroup { eid: string; event: string; date: number; bets: Bet[]; stake: number; ret: number }
+export function openByEvent(bets: Bet[], order?: (fid: string) => number): OpenGroup[] {
+  const first = (b: Bet): [number, number] => b.legs.map(l => [l.date, order ? order(l.fid) : 0] as [number, number]).sort((x, y) => x[0] - y[0] || x[1] - y[1])[0] || [0, 0];
+  const m = new Map<string, OpenGroup>();
+  for (const b of bets.filter(x => x.status === 'open')) {
+    const eids = [...new Set(b.legs.map(l => l.eid))], eid = eids.length === 1 ? eids[0] : '';
+    const g = m.get(eid) || { eid, event: eid && b.legs[0] ? b.legs[0].event : '', date: Infinity, bets: [], stake: 0, ret: 0 };
+    g.bets.push(b); g.stake += b.stake; g.ret += r2(b.stake * b.odd); g.date = Math.min(g.date, first(b)[0]);
+    m.set(eid, g);
+  }
+  const groups = [...m.values()].sort((x, y) => x.date - y.date || x.eid.localeCompare(y.eid));
+  for (const g of groups) {
+    g.stake = r2(g.stake); g.ret = r2(g.ret);
+    g.bets.sort((x, y) => { const fx = first(x), fy = first(y); return fx[0] - fy[0] || fx[1] - fy[1] || x.t - y.t; });
+  }
+  return groups;
+}
+
 /** How far the odds of now are from the ones the original printed, as a share (-0.074 is 7.4% lower). The whole bet is
  *  compared when the original gives its odd, or the odd of every selection, and each selection is of a different fight;
  *  otherwise it is the selection that fell the most. Null when the original printed nothing to compare with. */
@@ -38,13 +60,16 @@ export function copyDrop(betOdd: number | null | undefined, legs: { fid: string;
 }
 
 /** Results by who the bets were copied from ('' for the ones with no origin), the origin with the most money first.
- *  Voided and cashed-out bets are not hits or misses. `edge` compares the odds taken with the printed ones. */
-export interface OriginRow { k: string; n: number; st: number; ret: number; won: number; dec: number; edge: { n: number; avg: number; ahead: number } }
+ *  Voided and cashed-out bets are not hits or misses. `units` is the result with each bet measured by the unit it was
+ *  placed with (`unitBets` of them have one), so one large bet does not decide the comparison between origins.
+ *  `edge` compares the odds taken with the printed ones. */
+export interface OriginRow { k: string; n: number; st: number; ret: number; won: number; dec: number; units: number; unitBets: number; edge: { n: number; avg: number; ahead: number } }
 export function byOrigin(done: Bet[], all?: Bet[]): OriginRow[] {
   const m = new Map<string, OriginRow>();
   for (const b of done) {
-    const k = b.from || '', r = m.get(k) || { k, n: 0, st: 0, ret: 0, won: 0, dec: 0, edge: { n: 0, avg: 0, ahead: 0 } };
+    const k = b.from || '', r = m.get(k) || { k, n: 0, st: 0, ret: 0, won: 0, dec: 0, units: 0, unitBets: 0, edge: { n: 0, avg: 0, ahead: 0 } };
     r.n++; r.st += b.stake; r.ret += b.payout;
+    if (b.unit && b.unit > 0) { r.unitBets++; r.units += (b.payout - b.stake) / b.unit; }
     if (b.status === 'won' || b.status === 'lost') { r.dec++; if (b.status === 'won') r.won++; }
     m.set(k, r);
   }

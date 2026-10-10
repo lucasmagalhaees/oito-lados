@@ -25,7 +25,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
 - **Copiar aposta:** cola o texto de um palpite ou escolhe um ou vários prints; o app acha a luta e a seleção, entende se é simples ou múltipla (dupla, tripla...) e monta a aposta com a odd de agora. Com várias fotos, cada uma vira uma aposta e dá para fazer todas de uma vez. Cupom de acumulador que só mostra a primeira seleção é completado pela foto da lista de seleções, por outra aposta da lista ou à mão, e o valor e o tipo de cada uma podem ser mudados ali mesmo. Dá para dizer de quem é a aposta: a origem e a odd do print ficam guardadas, e a Carteira mostra o resultado por origem e quanto a sua odd ficou acima ou abaixo da do print. Antes de apostar várias de uma vez, o app avisa o que já está apostado, o que está repetido e a odd que caiu além do limite que você escolheu, e deixa corrigir o que o leitor leu errado. O valor segue a sua configuração: em dinheiro, o mesmo valor do original; em unidades, a mesma stake. A imagem é lida no próprio aparelho.
 - **Carteira:** resultado, ROI, acerto e gráfico de tudo, dos últimos 30 dias ou do último evento, com quebra por mercado, evento e origem. Ao reabrir o app, uma faixa resume o que fechou desde a última vez.
-- **Exposição:** antes de apostar numa luta que já tem aposta aberta, o app diz quanto já está em jogo nela e se a aposta nova vai contra a que existe.
+- **Exposição:** antes de apostar numa luta que já tem aposta aberta, o app diz quanto já está em jogo nela e se a aposta nova vai contra a que existe. No card, a luta mostra quantas apostas abertas tem. As abertas aparecem agrupadas por evento, na ordem das lutas, com o total em jogo e o que pagam se todas baterem.
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). Nas configurações você escolhe se o cupom pede o valor em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades.
 - **Leitura rápida:** mais e menos de uma linha aparecem como + e −, em tons neutros e com seta, e cada opção ligada a um lutador leva a cor do canto dele. Com os mercados abertos, uma legenda presa na tela lembra quem é o vermelho e quem é o azul.
 - **Tema e cores:** tema automático, claro ou escuro. Os cantos têm três pares de cor (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
@@ -72,7 +72,7 @@ scripts/verify.sh           # confere os tipos, faz o build e roda tudo contra a
 
 | Teste | O que confere |
 |---|---|
-| `tests/unit.py` | Conversão de odds, modelo de preço, combinadas e cada regra de liquidação |
+| `tests/unit.cases.mjs` | Os casos do núcleo: conversão de odds, modelo de preço, combinadas, cada regra de liquidação, o leitor de apostas e o histórico. Rodam duas vezes: no navegador, contra a página gerada (`tests/unit.py`), e no Node, contra o núcleo sozinho (`tests/core.mjs`) |
 | `tests/contract.py` | Os leitores da ESPN e do serviço de câmbio contra respostas reais gravadas em `tests/fixtures/` |
 | `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
@@ -114,7 +114,9 @@ tsconfig.json                        TypeScript em modo strict
 vercel.json                          como a Vercel constrói e publica
 scripts/verify.sh                    comando único de verificação
 scripts/check_production.py          confere a produção contra a main
-tests/unit.py                        testes do núcleo (preço e liquidação)
+tests/unit.cases.mjs                 casos do núcleo (preço, liquidação, leitor, histórico)
+tests/unit.py                        os casos no navegador, contra a página gerada
+tests/core.mjs                       os mesmos casos no Node, sem navegador
 tests/contract.py                    leitores da ESPN contra respostas reais gravadas
 tests/contract_live.py               conferência da API real da ESPN
 tests/docs_check.py                  documentação conferida contra o código

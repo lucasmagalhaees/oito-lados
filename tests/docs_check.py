@@ -146,11 +146,11 @@ check('pictures are numbered, not named after their files', '`Foto ${++photoSeq}
 check('a copied bet keeps its origin and the printed odds', "{ from: copy.from }" in html and "{ printed: copy!.bet }" in html and "{ printed: p }" in html and all(w in spec for w in ('`from`', '`printed`', '`slip.copy`')))
 check('the odd of the whole bet is only kept for the same selections', 'sameBet && copy!.bet' in html and 'ainda são exatamente as do original' in spec)
 check('a slip started by hand, emptied or repeated is not a copy', html.count('slip.copy = null') >= 6)
-check('the printed odd is compared in the core, with tests', 'export function printedEdge' in html and 'export function edgeSummary' in html and 'export function completeTip' in html and 'Core.printedEdge' in read('tests/unit.py') and 'Core.completeTip' in read('tests/unit.py'))
+check('the printed odd is compared in the core, with tests', 'export function printedEdge' in html and 'export function edgeSummary' in html and 'export function completeTip' in html and 'Core.printedEdge' in read('tests/unit.cases.mjs') and 'Core.completeTip' in read('tests/unit.cases.mjs'))
 check('the wallet breaks results down by origin', "'Sem origem'" in html and 'por origem' in spec)
 
 # 5d1c. warnings before the batch, corrections, origins, period and what closed since last time
-hist = read('src/core/history.ts'); rnd = read('src/app/render.ts'); unit_src = read('tests/unit.py')
+hist = read('src/core/history.ts'); rnd = read('src/app/render.ts'); unit_src = read('tests/unit.cases.mjs')
 check('a warning keeps a bet out of the batch until the person says so', "const held = (dups.length > 0 || !!twin || low) && !o.force;" in imp_src and "&& !held;" in imp_src and 'sem aviso pendente' in spec and '"Apostar mesmo assim"' in spec)
 check('the odd floor offers what the spec says, and is off until chosen', '[0, 3, 5, 10].map(' in rnd and 'x === 3 || x === 5 || x === 10' in html and 'entre desligada, 3%, 5% e 10%' in spec and "copyDrop?: 3 | 5 | 10" in html)
 check('the odd floor is a setting: kept by a reset and by a backup', "isDrop(o.copyDrop) ? { copyDrop: o.copyDrop }" in html and '`unitPct`, `stakeIn`, `theme`, `corners` e `copyDrop`' in spec)
@@ -164,6 +164,16 @@ check('without a new name an origin is not renamed', "if (!from || !name || name
 check('an odd with a colon needs one digit before it, the end of the line and no date', r"oddColon: /(?:^|\s)(\d)[:;](\d{2,3})\s*$/" in html and 'TIP.date.test(line) ? null' in html and 'com um dígito antes dos dois-pontos' in spec)
 check('the questions asked of the history have tests', all(('Core.' + f) in unit_src for f in ('selSig', 'dupBets', 'exposure', 'copyDrop', 'byOrigin', 'renameOrigin', 'periodBets', 'sinceSummary')))
 check('a bet against an open one is told by the joint model', 'p.J.prob([...mine, ...h.keys]) < 1e-9' in html and 'não têm desfecho em comum' in spec)
+
+# 5d1d. the core tested without a browser, the folded list, open bets by event, units by origin
+core_run = read('tests/core.mjs'); verify_sh = read('scripts/verify.sh')
+check('the two runners of the core read the same cases', "'unit.cases.mjs'" in read('tests/unit.py') and "from './unit.cases.mjs'" in core_run and '`tests/unit.cases.mjs`' in spec)
+check('the core is run without a browser on every verify, quick or full', 'run core     node tests/core.mjs' in verify_sh and verify_sh.index('run core     node tests/core.mjs') < verify_sh.index('run e2e-dark') and 'node tests/core.mjs' in spec)
+check('the Node runner traps what only a page has, as the spec says', "for (const name of ['window', 'document', 'localStorage', 'fetch'])" in core_run and '`window`, `document`, `localStorage` e `fetch`' in spec)
+check('the Node runner builds the core by itself with the tool that builds the app', "entry: path.join(root, 'src', 'core', 'index.ts')" in core_run and "from 'vite'" in core_run and 'tests/.build/' in read('.gitignore'))
+check('an item of the copy list starts folded when it is ready or a reference', "if (o.open == null) o.open = !(r.whole || r.ref);" in imp_src and 'o que está pronto, ou é só referência, vem recolhido' in spec)
+check('open bets by event and the units of an origin have tests', 'Core.openByEvent' in unit_src and 'r.units' in unit_src and '`Core.openByEvent`' in spec)
+check('units by origin use the unit each bet was placed with', "r.units += (b.payout - b.stake) / b.unit" in hist)
 
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')

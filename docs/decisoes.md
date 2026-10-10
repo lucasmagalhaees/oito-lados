@@ -39,6 +39,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 8. PR #11 mesclado às 11:06; o workflow `Produção` passou no commit `3331e05`. Às 14:54, usando o app com apostas de verdade para copiar: a "dupla" de um canal não foi reconhecida como múltipla, a foto de um cupom não foi reconhecida, e os pedidos de mandar várias fotos e fazer várias operações de uma vez, de um botão para limpar a tela de copiar, e de o leitor entender dupla, tripla, quádrupla e quíntupla, e simples contra múltipla (D43, D44). O Lucas mandou cinco prints reais para testar.
 9. PR #12 mesclado às 15:23; o workflow `Produção` passou no commit `228792e`. O Lucas pediu "propõe melhorias, 10 melhorias"; das dez propostas, respondeu "faz o 1 a 5": completar o acumulador na própria tela, juntar duas fotos numa aposta só, editar valor e tipo na lista, guardar de quem veio a aposta e medir por origem, e guardar a odd do print (D45 a D48). Mandou de novo os cinco prints como massa de teste e três capturas do iPhone, das 15:30, com a versão do PR #12 em produção: as fotos escolhidas de uma vez viraram lista com o card de verdade, os dois acumuladores ficaram com "só uma seleção lida" e cada foto aparecia com o nome de arquivo que o iPhone dá (um código de 36 caracteres).
 10. PR #13 mesclado às 16:01; o workflow `Produção` passou no commit `6886992`. O Lucas pediu "mais melhorias"; das dez propostas, respondeu "faz todos menos o 3" (ficou de fora guardar a odd de fechamento): D49 a D56. No meio, perguntou se dava para ter um retrospecto das últimas lutas de cada atleta, guardado no aparelho, e qual o peso disso na performance. Respondido com o que a ESPN oferece e o custo em chamadas (anotado na D57); **o retrospecto não foi implementado e espera ele mandar**.
+11. PR #14 mesclado às 16:45; o workflow `Produção` passou no commit `5d7d4e7`. Terceira leva de dez propostas; resposta: "Não faz: 1 8 7 6 9". Ficaram cinco: lista de copiar recolhida, apostas no card da luta, abertas agrupadas por evento, unidades por origem e os testes do núcleo sem navegador (D58 a D62). De fora, a pedido dele: lembrete de backup, aviso de amostra pequena, guardar o texto original da aposta, limite de exposição por evento e exportar em CSV.
+12. Com a terceira leva em andamento, entre 16:59 e 17:04, mais pedidos, **ainda não feitos e fora deste PR**: um botão para colar o texto da área de transferência; sugerir stake de 0,2u a 0,4u em múltipla com mais de quatro seleções; setinhas de meio em meio no campo de unidades; e uma revisão da regra de valor ao copiar ("tem que seguir o que foi parametrizado: ou segue a stake, ou segue o valor"; em unidades, print que não diz unidades vale 1u, e não o dinheiro do print, o que revê a D42), com a stake em unidades e a hora de cada aposta à vista para conferir o consolidado. E uma pergunta: dá para mandar notificação quando a aposta é resolvida? Respondida (D63).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -561,6 +563,60 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Não sabido:** o tamanho de cada resposta e se a ESPN limita rajada de chamadas.
 - **Decisão:** nenhuma ainda. O Lucas disse que avisa quando for para implementar. Antes do código, a regra 2 do `CLAUDE.md`: gravar a resposta real e pôr o caso em `tests/contract.py`.
 
+## D58. Lista de copiar em uma linha por item
+
+- **Contexto (10/10/2026):** item 2 da terceira leva. Com cinco fotos, cada uma com seleções, valor, tipo, avisos e botões, a tela de copiar ficou com muitas telas de altura, e o botão de apostar todas ia para o fim.
+- **Decisão:** numa lista de várias, cada item é uma linha: rótulo, situação, seleções e valor. O toque abre e fecha. Na primeira vez que aparece, o item que precisa de atenção vem aberto; o que está pronto, ou é só lista de referência, vem recolhido.
+- **Interpretações (confirmar com o Lucas):**
+  - Depois da primeira vez, só o toque muda. Um item aberto não se fecha sozinho quando deixa de ter aviso, para não sumir debaixo do dedo de quem acabou de tocar em "Apostar mesmo assim".
+  - O valor fica inteiro na linha; quem encolhe com reticências são as seleções.
+  - Com um item só não há linha: ele aparece inteiro, como antes.
+- **Consequência:** uma aposta pronta entra no lote sem que as seleções dela tenham sido vistas por extenso. A linha mostra as seleções e o valor, e o total está acima do botão.
+
+## D59. Suas apostas no card da luta
+
+- **Contexto (10/10/2026):** item 3. Na tela de Lutas não dava para saber em quais lutas já havia aposta.
+- **Decisão:** a luta com aposta aberta mostra "N apostas · R$ X" no cabeçalho do card, e o toque leva à aba Apostas.
+- **Interpretações (confirmar com o Lucas):** o valor é o mesmo do aviso da D54, com a múltipla contando inteira em cada luta dela (a soma das marcas do card passa do total em jogo); só aposta aberta conta; o toque abre a aba Apostas inteira, sem filtrar por aquela luta.
+
+## D60. Apostas abertas agrupadas por evento, na ordem das lutas
+
+- **Contexto (10/10/2026):** item 4. As abertas vinham da mais recente para a mais antiga, e copiando de vários canais a lista vira uma pilha sem ordem de uso.
+- **Decisão:** as abertas são agrupadas por evento, o que começa primeiro em cima. Dentro do evento, vem na frente a aposta cuja primeira luta acontece antes; entre lutas do mesmo horário, o lugar da luta no card decide. Cada grupo diz quantas apostas tem, quanto está em jogo e quanto paga se todas baterem. As encerradas não mudam.
+- **O que se perde, sabido:** a aposta recém-feita deixa de aparecer no topo. Depois de apostar, a tela continua indo para a aba Apostas, mas a aposta nova pode estar mais abaixo.
+- **Interpretações (confirmar com o Lucas):**
+  - A ordem é pela **primeira** luta da aposta, mesmo que ela já tenha acabado e a múltipla siga aberta por outra.
+  - Múltipla entre eventos vai num grupo "Vários eventos", posto pela data da primeira luta dela.
+  - "Se todas baterem" é a soma dos retornos, que apostas uma contra a outra não conseguem pagar juntas. O número é um teto, não uma previsão.
+
+## D61. Resultado em unidades por origem
+
+- **Contexto (10/10/2026):** item 5. A tabela por origem mostrava dinheiro e ROI, e uma aposta grande decide os dois. Para comparar canais, a régua é a unidade.
+- **Decisão:** embaixo do resultado em dinheiro de cada origem vai o resultado em unidades, somando `(payout − stake) / unit` com a unidade do dia de cada aposta, a mesma conta do total da Carteira (D24).
+- **Limite:** aposta antiga, sem `unit`, fica fora da soma em unidades e dentro da soma em dinheiro, como já acontece no total.
+
+## D62. Os casos do núcleo rodando sem navegador
+
+- **Contexto (10/10/2026):** item 10, que estava nas ideias desde a D33. Na proposta eu disse que isso deixaria a verificação mais rápida. **Medi antes de fazer e não é verdade:** o `tests/unit.py` leva 1,3 s.
+- **Decisão:** feito mesmo assim, pelo que ele de fato entrega. Os casos saíram de dentro do `tests/unit.py` para `tests/unit.cases.mjs`, e dois executores rodam os mesmos casos:
+  - `tests/unit.py`, no navegador, contra a página gerada. Continua sendo o que testa o que vai para o ar e o que conta para a cobertura.
+  - `tests/core.mjs`, no Node: constrói `src/core` sozinho com o mesmo Vite, arma `window`, `document`, `localStorage` e `fetch` para estourarem se forem tocados, e roda os casos. Leva 0,7 s e entra no `verify.sh`, rápido e completo.
+- **O que se ganha:** a prova de que o núcleo roda fora da página, que até aqui era só uma busca de texto no `docs_check.py`. É o que a etapa 2 do `escala.md` vai precisar se o núcleo for para um servidor. E os casos do núcleo passam a poder rodar sem Playwright.
+- **O que não se ganha:** tempo. A verificação ficou 0,7 s mais longa.
+- **Descartado:** tirar o `unit.py` (a cobertura é medida no navegador, sobre a página publicada; sem ele as funções do núcleo apareceriam como nunca chamadas) e passar os casos para TypeScript (muitos passam dados tortos de propósito; seria reescrever 451 casos para agradar o compilador).
+- **Exceção registrada:** o `core.mjs` é o único teste que não roda contra `dist/`.
+
+## D63. Notificação quando a aposta é resolvida: o que dá, e o que exige (não implementado)
+
+- **Contexto (10/10/2026):** "tem como mandar alguma notificação quando a aposta foi resolvida? Uma notificação tipo push? Se eu adicionar a página do Safari à minha tela inicial, é possível que chegue alguma notificação?"
+- **Conferido em 10/10/2026:**
+  - Desde o iOS 16.4, um app web adicionado à Tela de Início pode pedir permissão e receber Web Push; o pedido tem que vir de um toque. O que faz do site um app da Tela de Início é um manifest com `display` `standalone` ou `fullscreen`. Fonte: https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/
+  - Na Vercel, o plano Hobby só roda tarefa agendada uma vez por dia, com precisão de uma hora; de minuto em minuto, só no Pro. Fonte: https://vercel.com/docs/cron-jobs/usage-and-pricing
+- **O que isso quer dizer:** com o app fechado, nada no aparelho acorda a página. Alguém de fora tem que saber em quais lutas há aposta aberta, vigiar a ESPN e disparar o push. É um servidor, e sai do escopo da D11.
+- **Caminho proposto ao Lucas, em dois passos:** (1) `manifest.json`, ícone e o botão de permissão, sem servidor, para ver no iPhone dele se a parte da Apple funciona; (2) um disparador mínimo, que recebe do app só a inscrição do push e os ids das lutas com aposta aberta, e manda "a luta acabou". O resultado em dinheiro continuaria calculado no app.
+- **Não sabido:** onde rodar de graça com a frequência necessária, e se a ESPN responde a um servidor desses (ela recusa navegador automatizado).
+- **Decisão:** nenhuma. Espera o Lucas.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -574,6 +630,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
+| Dizer se quer o primeiro passo das notificações (manifest, ícone e botão de permissão) (D63) | Lucas |
+| Confirmar as interpretações da terceira leva: item pronto recolhido de início, a aposta nova fora do topo das abertas, a ordem pela primeira luta e a marca do card contando a múltipla inteira (D58 a D60) | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
 | Confirmar o padrão Automático do tema (D38) | Lucas |
 | Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |

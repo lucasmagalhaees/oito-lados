@@ -62,7 +62,7 @@ O custo que pesa não é esse: é manter login, banco e liquidação no servidor
 
 O que ficou de fora e continua valendo como próximo passo:
 
-- Os casos de `tests/unit.py` como testes do `core` num executor de TypeScript, rodando sem navegador. Hoje eles rodam pelo navegador contra a página gerada.
+- ~~Os casos do núcleo rodando sem navegador.~~ Feito em 10/10/2026 (D62): os casos estão em `tests/unit.cases.mjs` e rodam no Node (`tests/core.mjs`) contra o núcleo construído sozinho, além de continuarem rodando no navegador contra a página gerada. Continuam em JavaScript; passá-los para TypeScript não foi feito.
 - Separar `src/app/` em camadas mais limpas (`espn/`, `store/`, `ui/`). Hoje os módulos seguem as seções do script antigo e se importam em círculo.
 - O resto da PWA: `manifest.json` e ícone em arquivo. O service worker foi feito em 10/10/2026 (D37).
 
