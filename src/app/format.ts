@@ -30,6 +30,8 @@ export const fo = (o: unknown): string => Number(o).toFixed(2);
 export const fu = (x: number): string => (Math.round(x * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'u';
 export const signedU = (x: number): string => (x > 0.004 ? '+' : x < -0.004 ? '−' : '') + fu(Math.abs(x));
 export const pctText = (v: unknown): string => String(v).replace('.', ',');
+/** A share as a signed percentage with one decimal: 0.0119 is "+1,2%". */
+export const signedPct = (d: number): string => { const v = Math.round(d * 1000) / 10; return (v > 0 ? '+' : v < 0 ? '−' : '') + pctText(Math.abs(v).toFixed(1)) + '%'; };
 const nodot = (f: Intl.DateTimeFormat) => ({ format: (t: number): string => f.format(t).replace('.', '') });
 export const dWhen = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 export const dDay = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));

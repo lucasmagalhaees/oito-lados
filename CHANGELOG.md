@@ -2,6 +2,20 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.8.0] - 2026-10-10
+
+### Adicionado
+- Copiar aposta completa o cupom de acumulador que só mostra a primeira seleção: sozinho, quando a foto da lista de seleções vem junto ("Completada com a foto N", com desfazer); com um toque, a partir de outro item da lista; ou à mão, num seletor com os mercados da luta.
+- Conferência das odds do acumulador completado: mostra a multiplicação das seleções e diz se bate com a odd do cupom.
+- Valor e tipo (simples ou múltipla) de cada aposta podem ser mudados na própria lista, antes de apostar todas.
+- Campo "De quem é" na tela de copiar. A origem fica na aposta, aparece na lista de apostas, e a Carteira mostra o resultado por origem.
+- A odd do print fica guardada com a aposta. A lista de apostas mostra "odd do print X, você pegou Y", e a Carteira a diferença média.
+
+### Alterado
+- As fotos da lista aparecem como "Foto 1", "Foto 2", no lugar do nome de arquivo do celular.
+- "Apostar as N de uma vez" só inclui aposta com valor dito no original ou digitado. Antes, uma lista de seleções sem valor entrava com 1u.
+- A lista de seleções que serviu para completar outra aposta fica fora do lote e sai da lista junto com ele.
+
 ## [0.7.0] - 2026-10-10
 
 ### Adicionado

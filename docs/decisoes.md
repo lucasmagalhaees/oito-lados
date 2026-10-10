@@ -37,6 +37,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 6. Entre 10:31 e 10:38, com o app já publicado na mão: as cores de + e − nas quedas "não ficaram boas, estão destoando do tom de vermelho e azul" (D41); "quero opções de temas de cores para os corners, pode ser azul × vermelho, verde × rosa, roxo × laranja", com padrão separado para lutas femininas e masculinas (D40); "a mesma stake não precisa desse campo para inserir valor" e "sempre que eu escolher mesmo valor, fixa a opção acima para reais; se escolher mesma stake, fica a opção acima para unidades" (D42).
 7. O Lucas pediu para revisar se as alterações faziam sentido e um code review "como se fosse análise de negócio e como se fosse tech lead". A revisão está no PR; dois achados viraram código (a tela de copiar diz o que ficou de fora quando o original traz unidades e dinheiro; a lista de configurações passou a existir num lugar só).
 8. PR #11 mesclado às 11:06; o workflow `Produção` passou no commit `3331e05`. Às 14:54, usando o app com apostas de verdade para copiar: a "dupla" de um canal não foi reconhecida como múltipla, a foto de um cupom não foi reconhecida, e os pedidos de mandar várias fotos e fazer várias operações de uma vez, de um botão para limpar a tela de copiar, e de o leitor entender dupla, tripla, quádrupla e quíntupla, e simples contra múltipla (D43, D44). O Lucas mandou cinco prints reais para testar.
+9. PR #12 mesclado às 15:23; o workflow `Produção` passou no commit `228792e`. O Lucas pediu "propõe melhorias, 10 melhorias"; das dez propostas, respondeu "faz o 1 a 5": completar o acumulador na própria tela, juntar duas fotos numa aposta só, editar valor e tipo na lista, guardar de quem veio a aposta e medir por origem, e guardar a odd do print (D45 a D48). Mandou de novo os cinco prints como massa de teste e três capturas do iPhone, das 15:30, com a versão do PR #12 em produção: as fotos escolhidas de uma vez viraram lista com o card de verdade, os dois acumuladores ficaram com "só uma seleção lida" e cada foto aparecia com o nome de arquivo que o iPhone dá (um código de 36 caracteres).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -436,6 +437,47 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - Fechar a tela não apaga a lista nem o texto; "Limpar" apaga. Antes, fechar apagava o resultado.
 - **Descartado:** fila que carrega uma aposta por vez no cupom (seriam N toques em "Apostar", e o pedido foi "de uma vez").
 
+## D45. Completar o acumulador: pela foto da lista de seleções, por outro item ou à mão
+
+- **Contexto (10/10/2026):** itens 1 e 2 das melhorias ("faz o 1 a 5"). O cupom de acumulador imprime os dois eventos e o mercado só do primeiro (D43), então a aposta ficava pela metade e fora do lote. As capturas do iPhone mostraram isso acontecendo em produção com os dois acumuladores. Na mesma leva de fotos o Lucas manda a lista de seleções da casa, que tem a seleção que falta e a odd de cada uma.
+- **Decisão:** para cada luta que o original cita sem dizer a aposta, três caminhos, todos passando por `Core.completeTip`:
+  - **Sozinho:** se outro item da lista é uma *lista de seleções* (não diz valor nem tipo) e traz uma seleção para aquela luta, ela é usada. Aparece marcada "Completada com a foto N", com "desfazer".
+  - **Um toque:** cada seleção de outro item para aquela luta vira um botão "Usar da foto N".
+  - **À mão:** um seletor com todos os mercados daquela luta e a odd de agora.
+- **A lista de seleções vira referência:** a que serviu para completar outra aposta fica fora do lote e sai junto quando o lote é feito. Ela também empresta ao cupom a odd impressa de cada seleção.
+- **Conferência:** se todas as seleções têm odd no print e o cupom dá a odd da aposta, a tela mostra a multiplicação e diz se bate (tolerância de 0,6%, para o arredondamento da casa). É a prova de que a seleção completada é a do original.
+- **Mudou em relação à proposta:** o item 2 era "juntar duas fotos numa aposta só", com um botão. Virou preenchimento automático, porque com cinco fotos escolher os pares à mão dá mais trabalho que o problema. O "desfazer" e o botão por item cobrem o caso em que o automático erra.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Só uma lista **sem valor e sem tipo** completa sozinha. Uma simples de outra foto com a mesma luta não é usada sem toque: pode ser outra aposta na mesma luta.
+  - Se duas listas discordam sobre a luta, nada é preenchido sozinho.
+  - Desfeito um preenchimento automático, ele não volta sozinho naquele item.
+  - Uma lista em que o valor foi digitado passa a ser aposta e deixa de completar as outras sozinha.
+- **O que continua valendo da D43:** o leitor não inventa seleção. Sem lista e sem escolha, o acumulador fica incompleto e avisado.
+
+## D46. Mudar valor e tipo na própria lista; lote só com valor dito ou digitado (revê a D44)
+
+- **Contexto (10/10/2026):** item 3 das melhorias. Para mudar o valor de uma das fotos era preciso levá-la ao cupom, o que desfazia o "de uma vez".
+- **Decisão:** cada item da lista tem um campo com o valor (em dinheiro ou em unidades, conforme "Valor das apostas") e, com mais de uma seleção, a escolha entre múltipla e simples. Campo vazio volta ao que o original diz.
+- **Revê a D44:** lá, entrava no lote toda aposta inteira com valor de pelo menos 1, inclusive o "1u" presumido de um original sem valor. Agora só entra no lote a que tem valor **dito pelo original ou digitado**. Motivo: com as cinco fotos reais, as duas listas de seleções (sem valor) virariam duas múltiplas de 1u apostadas junto, sem ninguém ter pedido. No cupom o "1u" presumido continua valendo, porque lá a pessoa vê e confirma.
+- **Fotos numeradas:** "Foto 1", "Foto 2", na ordem em que foram lidas. O nome de arquivo do iPhone é um código, como as capturas mostraram, e "Completada com a foto 2" precisa de um nome que a pessoa reconheça. "Limpar" recomeça a contagem.
+- **Interpretação (confirmar com o Lucas):** em "simples" com várias seleções, o valor do campo é o de cada aposta, não o total.
+
+## D47. De quem é a aposta, e resultado por origem
+
+- **Contexto (10/10/2026):** item 4 das melhorias. O Lucas copia apostas de canais; saber qual canal dá resultado é a razão de usar o simulador.
+- **Decisão:** um campo opcional "De quem é" na tela de copiar, com as origens já usadas como sugestão. Vale para toda aposta que sai dali, pelo cupom ou pelo lote, e fica em `from` na aposta. A lista de apostas mostra "De X". A Carteira ganha uma tabela por origem (apostas, apostado, resultado, ROI, acerto), que aparece quando existe aposta encerrada com origem; as sem origem ficam numa linha "Sem origem".
+- **Descartado:** tentar adivinhar a origem pelo texto ou pelo print (nenhum dos originais mandados diz de que canal veio) e cadastro de canais (uma lista de sugestões resolve para um usuário).
+- **Interpretações (confirmar com o Lucas):** a origem é texto livre, com até 40 caracteres, e duas grafias são duas origens; o campo fica preenchido enquanto a tela não for limpa; uma aposta repetida pelo botão "Repetir aposta" não herda a origem; cashout entra no resultado e fica fora do acerto, como no resto da Carteira.
+- **Consequência:** `from` é um campo novo na aposta. Aposta antiga não tem e cai em "Sem origem".
+
+## D48. A odd do print fica guardada com a aposta
+
+- **Contexto (10/10/2026):** item 5 das melhorias. A odd do original aparecia na tela de copiar e se perdia quando a aposta era feita. Sem ela não dá para saber se a aposta copiada saiu melhor ou pior que a de quem publicou.
+- **Decisão:** a odd impressa de cada seleção vai em `printed` na perna e, quando o original dá uma odd para a aposta inteira, em `printed` na aposta. `Core.printedEdge(bet)` compara com a odd pega: usa a odd da aposta inteira se houver; senão a das seleções, multiplicadas quando são de lutas diferentes. A lista de apostas mostra "odd do print X, você pegou Y (±%)" e a Carteira a média e quantas saíram acima (`Core.edgeSummary`).
+- **Cuidado:** entre a tela de copiar e o botão "Apostar" o cupom pode mudar. A odd da aposta inteira só é gravada se as seleções do cupom ainda são exatamente as do original, e o que veio do print (`slip.copy`) é apagado quando o cupom esvazia, quando uma aposta é repetida e quando o cupom é começado à mão.
+- **O que a comparação não diz:** a diferença mistura a casa (o print é de outra casa; aqui a odd é a da ESPN, ou estimada) com o tempo entre a publicação e a cópia. Combinada na mesma luta sem odd da aposta inteira fica fora da conta, porque multiplicar as pernas não é o preço dela (D6).
+- **Interpretação (confirmar com o Lucas):** a média da Carteira é simples, uma aposta um voto, sem pesar pelo valor apostado.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -445,6 +487,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |
 | Confirmar as interpretações do leitor (várias seleções sem tipo dito viram múltipla; "simples" com várias vira várias simples) e do lote (D43, D44) | Lucas |
+| Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
+| Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
 | Confirmar o padrão Automático do tema (D38) | Lucas |
 | Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |

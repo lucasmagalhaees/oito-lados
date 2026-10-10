@@ -6,7 +6,7 @@
    What one unit is worth to whoever made the print is not known and is not asked for. */
 import { r2 } from './odds';
 import { parseMoney } from './money';
-import type { Fight, Fighter, Side, Tip, TipStake, TipStakeIn } from './types';
+import type { Bet, Fight, Fighter, Leg, Side, Tip, TipPick, TipStake, TipStakeIn } from './types';
 
 export function tipStake(stake: TipStakeIn, mode: unknown, unit: unknown): TipStake {
   const u = Math.max(0, Number(unit) || 0);
@@ -174,4 +174,36 @@ export function parseTip(text: unknown, fights: TipFight[]): Tip {
   for (const s of sels) out.items.push({ fid: s.f.id, key: s.mk.key, assumed: !!s.mk.assumed, printedOdd: s.odd, quote: raw[s.start] });
   if (out.kind === 'multi' && out.legs && out.items.length < out.legs && !out.problems.length) out.problems.push({ code: 'short', want: out.legs, got: out.items.length });
   return out;
+}
+
+/* ---------- completing a tip ----------
+   A slip of a multiple often prints its events and the market of the first one only. The selections that are missing
+   can be filled in, one per fight the tip names without a bet: chosen by hand, or taken from another original. */
+export function completeTip(tip: Tip, picks: TipPick[]): Tip {
+  const items = tip.items.slice(), open = new Set(tip.problems.filter(p => p.code === 'nomarket' && p.fid).map(p => p.fid as string));
+  for (const p of picks) {
+    if (!open.has(p.fid)) continue;                       // not a fight this tip is waiting on, or already filled
+    open.delete(p.fid);
+    items.push({ fid: p.fid, key: p.key, printedOdd: p.printedOdd && p.printedOdd > 1 ? p.printedOdd : null, assumed: false, quote: '' });
+  }
+  const problems = tip.problems.filter(p => p.code !== 'short' && !(p.code === 'nomarket' && p.fid && !open.has(p.fid)));
+  if (tip.kind === 'multi' && tip.legs && items.length < tip.legs && !problems.length) problems.push({ code: 'short', want: tip.legs, got: items.length });
+  return { ...tip, items, problems };
+}
+
+/* ---------- the odd of the original, kept with a copied bet ----------
+   What the original printed against what the bet was placed at. The odd of the whole bet is used when the original gave
+   one; otherwise the odds of the selections, multiplied when each is from a different fight. */
+type Copied = Pick<Bet, 'type' | 'odd'> & { printed?: unknown; legs: Pick<Leg, 'fid' | 'printed'>[] };
+export function printedEdge(bet: Copied): { printed: number; got: number; diff: number } | null {
+  const whole = Number(bet.printed), legs = bet.legs || [];
+  let printed = whole > 1 ? whole : 0;
+  if (!printed && legs.length && legs.every(l => Number(l.printed) > 1) && new Set(legs.map(l => l.fid)).size === legs.length) printed = Math.round(legs.reduce((p, l) => p * Number(l.printed), 1) * 1000) / 1000;
+  if (!(printed > 1) || !(bet.odd > 1)) return null;
+  return { printed, got: bet.odd, diff: Math.round((bet.odd / printed - 1) * 1e4) / 1e4 };
+}
+/** Over a set of bets: how many can be compared, the average difference and how many were placed above the printed odd. */
+export function edgeSummary(bets: Copied[]): { n: number; avg: number; ahead: number } {
+  const ds = bets.map(printedEdge).filter((e): e is NonNullable<typeof e> => !!e).map(e => e.diff);
+  return { n: ds.length, avg: ds.length ? Math.round(ds.reduce((a, d) => a + d, 0) / ds.length * 1e4) / 1e4 : 0, ahead: ds.filter(d => d > 0).length };
 }

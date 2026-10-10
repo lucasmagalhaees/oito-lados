@@ -3,7 +3,7 @@ import { loadOdds } from './api';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
-import { clearImport, closeImport, dropOp, importImages, importToSlip, placeAll, renderImport, runImport } from './import';
+import { clearImport, closeImport, dropOp, importImages, importToSlip, modeFor, pickFor, placeAll, renderImport, runImport, stakeFor, unpickFor } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
 import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
@@ -88,11 +88,13 @@ document.addEventListener('click', e => {
   else if (a === 'pick') {
     const fid = d.fid as string, key = d.key as string, g = key.split(':')[0];
     const i = slip.sels.findIndex(s => s.fid === fid && s.key === key);
+    if (!slip.sels.length) slip.copy = null;                     // a slip started by hand is not a copy of anything
     if (i >= 0) slip.sels.splice(i, 1);
     else { slip.sels = slip.sels.filter(s => !(s.fid === fid && s.key.split(':')[0] === g)); slip.sels.push({ fid, key }); }
+    if (!slip.sels.length) slip.copy = null;
     ui.msg = ''; render();
   }
-  else if (a === 'unpick') { slip.sels = slip.sels.filter(s => !(s.fid === d.fid && s.key === d.key)); ui.msg = ''; if (!slip.sels.length) ui.sheet = false; renderSheet(); render(); }
+  else if (a === 'unpick') { slip.sels = slip.sels.filter(s => !(s.fid === d.fid && s.key === d.key)); ui.msg = ''; if (!slip.sels.length) { ui.sheet = false; slip.copy = null; } renderSheet(); render(); }
   else if (a === 'sheet') { ui.sheet = !ui.sheet; ui.msg = ''; renderSheet(); }
   else if (a === 'imp') { imp.open = true; imp.err = ''; imp.msg = ''; ui.sheet = false; renderImport(); }
   else if (a === 'impclose') { if (!imp.busy) closeImport(); }
@@ -101,6 +103,9 @@ document.addEventListener('click', e => {
   else if (a === 'impall') placeAll();
   else if (a === 'impdrop') { if (!imp.busy && !imp.placing) dropOp(Number(d.op)); }
   else if (a === 'impclear') { if (!imp.busy && !imp.placing) clearImport(); }
+  else if (a === 'impuse') pickFor(Number(d.op), d.fid as string, d.key as string, Number(d.from));
+  else if (a === 'impunpick') unpickFor(Number(d.op), d.fid as string);
+  else if (a === 'impmode') modeFor(Number(d.op), d.m);
   else if (a === 'mode') { slip.mode = d.m as Slip['mode']; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = d.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(d.v); setStakeMoney(v); showStake(); ui.msg = ''; slipSummary(); }
   else if (a === 'stu') { if (wallet().unit > 0) { setStakeUnits(Number(d.u)); showStake(); ui.msg = ''; slipSummary(); } }
@@ -137,7 +142,7 @@ document.addEventListener('click', e => {
     if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); applyTheme(); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, ...settingsOf(S) }); saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, ...settingsOf(S) }); saveS(); slip.sels = []; slip.copy = null; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 document.addEventListener('input', e => {
   const t = e.target as HTMLInputElement, typed = (e as InputEvent).data;
@@ -145,8 +150,15 @@ document.addEventListener('input', e => {
   else if (t.id === 'stakeu') { const u = Core.maskUnits(t.value); if (t.value !== u) t.value = u; setStakeUnits(Core.parseUnits(u)); slip.units = u; ui.msg = ''; slipSummary(); }
   else if (t.id === 'dep') ui.dep = applyMask(t, typed);
   else if (t.id === 'imptext') imp.text = t.value;
+  else if (t.id === 'impfrom') imp.from = t.value;
+  else if (t.classList.contains('opstake')) { const v = S.stakeIn === 'units' && wallet().unit > 0 ? Core.maskUnits(t.value) : Core.maskMoney(t.value); if (t.value !== v) t.value = v; }
 });
-document.addEventListener('change', e => { const t = e.target as HTMLInputElement; if (t.id === 'impfile') importImages([...(t.files || [])]); });
+document.addEventListener('change', e => {
+  const t = e.target as HTMLInputElement;
+  if (t.id === 'impfile') importImages([...(t.files || [])]);
+  else if (t.classList.contains('imppick')) pickFor(Number(t.dataset.op), t.dataset.fid as string, t.value);
+  else if (t.classList.contains('opstake')) stakeFor(Number(t.dataset.op), t.value);
+});
 document.addEventListener('paste', e => {
   if (!imp.open || imp.busy) return;
   const f = [...((e.clipboardData && e.clipboardData.files) || [])].find(x => /^image\//.test(x.type));

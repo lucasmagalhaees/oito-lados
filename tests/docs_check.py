@@ -138,6 +138,17 @@ check('the batch re-reads the source before writing, and writes nothing if it ca
 check('the batch prices each bet with the arithmetic of the slip', 'slipCalc()' in batch and '`slipCalc`' in spec)
 check('the slip and the batch write bets through the same function', read('src/app/render.ts').count('writeBets(') == 2 and batch.count('writeBets(') == 1)
 
+# 5d1b. completing, editing, origin and the printed odd
+check('a bet goes in the batch only with a value the original states or the person typed', "ts.value >= 1 && ts.how !== 'default'" in imp_src and 'veio do original ou foi digitado' in spec)
+check('only a list that says neither value nor kind fills in other bets by itself', "o.res.stake.kind === 'default' && o.res.kind === null && !o.stake" in imp_src and 'não diz valor nem tipo de aposta' in spec)
+check('lists that disagree fill in nothing', 'size !== 1) continue;' in imp_src and 'Se duas listas discordam, nada é preenchido sozinho' in spec)
+check('pictures are numbered, not named after their files', '`Foto ${++photoSeq}`' in imp_src and '"Foto 1"' in spec)
+check('a copied bet keeps its origin and the printed odds', "{ from: copy.from }" in html and "{ printed: copy!.bet }" in html and "{ printed: p }" in html and all(w in spec for w in ('`from`', '`printed`', '`slip.copy`')))
+check('the odd of the whole bet is only kept for the same selections', 'sameBet && copy!.bet' in html and 'ainda são exatamente as do original' in spec)
+check('a slip started by hand, emptied or repeated is not a copy', html.count('slip.copy = null') >= 6)
+check('the printed odd is compared in the core, with tests', 'export function printedEdge' in html and 'export function edgeSummary' in html and 'export function completeTip' in html and 'Core.printedEdge' in read('tests/unit.py') and 'Core.completeTip' in read('tests/unit.py'))
+check('the wallet breaks results down by origin', "'Sem origem'" in html and 'por origem' in spec)
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

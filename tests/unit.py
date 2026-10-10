@@ -372,6 +372,33 @@ JS = r"""
   eq('tip: a channel "quíntupla"', (r => [r.items.length, r.items.every(i => /^ml:/.test(i[1]) && !i[3] && i[2] === null), r.odd, r.kind, r.legs, r.problems])(joined('QUÍNTUPLA', ['Marina Teles', 'Caio Brandt', 'Connor Lee Dunne', 'Leo Vance', 'Nina Kovac'])), [5, true, 4.2, 'multi', 5, []]);
   eq('tip: a "tripla" with only two selections found says one is missing', joined('TRIPLA', ['Marina Teles', 'Fulano de Tal', 'Connor Lee Dunne']).problems, [{ code: 'short', want: 3, got: 2 }]);
   eq('tip: a multiple that names as many as it should has nothing to report', joined('DUPLA', ['Marina Teles', 'Connor Lee Dunne']).problems, []);
+
+  /* completing a slip that names a fight without saying the bet: by hand, or with the selection another original gives */
+  const ACCA = Core.parseTip("Eventos: 2 (finalizado 0)\nRafael Almeida - Connor Lee Dunne\nCaio Brandt - Dario Kessler\nTipo de aposta Acumulador\n1X2: V1: Rafael Almeida - Connor Lee Dunne 1.614\nAposta 1850 BRL", card3);
+  const tipShape = r => ({ items: r.items.map(i => [i.fid, i.key, i.printedOdd, i.assumed]), odd: r.odd, kind: r.kind, legs: r.legs, stake: r.stake, problems: r.problems });
+  eq('complete: the selection chosen for the fight the slip does not describe', tipShape(Core.completeTip(ACCA, [{ fid: 'f2', key: 'ml:a', printedOdd: 1.31 }])),
+     { items: [['f3', 'ml:a', null, false], ['f2', 'ml:a', 1.31, false]], odd: 1.614, kind: 'multi', legs: 2, stake: { kind: 'money', money: 1850 }, problems: [] });
+  eq('complete: chosen by hand, there is no printed odd', tipShape(Core.completeTip(ACCA, [{ fid: 'f2', key: 'mov:b:ko' }])).items, [['f3', 'ml:a', null, false], ['f2', 'mov:b:ko', null, false]]);
+  eq('complete: nothing chosen leaves the tip as it was read', tipShape(Core.completeTip(ACCA, [])), tipShape(ACCA));
+  eq('complete: the tip that was read is not changed', [Core.completeTip(ACCA, [{ fid: 'f2', key: 'ml:a' }]) !== ACCA, ACCA.items.length, ACCA.problems], [true, 1, [{ code: 'nomarket', fid: 'f2' }]]);
+  eq('complete: a choice for a fight the slip already describes, or does not name at all, is ignored', tipShape(Core.completeTip(ACCA, [{ fid: 'f3', key: 'ml:b' }, { fid: 'f1', key: 'ml:a' }])), tipShape(ACCA));
+  eq('complete: only the first choice for a fight counts', tipShape(Core.completeTip(ACCA, [{ fid: 'f2', key: 'ml:a' }, { fid: 'f2', key: 'ml:b' }])).items, [['f3', 'ml:a', null, false], ['f2', 'ml:a', null, false]]);
+  const ACCA3 = Core.parseTip("Eventos: 3\nRafael Almeida - Connor Lee Dunne\nCaio Brandt - Dario Kessler\nTipo de aposta Acumulador\n1X2: V1: Rafael Almeida - Connor Lee Dunne 2.10", card3);
+  eq('complete: once the fights it names are settled, a slip that should have more says so', Core.completeTip(ACCA3, [{ fid: 'f2', key: 'ml:a' }]).problems, [{ code: 'short', want: 3, got: 2 }]);
+  eq('complete: and while one of them is still open, only that is reported', Core.completeTip(ACCA3, []).problems, [{ code: 'nomarket', fid: 'f2' }]);
+
+  /* the odd of the original, kept with the bet: what was printed against what was taken */
+  const pleg = (fid, odd, printed) => ({ fid, key: 'ml:a', odd, printed });
+  eq('printed odd: a single', Core.printedEdge({ type: 'single', odd: 1.7, legs: [pleg('f1', 1.7, 1.68)] }), { printed: 1.68, got: 1.7, diff: 0.0119 });
+  eq('printed odd: a multiple with the odd of the whole bet', Core.printedEdge({ type: 'multi', odd: 1.55, printed: 1.614, legs: [pleg('f1', 1.2), pleg('f2', 1.29)] }), { printed: 1.614, got: 1.55, diff: -0.0397 });
+  eq('printed odd: a multiple with an odd on every selection multiplies them', Core.printedEdge({ type: 'multi', odd: 1.6, legs: [pleg('f1', 1.2, 1.232), pleg('f2', 1.33, 1.31)] }).printed, 1.614);
+  eq('printed odd: the odd of the whole bet wins over the selections', Core.printedEdge({ type: 'multi', odd: 1.6, printed: 1.7, legs: [pleg('f1', 1.2, 1.232), pleg('f2', 1.33, 1.31)] }).printed, 1.7);
+  eq('printed odd: a multiple missing one is not compared', Core.printedEdge({ type: 'multi', odd: 1.6, legs: [pleg('f1', 1.2, 1.232), pleg('f2', 1.33)] }), null);
+  eq('printed odd: two selections of the same fight do not multiply', Core.printedEdge({ type: 'multi', odd: 3, legs: [pleg('f1', 1.5, 1.5), pleg('f1', 2.2, 2.2)] }), null);
+  eq('printed odd: none on the original, or nonsense', [{ type: 'single', odd: 2, legs: [pleg('f1', 2)] }, { type: 'single', odd: 2, legs: [pleg('f1', 2, 1)] }, { type: 'single', odd: 0, legs: [pleg('f1', 0, 1.5)] }, { type: 'single', odd: 2, printed: 'x', legs: [] }].map(Core.printedEdge), [null, null, null, null]);
+  const copiedBets = [{ type: 'single', odd: 2.1, legs: [pleg('f1', 2.1, 2)] }, { type: 'single', odd: 1.8, legs: [pleg('f2', 1.8, 2)] }, { type: 'single', odd: 3, legs: [pleg('f3', 3)] }];
+  eq('printed odd: over all copiedBets bets, the average difference and how many were ahead', Core.edgeSummary(copiedBets), { n: 2, avg: -0.025, ahead: 1 });
+  eq('printed odd: nothing to compare', Core.edgeSummary([copiedBets[2]]), { n: 0, avg: 0, ahead: 0 });
   eq('tip: fight found but no bet described', tip("Almeida x Dunne").problems, [{ code: 'nomarket', fid: 'f3' }]);
   eq('tip: over written with a plus', tip("Almeida x Dunne\n+2.5 rounds").items, one('f3', 'tot:o:2.5', null));
   eq('tip: under written with a minus sign', tip("Almeida x Dunne\n−2.5 rounds").items, one('f3', 'tot:u:2.5', null));
