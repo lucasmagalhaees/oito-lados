@@ -20,11 +20,26 @@ def start(page):
     cdp.send('Profiler.startPreciseCoverage', {'callCount': True, 'detailed': True})
     _sessions[id(page)] = cdp
 
+_kept = {}
+_ours = lambda result: [s for s in result if s['url'].endswith('/index.html')]
+
+def reload(page):
+    """Reload the page without losing what was measured before the reload.
+
+    A reload throws the page's script away, and the browser may drop that script's counters with it. On GitHub's runners
+    it did: everything exercised before the last reload came back as "never called" and coverage read 91.7% for code
+    that measures 97.2% here. It could not be reproduced on this machine (an older Chromium), so the cause is inferred
+    from which functions went missing. Reading the counters out before each reload does not depend on that guess."""
+    cdp = _sessions.get(id(page))
+    if cdp:
+        _kept.setdefault(id(page), []).extend(_ours(cdp.send('Profiler.takePreciseCoverage')['result']))
+    page.reload()
+
 def stop(page, name):
     cdp = _sessions.pop(id(page), None)
     if not cdp:
         return
-    scripts = [s for s in cdp.send('Profiler.takePreciseCoverage')['result'] if s['url'].endswith('/index.html')]
+    scripts = _kept.pop(id(page), []) + _ours(cdp.send('Profiler.takePreciseCoverage')['result'])
     OUT.mkdir(exist_ok=True)
     (OUT / f'{name}.json').write_text(json.dumps(scripts))
 

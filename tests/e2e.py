@@ -64,7 +64,7 @@ with sync_playwright() as p:
     pg.click('[data-act=convonly]'); assert bal().replace('\xa0', ' ') == 'US$ 0,00' and FX['calls'] == 0 and pg.locator('[data-act=convonly]').count() == 0, (bal(), FX['calls'])
     pg.click('[data-act=depcur][data-c=EUR]'); pg.fill('#dep', '80'); pg.click('[data-act=deposit]')
     assert bal().replace('\xa0', ' ') == '€ 80,00' and FX['calls'] == 0, (bal(), FX['calls'])
-    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'the currency must survive a reload: ' + bal()
+    cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'the currency must survive a reload: ' + bal()
     pg.click('[data-act=tab][data-tab=carteira]')
     # with money in the bankroll, depositing in another currency converts everything at the day's rate
     FX['down'] = True; pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxmsg')
@@ -101,7 +101,7 @@ with sync_playwright() as p:
     only = pg.evaluate('(() => { const S = window.__OL.S; return [S.deposits.map(d => d.v), S.conv.length, S.conv[1].from, S.conv[1].to, S.conv[1].rate]; })()')
     assert bal().replace('\xa0', ' ') == 'US$ 200,00' and only == [[100, 100], 2, 'BRL', 'USD', 0.2], (bal(), only)
     assert pg.inner_text('[data-act=deposit]') == 'Depositar' and pg.locator('[data-act=convonly]').count() == 0
-    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == 'US$ 200,00', 'a conversion without a deposit is saved: ' + bal()
+    cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == 'US$ 200,00', 'a conversion without a deposit is saved: ' + bal()
     pg.click('[data-act=tab][data-tab=carteira]'); pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxinfo b')
     pg.evaluate('window.__OL.FX.ts = 0'); FX['body']['rates']['USD'] = 0.25              # the same guard as a deposit: a rate nobody saw is shown first
     pg.click('[data-act=convonly]'); pg.wait_for_selector('#fxmsg'); assert 'A cotação mudou' in txt('#fxmsg') and bal().replace('\xa0', ' ') == 'US$ 200,00', (txt('#fxmsg'), bal())
@@ -178,7 +178,7 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=lutas]')
     pg.click('[data-act=imp]'); pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
     assert txt('#impvalue') == 'R$ 50,00 · 0,5u', 'a tip in units is not touched by the setting: ' + txt('#impvalue')
-    pg.click('[data-act=impclose]'); pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S')
+    pg.click('[data-act=impclose]'); cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
     assert pg.evaluate('JSON.stringify(window.__OL.S.tip)') == '{"mode":"units","srcUnit":1000}', 'the setting survives a reload'
     pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=same]'); assert 'Um print de R$ 1.000,00 vira uma aposta de R$ 1.000,00.' in txt('#tiphow'), txt('#tiphow')
     pg.click('.tabbar [data-tab=lutas]'); pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
@@ -216,7 +216,7 @@ with sync_playwright() as p:
     pg.click('[data-act=stq][data-v=max]'); assert pg.input_value('#stakeu') == '10' and 'R$ 1.000,00 · 10u' in txt('#slipsum'), txt('#slipsum')
     assert pg.locator('[data-act=stq]').count() == 1, 'in units the money shortcuts give way; only "Tudo" stays'
     shot('s17-em-unidades.png')
-    pg.fill('#stakeu', '1,25'); pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S')
+    pg.fill('#stakeu', '1,25'); cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
     assert pg.evaluate('window.__OL.S.stakeIn') == 'units', 'the way of typing the stake survives a reload'
     pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
