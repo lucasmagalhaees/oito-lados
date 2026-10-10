@@ -25,6 +25,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 17. Pedido de um botão para converter a banca sem depositar (ajuste na D28). Dúvida do Lucas sobre o modo "fixo" do valor de print (D29), explicada; ele ainda não disse se fica.
 18. O Lucas mesclou os PRs #4 a #7 em sequência e a produção ficou na versão do #4 (D32). Pedidos seguintes: atalhos de valor altos e valor em unidades (D30), print só com "mesmo valor" ou "mesma stake" (D29), + e − e cores dos lutadores (D31).
 19. Perguntas sobre mais de um usuário e sobre custo de backend, respondidas e anotadas em `docs/escala.md`. O Lucas pediu a migração para Vite + TypeScript (etapa 1 da escala), a fazer num PR separado.
+20. Migração feita no mesmo dia (D33), em cima do PR dos pedidos anteriores.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -95,6 +96,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Decisão:** `index.html` com HTML, CSS e JS. `Core` puro e isolado dentro dele.
 - **Descartado, por enquanto:** Vite, TypeScript e módulos (é a etapa 1 de `escala.md`).
 - **Consequência:** publicar é copiar um arquivo. O custo é o arquivo crescer.
+- **Revista pela D33** (mesmo dia): o código passou a ser TypeScript em módulos, com build. O que vai para o ar continua sendo um arquivo só.
 
 ## D11. MVP para um usuário; escala fica documentada
 
@@ -288,6 +290,23 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Regra de uso:** mesclar um PR por vez e esperar o deploy; quando um PR contém os anteriores, mesclar só ele.
 - **O que não se sabe:** se a Vercel sempre aponta a produção para o último deploy a terminar, ou se foi circunstância. Fato de terceiro, visto uma vez.
 
+## D33. Vite + TypeScript em módulos (etapa 1 da escala)
+
+- **Contexto:** em um dia o `index.html` passou de 1.600 linhas, com cashout dinâmico, câmbio, copiar aposta e unidades entrando em sequência. Perguntado se era a hora de migrar, o Lucas respondeu: "pode migrar então para Vite + TypeScript".
+- **Decisão:** o código saiu do `index.html` para `src/`, em TypeScript `strict`: `src/core/` com a lógica pura e `src/app/` com a página. Build pelo Vite 8.3.3 e TypeScript 7.0.2, em versões exatas.
+- **O que não mudou, de propósito:**
+  - O produto. Os mesmos testes passam com os mesmos números (340 unitários, saldo final de R$ 1.609,59 no ponta a ponta).
+  - O que vai para o ar continua sendo **um arquivo só** (`dist/index.html`, com script e estilo dentro). Assim os testes continuam abrindo a página do disco, o deploy continua sendo uma página estática e nada depende de outros arquivos chegarem.
+  - Sem framework e sem dependência em tempo de execução. Vite e TypeScript são só de build.
+- **Escolhas dentro da decisão:**
+  - **Sem minificar.** A cobertura é medida por nome de função e linha no arquivo gerado, e o que é testado é exatamente o que é publicado. São uns 125 kB; para um usuário, o tamanho não pesa.
+  - **Plugin próprio de um arquivo só**, com umas 25 linhas no `vite.config.js`, em vez do `vite-plugin-singlefile`: o pacote trazia uma dependência com aviso de segurança no `npm audit`.
+  - **Carimbo de commit na página** (`<meta name="ol-commit">`), que só passou a ser possível com um build. A checagem de produção (D32) deixou de comparar o arquivo por sha256 e passou a ler o carimbo.
+  - **`vite.config.js` em JavaScript**, para não precisar dos tipos do Node só por causa de um arquivo de configuração.
+- **O que ficou para depois:** passar os casos de `tests/unit.py` para um executor de testes de TypeScript sem navegador (previsto na etapa 1 do `escala.md`); PWA. Os testes atuais continuam valendo porque exercitam a página gerada.
+- **Consequência:** publicar passou a depender de um build na Vercel (`npm ci`, `npm run build`). Se o build falhar lá, a produção fica na versão anterior.
+- **Como a migração foi feita:** o script antigo foi cortado nas próprias seções, cada corte virou um módulo, e só depois vieram os tipos. Antes de tipar, a página gerada já passava em todos os testes; depois de tipar, passou de novo. Três trechos foram reescritos para o compilador aceitar, sem mudar o resultado: `legOutcome` (uma variável para "o resultado, se a luta acabou"), `slipCalc` (o preço da combinada lido só quando ela é válida) e `doCashout` (a oferta calculada uma vez antes de pedir confirmação).
+
 ## Pendências em 09/10/2026
 
 | Pendência | Quem resolve |
@@ -297,7 +316,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e de + / − e cores (D31) | Lucas |
-| Ver o workflow `Produção` rodar no primeiro merge depois dele, e se o runner do GitHub alcança a produção | Quem fizer o próximo merge |
+| Ver o workflow `Produção` rodar no modo estrito no primeiro merge depois dele | Quem fizer o próximo merge |
+| Ver o primeiro build da migração na Vercel (prévia do PR) e conferir o carimbo de commit na página publicada | Quem abrir o PR da migração |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

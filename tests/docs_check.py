@@ -16,7 +16,11 @@ def check(name, cond, detail=''):
     if not cond:
         fails.append(f'{name}{": " + str(detail) if detail else ""}')
 
-html, spec, readme = read('index.html'), read('CLAUDE.md'), read('README.md')
+SRC = sorted((ROOT / 'src').rglob('*.ts'))
+src_of = lambda rel: (ROOT / 'src' / rel).read_text(encoding='utf-8')
+# the code the documentation talks about: every TypeScript module, in a stable order, plus the page skeleton
+html = '\n'.join(p.read_text(encoding='utf-8') for p in SRC) + '\n' + read('index.html')
+spec, readme = read('CLAUDE.md'), read('README.md')
 MD = [p for p in ROOT.rglob('*.md') if '.git/' not in p.as_posix() and 'node_modules' not in p.as_posix()]
 
 # 1. every relative link in every markdown file points at something that exists
@@ -41,7 +45,7 @@ for rel in set(re.findall(r'`((?:tests|docs|scripts|\.github|\.claude)/[\w./-]+)
         continue                      # branch-name patterns such as docs/..., and output that only exists after a test run
     check('documented path exists', (ROOT / rel).exists(), rel)
 
-# 4. numbers quoted in the spec are the numbers in the code: (regex over index.html, text that must be in CLAUDE.md)
+# 4. numbers quoted in the spec are the numbers in the code: (regex over src/, text that must be in CLAUDE.md)
 CONSTANTS = [
     (r'const MARGIN = 1\.07;', 'Margens: 7%'),
     (r'const COMBO_MARGIN = 1\.10;', '10% nas combinadas'),
@@ -59,12 +63,12 @@ CONSTANTS = [
     (r'D\.finalSeen\[f\.id\] > 120e3 \|\| now - f\.date > 6 \* H', '2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário)'),
     (r'now - f\.date > 2 \* DAY && D\.results\[f\.id\]\) D\.results\[f\.id\]\.tdUnavailable = true', 'Sem estatística por 2 dias: anula'),
     (r'Date\.now\(\) > l\.date \+ 36 \* H', 'anula 36 h depois do horário'),
-    (r'res\.time === 150\) return \'void\'', 'exatamente 2:30 anula'),
+    (r'end\.time === 150\) return \'void\'', 'exatamente 2:30 anula'),
     (r'const UNIT_PCT_DEFAULT = 10;', 'O padrão é 10% da banca'),
     (r'clamp\(r2\(n\), 0\.1, 100\)', 'de 0,1% a 100%'),
     (r'\[0\.5, 1, 2, 3\]\.map\(u =>', 'atalhos de 0,5u, 1u, 2u e 3u'),
-    (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
-    (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
+    (r"const CUR: Record<Currency, string> = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
+    (r'\.slice\(0, 2\);\n\}\nexport function parseMoney', 'no máximo duas casas'),
     (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
     (r'\[10, 50, 100\]\.map\(v => `<button data-act="stq"', '+10, +50, +100,'),
     (r'\[10000, 100000, 1000000\]\.map\(v => `<button data-act="stq"', '+10.000, +100.000 e +1.000.000'),
@@ -77,9 +81,11 @@ for pattern, text in CONSTANTS:
 
 # 5. selection keys: the table in the spec, the settlement switch and the combo predicates name the same families
 doc_keys = set(re.findall(r'^\| `(\w+):', spec, re.M))
-settle = set(re.findall(r"case '(\w+)':", html[html.index('function legOutcome'):html.index('function betResult')]))
-preds = set(re.findall(r"case '(\w+)':", html[html.index('function pred(q)'):html.index('const tdOk')])) | {'td', 'tda'}
-priced = set(re.findall(r"id: '(\w+)', cat:", html))
+settlement = src_of('core/settlement.ts')
+settle = set(re.findall(r"case '(\w+)':", settlement[settlement.index('function legOutcome'):settlement.index('function betResult')]))
+pricing = src_of('core/pricing.ts')
+preds = set(re.findall(r"case '(\w+)':", pricing[pricing.index('function pred('):pricing.index('const tdOk')])) | {'td', 'tda'}
+priced = set(re.findall(r"id: '(\w+)', cat:", pricing))
 check('spec key table matches settlement', doc_keys == settle, f'{sorted(doc_keys)} vs {sorted(settle)}')
 check('settlement matches combo predicates', settle == preds, f'{sorted(settle)} vs {sorted(preds)}')
 check('every priced market can be settled', priced == settle, f'{sorted(priced)} vs {sorted(settle)}')
@@ -88,12 +94,12 @@ check('every priced market can be settled', priced == settle, f'{sorted(priced)}
 spec_status = set(re.search(r"status: ((?:'\w+'\|?)+), payout", spec).group(1).replace("'", '').split('|'))
 code_status = set(re.findall(r"status(?: ===|:) '(\w+)'", html)) | {'open'}
 check('bet statuses in the spec match the code', spec_status == code_status, f'{sorted(spec_status)} vs {sorted(code_status)}')
-cash_fn = html[html.index('function cashout(bet, legs, probOf)'):html.index('return { r2, am2dec')]
+cash_fn = src_of('core/cashout.ts')
 code_why = set(re.findall(r"why: '(\w+)'", cash_fn))
 spec_why = set(re.findall(r'^\| `(\w+)` \| ', spec[spec.index('## Cashout'):spec.index('## Sincronização')], re.M))
 spec_why.discard('why')                       # the table header
 check('cashout reasons in the spec match the code', code_why == spec_why, f'{sorted(code_why)} vs {sorted(spec_why)}')
-check('every cashout reason the user can hit has a message', all(f'{w}:' in html[html.index('const CASH_WHY'):html.index('const cashoutOf')] for w in code_why - {'closed'}))
+check('every cashout reason the user can hit has a message', all(f'{w}:' in src_of('app/cashout.ts')[src_of('app/cashout.ts').index('const CASH_WHY'):src_of('app/cashout.ts').index('const cashoutOf')] for w in code_why - {'closed'}))
 check('with nothing decided the cashout is the stake', "if (!won) return { ok: true, kind: 'refund', value: bet.stake };" in cash_fn)
 check('a market cashout never pays more than the bet could', 'Math.min(full, r2(full * prob * (1 - CASHOUT_MARGIN)))' in cash_fn)
 check('spec documents both cashout kinds', "`kind: 'refund'`" in spec and "`kind: 'market'`" in spec)
@@ -113,19 +119,36 @@ if lib.exists() and sri:
     real = 'sha384-' + base64.b64encode(hashlib.sha384(lib.read_bytes()).digest()).decode()
     check('integrity hash matches the pinned OCR file', real == sri.group(1), f'{real} vs {sri.group(1)}')
 # 5d. the setting for copied bets: the modes in the spec table are the modes in the code
-code_modes = re.search(r"const TIP_MODES = \[([^\]]+)\];", html)
+code_modes = re.search(r"const TIP_MODES[^=]*= \[([^\]]+)\];", html)
 spec_modes = re.findall(r'^  \| `(\w+)`', spec[spec.index('## Copiar aposta'):spec.index('## Sincronização')], re.M)
 spec_modes = [m for m in spec_modes if m != 'mode']      # the table header
 check('copied-bet modes in the spec match the code', bool(code_modes) and [m.strip(" '") for m in code_modes.group(1).split(',')] == spec_modes, f'{code_modes and code_modes.group(1)} vs {spec_modes}')
 check('units field limits are the documented ones', ".slice(0, 4);" in html and 'no máximo 9999,99' in spec)
-side_fn = re.search(r"const sideOf = key => .*?\[([^\]]+)\]\.includes", html)
+side_fn = re.search(r"const sideOf = [^\[]*\[([^\]]+)\]\.includes", html)
 check('fighter-side families in the code are the ones the spec names', bool(side_fn) and [x.strip(" '") for x in side_fn.group(1).split(',')] == ['ml', 'mov', 'wr', 'tda'] and '(`ml`, `mov`, `wr` e `tda`;' in spec)
 check('production check waits and then holds for the documented time', "os.environ.get('OL_PROD_HOLD', 300)" in read('scripts/check_production.py') and 'continua olhando por 5 min' in spec)
+check('production check reads the stamp the build writes', 'name="ol-commit"' in read('scripts/check_production.py'))
 check('production workflow runs the check on pushes to main', 'scripts/check_production.py' in read('.github/workflows/producao.yml') and 'branches: [main]' in read('.github/workflows/producao.yml'))
 check('verify.sh self-tests the production check', 'check_production.py --selftest' in read('scripts/verify.sh'))
 fxs = sorted(p.name for p in (ROOT / 'tests' / 'fixtures' / 'fx').glob('*.json'))
 check('every recorded exchange-rate sample is listed in its README', bool(fxs) and all(f'`{n}`' in read('tests/fixtures/fx/README.md') for n in fxs), fxs)
 check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
+
+# 5e. the build: one self-contained page, exact versions, strict types, and a host that builds the same way
+pkg = json.loads(read('package.json'))
+check('build tools are pinned to exact versions', all(re.fullmatch(r'\d+\.\d+\.\d+', v) for v in pkg['devDependencies'].values()), pkg['devDependencies'])
+check('spec states the versions of the build tools', all(f'{name} {v}' in spec for name, v in (('Vite', pkg['devDependencies']['vite']), ('TypeScript', pkg['devDependencies']['typescript']))), pkg['devDependencies'])
+check('there is a lockfile for the build tools', (ROOT / 'package-lock.json').exists())
+tsconfig = json.loads(read('tsconfig.json'))
+check('TypeScript runs in strict mode', tsconfig['compilerOptions'].get('strict') is True and tsconfig['compilerOptions'].get('noUnusedLocals') is True, tsconfig['compilerOptions'])
+check('no module opts out of type checking', not any(re.search(r'@ts-(nocheck|ignore|expect-error)', p.read_text(encoding='utf-8')) for p in SRC))
+check('the core never touches the page, the network or storage', not any(re.search(r'\b(document|window|localStorage|fetch)\b', p.read_text(encoding='utf-8')) for p in SRC if '/core/' in p.as_posix()), [p.name for p in SRC if '/core/' in p.as_posix() and re.search(r'\b(document|window|localStorage|fetch)\b', p.read_text(encoding='utf-8'))])
+vite = read('vite.config.js')
+check('the build ships unminified, as the spec says', 'minify: false' in vite and 'sem minificar' in spec)
+check('the page carries the commit it was built from', '<meta name="ol-commit" content="__OL_COMMIT__">' in read('index.html') and 'VERCEL_GIT_COMMIT_SHA' in vite and '`<meta name="ol-commit">`' in spec)
+check('dist/ is built, not committed', 'dist/' in read('.gitignore').split())
+check('every documented source module exists', all((ROOT / 'src' / m).exists() for m in re.findall(r'`src/([\w/.-]+\.ts)`', spec)), [m for m in re.findall(r'`src/([\w/.-]+\.ts)`', spec) if not (ROOT / 'src' / m).exists()])
+check('every source module is documented', all(f'`src/{p.relative_to(ROOT / "src").as_posix()}`' in spec for p in SRC), [p.relative_to(ROOT / 'src').as_posix() for p in SRC if f'`src/{p.relative_to(ROOT / "src").as_posix()}`' not in spec])
 
 # 6. storage keys and API hosts
 for key in ('oitolados.v1', 'oitolados.cache.v1', 'oitolados.fx.v1'):
@@ -173,7 +196,7 @@ check('Stop hook is configured', any('verify-on-stop.sh' in c for c in cmds), cm
 check('Stop hook script exists', (ROOT / '.claude/hooks/verify-on-stop.sh').exists())
 check('CI runs the quick verification', 'scripts/verify.sh --quick' in read('.github/workflows/ci.yml'))
 vercel = json.loads(read('vercel.json'))
-check('vercel.json pins a static deployment', vercel.get('framework', 0) is None and vercel.get('installCommand') == '', vercel)
+check('vercel.json builds with the same commands as everywhere else', vercel.get('framework') == 'vite' and vercel.get('installCommand') == 'npm ci' and vercel.get('buildCommand') == 'npm run build' and vercel.get('outputDirectory') == 'dist', vercel)
 check('deployment ships no test code', 'tests' in read('.vercelignore').split())
 check('weekly live contract workflow exists', 'contract_live.py' in read('.github/workflows/espn-contract.yml'))
 

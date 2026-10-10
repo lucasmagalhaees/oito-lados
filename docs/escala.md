@@ -4,7 +4,7 @@ Este documento guarda o que foi decidido sobre escala e o que fazer quando chega
 
 ## Decisão atual (09/10/2026)
 
-**MVP para um usuário.** Um arquivo estático, sem backend, dados no `localStorage` de um aparelho. A ordem combinada é: começar simples, validar hipóteses usando de verdade, e só escalar se alguma delas pedir.
+**MVP para um usuário.** Uma página estática, sem backend, dados no `localStorage` de um aparelho. A ordem combinada é: começar simples, validar hipóteses usando de verdade, e só escalar se alguma delas pedir.
 
 Por que isso basta agora:
 - Um usuário, um iPhone. Não há o que sincronizar nem com quem competir.
@@ -47,24 +47,24 @@ O custo que pesa não é esse: é manter login, banco e liquidação no servidor
 
 | Sintoma | Etapa |
 |---|---|
-| Mexer no `index.html` ficou lento ou arriscado; duas pessoas no código | Etapa 1 |
+| Mexer no `index.html` ficou lento ou arriscado; duas pessoas no código | Etapa 1 (feita) |
 | Quero ver o mesmo saldo no iPhone e no computador; perdi dados | Etapa 2 |
 | Quero amigos usando, ranking, ligas | Etapa 3 |
 | A ESPN mudou o formato ou começou a bloquear | Trocar a fonte de dados (ver abaixo) |
 
 ## Etapa 1: estruturar o código (sem mudar o produto)
 
-Continua estático e sem backend. Só muda a organização.
+**Feita em 09/10/2026** (D33 em `docs/decisoes.md`), a pedido do Lucas. Continua estático e sem backend; só mudou a organização.
 
-- Vite + TypeScript. Saída continua sendo arquivos estáticos.
-- Módulos: `core/odds`, `core/pricing`, `core/settlement`, `espn/` (cliente e normalizadores), `store/` (estado e persistência), `ui/` (telas e cupom).
-- Tipos para `Fight`, `Odds`, `Result`, `Bet`, `Leg` e para as chaves de seleção.
-- Os casos de `tests/unit.py` viram testes do `core` em Vitest, rodando sem navegador. O e2e com Playwright fica.
+- Vite + TypeScript `strict`. A saída é um único `dist/index.html`.
+- Módulos: `src/core/` (`odds`, `espn`, `pricing`, `settlement`, `cashout`, `money`, `fx`, `tip`, `types`) e `src/app/` (estado, rede, telas, eventos).
+- Tipos para `Fight`, `Odds`, `Result`, `Bet`, `Leg`, `AppState` e os demais.
+
+O que ficou de fora e continua valendo como próximo passo:
+
+- Os casos de `tests/unit.py` como testes do `core` num executor de TypeScript, rodando sem navegador. Hoje eles rodam pelo navegador contra a página gerada.
+- Separar `src/app/` em camadas mais limpas (`espn/`, `store/`, `ui/`). Hoje os módulos seguem as seções do script antigo e se importam em círculo.
 - PWA de verdade: `manifest.json`, ícone em arquivo, service worker.
-
-O que já ajuda: `Core` é puro (sem DOM, rede ou armazenamento), todo acesso à ESPN passa pelos normalizadores, e o estado salvo tem campo de versão (`v: 1`).
-
-Esforço: pequeno. É mover código, não reescrever.
 
 ## Etapa 2: sincronizar entre aparelhos (um usuário)
 

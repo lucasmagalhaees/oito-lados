@@ -1,6 +1,7 @@
 name: Produção
 
-# After a merge, production must serve the index.html of main and keep serving it.
+# After a merge, production must serve the commit that was merged, and keep serving it.
+# The build stamps its commit into the page; scripts/check_production.py reads that stamp from the production address.
 # On 09/10/2026 four merges in a row left production on the oldest one: the host finished that deployment last.
 # On a pull request this only reports which commit production is serving; it never fails there.
 on:

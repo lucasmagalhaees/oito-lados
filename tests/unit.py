@@ -1,4 +1,4 @@
-"""Unit tests for the pure core of index.html (odds maths, ESPN normalisers, pricing, settlement).
+"""Unit tests for the pure core (src/core, exercised through the built page) (odds maths, ESPN normalisers, pricing, settlement).
 
 Usage: python3 tests/unit.py   (needs: pip install -r tests/requirements.txt && playwright install chromium)
 Loads the page with the network blocked and exercises window.__OL.Core directly. Exits non-zero on any failure.
@@ -321,7 +321,7 @@ with sync_playwright() as p:
     page = browser.new_page()
     page.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())
     cov.start(page)
-    page.goto((ROOT / 'index.html').as_uri())
+    page.goto((ROOT / 'dist' / 'index.html').as_uri())
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS)
     cov.stop(page, 'unit')

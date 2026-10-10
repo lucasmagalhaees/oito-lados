@@ -4,7 +4,7 @@ Usage: python3 tests/contract_live.py          (hits the real API; needs interne
        python3 tests/contract_live.py --mock   (self-test of this script against tests/mock_espn.py)
 
 Fetches a scoreboard, one finished fight and one upcoming fight with odds from the real API and runs the app's own
-parsers (window.__OL.Core, loaded from index.html in headless Chromium) on the answers.
+parsers (window.__OL.Core, loaded from dist/index.html in headless Chromium) on the answers.
 
 The HTTP calls are made from Python with a user agent that says what this is, and with the production site as Origin,
 so every answer is also checked for the CORS header a browser needs. The headless browser itself never talks to ESPN:
@@ -130,7 +130,7 @@ with sync_playwright() as p:
         page.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())   # the browser only runs the parsers
         page.expose_function('pyGet', py_get)
         page.add_init_script(f'window.ORIGIN = {json.dumps(ORIGIN)};')
-    page.goto((ROOT / 'index.html').as_uri())
+    page.goto((ROOT / 'dist' / 'index.html').as_uri())
     page.wait_for_function('window.__OL && window.__OL.Core')
     res = page.evaluate(JS)
     browser.close()
