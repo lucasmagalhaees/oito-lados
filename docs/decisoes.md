@@ -42,6 +42,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 11. PR #14 mesclado às 16:45; o workflow `Produção` passou no commit `5d7d4e7`. Terceira leva de dez propostas; resposta: "Não faz: 1 8 7 6 9". Ficaram cinco: lista de copiar recolhida, apostas no card da luta, abertas agrupadas por evento, unidades por origem e os testes do núcleo sem navegador (D58 a D62). De fora, a pedido dele: lembrete de backup, aviso de amostra pequena, guardar o texto original da aposta, limite de exposição por evento e exportar em CSV.
 12. Com a terceira leva em andamento, entre 16:59 e 17:04, mais pedidos, **ainda não feitos e fora deste PR**: um botão para colar o texto da área de transferência; sugerir stake de 0,2u a 0,4u em múltipla com mais de quatro seleções; setinhas de meio em meio no campo de unidades; e uma revisão da regra de valor ao copiar ("tem que seguir o que foi parametrizado: ou segue a stake, ou segue o valor"; em unidades, print que não diz unidades vale 1u, e não o dinheiro do print, o que revê a D42), com a stake em unidades e a hora de cada aposta à vista para conferir o consolidado. E uma pergunta: dá para mandar notificação quando a aposta é resolvida? Respondida (D63).
 13. Às 17:09: "deixa quieto esse lance da notificação" e "só garante que está numa forma bacana esse lance de resolver a aposta, pra ganho e pra perda; seria bacana não demorar tanto depois que a luta acabou, mas eu consigo esperar um tempo". É a primeira noite com luta de verdade. Revisão do caminho de liquidação (D64), num PR à frente dos outros pedidos da fila.
+14. PR #15 mesclado às 17:19 (depois de um conserto: o `docs_check.py` falhou no CI por exigir uma pasta que só existe depois de um teste rodar). PR #16, da liquidação, aberto com o CI verde. Em seguida, os pedidos do item 12: botão de colar (D65), stake sugerida em múltipla longa (D66), setas no campo de unidades (D67), a regra de valor ao copiar seguida à risca (D68) e a stake e a hora à vista em cada aposta lida (D69).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -640,6 +641,54 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Risco aceito no item 1:** a aposta de vencedor fecha com a marca do placar. Se a ESPN marcar o vencedor errado e corrigir depois, a aposta já fechou. O mesmo valia antes, com o resultado lido.
 - **Teste que mudou de propósito:** o caso "luta encerrada, resultado não publicado" esperava a aposta de vencedor pendente; agora espera decidida quando há vencedor marcado e pendente quando não há.
 
+## D65. Botão de colar na tela de copiar
+
+- **Contexto (10/10/2026):** "falta um botão para eu colar o texto da minha área de transferência".
+- **Decisão:** o botão "Colar" lê o texto da área de transferência, põe no campo e já lê a aposta, num toque só.
+- **Interpretações (confirmar com o Lucas):** só texto; imagem continua entrando por "Escolher fotos" ou pelo gesto de colar. Colar já lê, sem precisar tocar em "Ler texto".
+- **Fato de terceiro, não conferido no aparelho:** no Safari do iPhone, ler a área de transferência por um botão costuma abrir um balãozinho "Colar" do sistema para confirmar. Se o navegador recusar, a tela diz para colar no campo.
+
+## D66. Stake sugerida em múltipla longa
+
+- **Contexto (10/10/2026):** "quando for uma múltipla com mais de quatro operações envolvidas em uma única aposta, você já pode sugerir uma stake de 0.2 a 0.4 em unidades".
+- **Decisão:** numa múltipla de cinco seleções ou mais, o cupom e a lista de copiar mostram os atalhos 0,2u, 0,3u e 0,4u e uma linha dizendo que é a faixa sugerida.
+- **Interpretações (confirmar com o Lucas):**
+  - "Mais de quatro" é cinco ou mais. A de quatro não recebe sugestão.
+  - Contam as seleções, inclusive as combinadas na mesma luta: três lutas com duas combinadas são cinco seleções.
+  - É sugestão, não preenchimento. Uma múltipla longa copiada de um print sem unidades continua entrando com 1u (D68), com os atalhos ao lado.
+  - Vale para múltipla; cinco simples no mesmo cupom não recebem sugestão.
+
+## D67. Setas de meia unidade no campo de unidades
+
+- **Contexto (10/10/2026):** "na hora de colocar unidades, poderia ter um cursorzinho de meio, para cima e para baixo, porque fica mais fácil ir na setinha do que digitar".
+- **Decisão:** o campo em unidades, no cupom e em cada item da lista de copiar, tem um botão de cada lado. Cada toque leva à meia unidade seguinte ou anterior.
+- **Interpretações (confirmar com o Lucas):** de um valor quebrado, a seta vai para a meia unidade mais próxima naquela direção (de 0,3u sobe para 0,5u, não para 0,8u); abaixo de 0,5u a seta para baixo zera; em dinheiro não há setas.
+- **Na lista de copiar,** zerar pela seta devolve o item ao valor do original, como apagar o campo (D46).
+
+## D68. Ao copiar, a configuração é seguida à risca (revê a D42)
+
+- **Contexto (10/10/2026):** "quando eu estou colocando a imagem e aparece lá 1750, ele está considerando o valor e não a unidade. Se é valor, copia exatamente o que o cara postou. Se não, copia em unidade. Se não especificar a quantidade de unidades, você considera uma unidade. Tem que seguir o que foi parametrizado: ou ele vai seguir a stake, ou ele vai seguir o valor."
+- **O que a D42 fazia:** com a configuração em unidades, o print que só trazia dinheiro entrava com o mesmo dinheiro, mostrado em unidades. Era o caso que "se enrolava": a configuração dizia unidades e a aposta seguia o valor.
+- **Decisão:**
+
+  | Configuração | Print só com dinheiro | Print com unidades | Print com os dois | Print sem valor |
+  |---|---|---|---|---|
+  | Em R$ | o mesmo valor | essas unidades, na sua unidade | o dinheiro | 1u |
+  | Em unidades | **1u** | essas unidades | as unidades | 1u |
+
+- **O lote:** o 1u do print com dinheiro, em unidades, é regra dita pelo Lucas e conta como valor dito: a aposta entra no "apostar todas". O 1u do original que não diz valor nenhum (a lista de seleções) continua fora do lote (D46).
+- **A tela diz de onde veio:** "1u, pela sua configuração: o print só traz R$ 1.750,00, que não é copiado".
+- **Teste que mudou de propósito:** em unidades, o texto de R$ 250,00 era esperado com R$ 250,00 (2,5u); agora é esperado com 1u.
+
+## D69. A stake e a hora de cada aposta à vista, e o consolidado em unidades
+
+- **Contexto (10/10/2026):** "eu quero que em cada aposta fique claro quantas unidades eu estou colocando em jogo, a stake de cada oportunidade, a hora de cada oportunidade, para poder conferir o consolidado ali".
+- **Decisão:**
+  - Na lista de copiar, a linha de cada item traz a hora da primeira luta e a stake dos dois jeitos, na ordem da configuração; cada seleção, aberta, diz a hora da luta dela; o total do lote vem também em unidades.
+  - Na aba Apostas, o total em jogo de cada evento vem também em unidades.
+- **Interpretação que precisou ser feita (perguntada ao Lucas, sem resposta ainda):** "a hora de cada oportunidade" foi lida como a hora da **luta**, que o app conhece sempre. A hora em que o canal postou só existe em alguns prints e não é lida.
+- **O que já existia:** na aba Apostas cada aposta já mostrava a stake em unidades, a hora de cada luta e a hora em que foi feita.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -653,7 +702,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
-| Dizer se quer o primeiro passo das notificações (manifest, ícone e botão de permissão) (D63) | Lucas |
+| Confirmar: "mais de quatro" como cinco ou mais, sugestão sem preencher sozinha, seta indo à meia unidade mais próxima, e a hora da aposta como a hora da luta (D66, D67, D69) | Lucas |
 | Confirmar as interpretações da terceira leva: item pronto recolhido de início, a aposta nova fora do topo das abertas, a ordem pela primeira luta e a marca do card contando a múltipla inteira (D58 a D60) | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
 | Confirmar o padrão Automático do tema (D38) | Lucas |

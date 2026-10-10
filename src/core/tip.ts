@@ -1,8 +1,9 @@
 /* ---------- the stake of a copied bet ----------
-   One setting decides it, the same one that says how the slip asks for the stake (money or units):
+   One setting decides it, the same one that says how the slip asks for the stake (money or units), and it is followed
+   to the letter: either the value is copied, or the stake is.
      money - the same amount: the money the original shows. An original that only speaks in units brings those units.
-     units - the same stake: the units the original states, in my unit. An original that only shows money brings that
-             money, which the slip then shows in my units.
+     units - the same stake: the units the original states, in my unit. An original that states no units is one unit:
+             the money it shows is not copied.
    What one unit is worth to whoever made the print is not known and is not asked for. */
 import { r2 } from './odds';
 import { parseMoney } from './money';
@@ -13,6 +14,7 @@ export function tipStake(stake: TipStakeIn, mode: unknown, unit: unknown): TipSt
   if (stake.kind === 'default') return { how: 'default', units: 1, value: r2(u) };
   const money = stake.money && stake.money > 0 ? stake.money : 0, units = stake.kind === 'units' ? stake.units : 0;
   if (units > 0 && (mode === 'units' || !money)) return { how: 'units', units, value: r2(units * u) };
+  if (mode === 'units') return { how: 'one', units: 1, value: r2(u) };
   return { how: 'same', units: u > 0 ? money / u : null, value: money };
 }
 

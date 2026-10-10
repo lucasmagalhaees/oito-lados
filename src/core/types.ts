@@ -80,8 +80,10 @@ export interface FxRates { date: string; rates: Record<Currency, number>; ts?: n
 
 /** The stake as the original states it. One that states both units and money is `units` with the money alongside. */
 export type TipStakeIn = { kind: 'units'; units: number; money?: number } | { kind: 'money'; money: number } | { kind: 'default'; units: number };
-/** The stake to copy: `units` when it comes from the units of the original, `same` when it is the money of the original. */
-export interface TipStake { how: 'units' | 'default' | 'same'; units: number | null; value: number }
+/** The stake to copy: `units` when it comes from the units of the original, `same` when it is the money of the original,
+ *  `one` when the setting says units and the original states none (one unit, whatever money it shows), and `default`
+ *  when the original states no stake at all. */
+export interface TipStake { how: 'units' | 'default' | 'same' | 'one'; units: number | null; value: number }
 export interface TipItem { fid: string; key: string; printedOdd: number | null; assumed: boolean; quote: string }
 /** Why part of a tip could not be read. `short`: the original says it is a multiple of `want` selections and only `got` were found. */
 export interface TipProblem { code: 'empty' | 'nofight' | 'ambiguous' | 'nomarket' | 'short'; fid?: string; want?: number; got?: number }

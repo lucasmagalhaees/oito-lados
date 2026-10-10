@@ -28,3 +28,15 @@ export function maskUnits(text: unknown): string {
 }
 export const parseUnits = (text: unknown): number => { const n = parseFloat(maskUnits(text).replace(',', '.')); return isFinite(n) && n > 0 ? r2(n) : 0; };
 export const unitsText = (n: number): string => (isFinite(n) && n > 0 ? String(r2(n)).replace('.', ',') : '');
+
+/* ---------- stakes in units: a suggestion for long multiples, and the steps of the field ----------
+   A multiple of five or more selections is a long shot; the stake suggested for it is a fraction of a unit. */
+export const LONG_MULTI = 5;
+export const LONG_STAKES = [0.2, 0.3, 0.4];
+export const suggestedUnits = (selections: unknown, mode: unknown): number[] => (mode === 'multi' && Number(selections) >= LONG_MULTI ? LONG_STAKES.slice() : []);
+/** One step of a units field: up or down to the next half unit, never below zero nor past what the field takes. */
+export function stepUnits(now: unknown, dir: number): number {
+  const n = Number(now), k = (isFinite(n) && n > 0 ? n : 0) / 0.5;
+  const next = dir > 0 ? Math.floor(k + 1e-9) + 1 : Math.ceil(k - 1e-9) - 1;
+  return clamp(r2(next * 0.5), 0, 9999.5);
+}
