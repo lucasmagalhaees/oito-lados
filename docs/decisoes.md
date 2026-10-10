@@ -317,7 +317,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Testar o copiar aposta no iPhone com prints reais | Lucas |
 | Confirmar as interpretações do valor em unidades (D30) e de + / − e cores (D31) | Lucas |
 | Ver o workflow `Produção` rodar no modo estrito no primeiro merge depois dele | Quem fizer o próximo merge |
-| Ver o primeiro build da migração na Vercel (prévia do PR) e conferir o carimbo de commit na página publicada | Quem abrir o PR da migração |
+| Conferir o carimbo de commit na página publicada pela Vercel (o build da prévia do PR #9 passou; a página não foi lida) | Lucas, ou o workflow `Produção` no merge |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |
