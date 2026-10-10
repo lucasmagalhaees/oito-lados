@@ -33,21 +33,26 @@ RES = {'f1': dict(id=356,name='kotko',displayName='KO/TKO',description='Punch',d
        'f2': dict(id=263,name='decision---unanimous',displayName='Decision - Unanimous'),
        'f3': dict(id=1,name='submission',displayName='Submission',description='Rear Naked Choke',displayDescription='Rear Naked Choke')}
 TD = {'f1': [None,(1,0),(2,1),(2,1)], 'f2': [None,None,(0,0),(0,0)], 'f3': [None,None,None,(3,0)]}
+# one more event, a week ahead and with no line published yet, on the board only while a test asks for it (ESPN['next'])
+EV2 = '600000002'
+NEXT = {'g1': dict(a=('701','Hugo Teles','H. Teles','11-3-0'), b=('702','Otto Farias','O. Farias','9-2-0'), rounds=5, w='Featherweight')}
+def comp(fid, f, st, when):
+    mk = lambda x, order, side: dict(id=x[0], order=order, winner=(st[5]==side), athlete=dict(displayName=x[1], fullName=x[1], shortName=x[2], flag=dict(alt='Brazil')), records=[dict(summary=x[3])])
+    return dict(id=fid, date=iso(when), type=dict(abbreviation=f['w']),
+        competitors=[mk(f['b'],2,'b'), mk(f['a'],1,'a')],
+        status=dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post')),
+        format=dict(regulation=dict(periods=f['rounds'])))
 def scoreboard():
-    comps = []
-    for i,(fid,f) in enumerate((ALL if ESPN['extra'] else F).items()):
-        st = ST[fid][PHASE['n']] if fid in ST else PRE
-        mk = lambda x, order, side: dict(id=x[0], order=order, winner=(st[5]==side), athlete=dict(displayName=x[1], fullName=x[1], shortName=x[2], flag=dict(alt='Brazil')), records=[dict(summary=x[3])])
-        comps.append(dict(id=fid, date=iso(NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)), type=dict(abbreviation=f['w']),
-            competitors=[mk(f['b'],2,'b'), mk(f['a'],1,'a')],
-            status=dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post')),
-            format=dict(regulation=dict(periods=f['rounds']))))
-    return dict(events=[dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)])
+    comps = [comp(fid, f, ST[fid][PHASE['n']] if fid in ST else PRE, NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)) for fid, f in (ALL if ESPN['extra'] else F).items()]
+    evs = [dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)]
+    if ESPN['next']: evs.append(dict(id=EV2, name='UFC 999: Teles vs. Farias', date=iso(NOW+7*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, f, PRE, NOW+7*86400e3) for fid, f in NEXT.items()]))
+    return dict(events=evs)
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
-# knobs for the tests: the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
+# knobs for the tests: a second event on the board (next), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
 # is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False}
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False}
 def odds(fid):
+    if fid not in ALL: return dict(count=0, items=[])          # a fight with no line published, as the source answers it
     f = ALL[fid]
     side = lambda x, ml, ko, sub, dec: dict(moneyLine=ml, current=dict(moneyLine=am(ml), victoryMethod=dict(koTkoDq=am(ko), submission=am(sub), points=am(dec))), athlete={'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/%s?lang=en'%x[0]})
     if fid=='f3': h, a, ou = side(f['a'],-125,800,300,250), side(f['b'],105,200,2200,450), (3.5,-120,-110)

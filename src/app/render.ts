@@ -10,7 +10,7 @@ import { legOut, resultText } from './settle';
 import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
 import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
-import type { Bet, Currency, Fight, FightEvent, Leg, OpenTotals, Option, Outcome, Period, Side } from '../core';
+import type { Bet, CardPart, Currency, Fight, FightEvent, Leg, OpenTotals, Option, Outcome, Period, Side } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
 import type { CopyMeta, Slip } from './state';
 
@@ -33,7 +33,8 @@ export function render(): void {
   if (!(ae && v.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName))) {       // never yank a field the person is typing in
     v.innerHTML = sinceHtml() + (ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w));
     if (ui.tab === 'carteira') bindChart();
-  }
+  } else if (ae.id === 'q') paintList();          // the search field stays as it is; the fights under it follow
+
   renderSlipBar();
 }
 const originName = (k: string): string => k || 'Sem origem';
@@ -69,13 +70,47 @@ function vLutas(): string {
   let h = `<div class="events">${chips}</div><div class="sync"><span>${info}</span><button data-act="refresh">${busy ? 'Atualizando…' : 'Atualizar'}</button></div>`;
   h += `<button class="btn ghost block" data-act="imp" style="margin-top:10px">Copiar aposta de um print ou texto</button>`;
   if (!S.deposits.length) h += `<div class="cta"><p><b>Saldo fictício zerado.</b> Coloca quanto quiser pra começar a simular.</p><button class="btn" data-act="tab" data-tab="carteira">Depositar</button></div>`;
-  const times = [...new Set(ev.fights.map(f => f.date))].sort((a, b) => b - a);
-  const main = Math.max(...ev.fights.map(f => f.idx));
-  times.forEach((t, i) => {
-    h += `<div class="seg label">${i === 0 ? 'Card principal' : i === times.length - 1 && times.length > 2 ? 'Primeiras preliminares' : 'Preliminares'} · ${esc(dWhen.format(t))}</div>`;
-    ev.fights.filter(f => f.date === t).sort((a, b) => b.idx - a.idx).forEach(f => { h += fightCard(f, f.idx === main); });
-  });
+  // finding a fight by a fighter's name, across the events on screen; the list under the field is repainted by itself
+  h += `<div class="field search"><span aria-hidden="true">Buscar</span><input id="q" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40" placeholder="nome do lutador" value="${esc(ui.q)}" aria-label="Buscar luta pelo nome do lutador"><button class="x" data-act="qclear" aria-label="Limpar a busca"${ui.q ? '' : ' hidden'}>×</button></div>`;
+  return h + `<div id="list">${listHtml(ev, evs)}</div>`;
+}
+const PART: Record<CardPart, string> = { main: 'Card principal', prelims: 'Preliminares', early: 'Primeiras preliminares' };
+const PART_SHORT: Record<CardPart, string> = { main: 'Principal', prelims: 'Preliminares', early: 'Primeiras' };
+/** The fights of one event, part by part of the card (`only` leaves the ones found by the search). */
+function sectionsHtml(e: FightEvent, part: CardPart | null, only?: Set<string>): string {
+  const main = Math.max(...e.fights.map(f => f.idx));
+  let h = '';
+  for (const s of Core.cardSections(e.fights)) {
+    const fs = s.fights.filter(f => !only || only.has(f.id)); if (!fs.length || (part && s.part !== part)) continue;
+    h += `<div class="seg label sec" data-part="${s.part}">${PART[s.part]} · ${esc(dWhen.format(s.date))}</div>` + fs.map(f => fightCard(f, f.idx === main)).join('');
+  }
   return h;
+}
+/** What goes under the search field: the fights found, event by event, or the card of the event on screen with the
+ *  buttons that show one part of it. */
+function listHtml(ev: FightEvent, evs: FightEvent[]): string {
+  const q = ui.q.trim();
+  if (q) {
+    let n = 0, h = '';
+    for (const e of [ev, ...evs.filter(x => x.id !== ev.id)]) {
+      const hits = Core.findFights(e.fights, q); if (!hits.length) continue;
+      n += hits.length;
+      const name = `${esc(evLabel(e).main)} · ${esc(dDay.format(e.date))}`;
+      h += (e.id === ev.id ? `<div class="seg label qev">${name}</div>` : `<button class="seg label qev" data-act="event" data-id="${esc(e.id)}" data-keep="1">${name} · abrir este card ›</button>`) + sectionsHtml(e, null, new Set(hits.map(f => f.id)));
+    }
+    return `<p class="hint" id="qinfo">${n ? `${n} ${n > 1 ? 'lutas' : 'luta'} com "${esc(q)}"${evs.length > 1 ? `, nos ${evs.length} eventos carregados` : ''}.` : `Nenhuma luta com "${esc(q)}" nos eventos carregados.`}</p>` + h;
+  }
+  const secs = Core.cardSections(ev.fights), parts = [...new Set(secs.map(s => s.part))];
+  if (ui.part && !parts.includes(ui.part)) ui.part = null;
+  const count = (p: CardPart): number => secs.filter(s => s.part === p).reduce((a, s) => a + s.fights.length, 0);
+  const chips = parts.length > 1 ? `<div class="quick froms" id="parts" role="group" aria-label="Parte do card"><button class="${ui.part == null ? 'on' : ''}" data-act="part" aria-pressed="${ui.part == null}">Tudo (${ev.fights.length})</button>${parts.map(p => `<button class="${ui.part === p ? 'on' : ''}" data-act="part" data-p="${p}" aria-pressed="${ui.part === p}">${PART_SHORT[p]} (${count(p)})</button>`).join('')}</div>` : '';
+  return chips + sectionsHtml(ev, ui.part);
+}
+/** Repaints only the list under the search field, so that typing keeps its field, its caret and its keyboard. */
+export function paintList(): void {
+  const box = $('#list'), evs = shownEvents(); if (!box || !evs.length) return;
+  box.innerHTML = listHtml(evs.find(e => e.id === ui.eventId) || evs[0], evs);
+  const x = $('[data-act=qclear]'); if (x) x.hidden = !ui.q;
 }
 // the mark in front of a selection's name: the corner colour for a fighter's, the arrow for an over or an under
 export const sideDot = (key: string, weight?: string): string => { const sd = Core.sideOf(key), ou = Core.overUnder(key); return sd ? `<i class="sd ${sd}"${cornersAttr(weight)}></i>` : ou ? `<i class="ou ${ou}"></i>` : ''; };

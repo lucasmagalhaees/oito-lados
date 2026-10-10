@@ -22,7 +22,7 @@ export function tipStake(stake: TipStakeIn, mode: unknown, unit: unknown): TipSt
    parseTip reads free text (typed, pasted, or what the OCR got out of a screenshot) and finds, among the fights given,
    which one it talks about, which selection, the odd it was printed with and the stake (in units or in money).
    It only names selections; whether each one can be bet on right now is decided by the caller against live prices. */
-const plain = (s: unknown): string => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+export const plain = (s: unknown): string => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const reEsc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const hasWord = (hay: string, needle: string): boolean => needle.length >= 3 && new RegExp('(^|[^a-z0-9])' + reEsc(needle) + '($|[^a-z0-9])').test(hay);
 type Named = Pick<Fighter, 'name' | 'last'>;
