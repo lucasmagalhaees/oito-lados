@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "17 12 * * 5"   # Fridays 09:17 in São Paulo, ahead of the weekend card
   workflow_dispatch:
+    inputs:
+      capture:
+        description: "Para gravar amostras: argumentos de scripts/capture_espn.py (ex.: history 4077451). Vazio: só a conferência."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -13,6 +18,7 @@ permissions:
 jobs:
   live:
     name: live API
+    if: ${{ !inputs.capture }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -39,3 +45,34 @@ jobs:
         env:
           OL_SAMPLES: "1"      # prints one real status per result name, to record as a fixture when a new one shows up
         run: python tests/contract_live.py || [ $? -eq 3 ]
+
+  # Records real answers as fixtures and commits them to the branch the run was started on. It is how a sample gets
+  # recorded from a machine that cannot reach ESPN. Never on main: fixtures go in through a pull request like the rest.
+  capture:
+    name: capture samples
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.capture && github.ref_name != 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Capture
+        env:
+          ARGS: ${{ inputs.capture }}
+        run: |
+          set -f
+          for call in $(echo "$ARGS" | tr ';' '\n' | tr ' ' ','); do python scripts/capture_espn.py $(echo "$call" | tr ',' ' '); done
+      - name: Commit what was captured
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/fixtures/espn
+          git diff --cached --quiet && { echo "nothing new captured"; exit 0; }
+          git commit -m "test: amostras reais da ESPN gravadas pelo workflow (${ARGS})"
+          git push
+        env:
+          ARGS: ${{ inputs.capture }}
