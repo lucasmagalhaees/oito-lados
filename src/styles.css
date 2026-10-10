@@ -80,6 +80,10 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .warn{border:1px solid var(--line);border-left:3px solid var(--live);border-radius:6px;background:var(--surface);padding:10px 12px;font-size:13px;margin-top:10px}
 .cta{border:1px solid var(--gold);border-radius:8px;background:var(--surface);padding:12px;margin-top:12px;display:flex;gap:12px;align-items:center;justify-content:space-between}
 .cta p{font-size:13px;min-width:0}
+.since{border:1px solid var(--gold);border-radius:8px;background:var(--surface);padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+.since b{display:block;font-size:14px}
+.since b + span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.since .btn{min-height:38px}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:8px;background:var(--gold-bg);color:var(--on-gold);font-weight:700;white-space:nowrap}
 .btn.ghost{background:none;color:var(--fg);border:1px solid var(--line);font-weight:600}
 .btn.danger{background:none;color:var(--loss);border:1px solid var(--loss);font-weight:600}
@@ -172,6 +176,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .ph h3{font:800 26px/1 var(--font-display);text-transform:uppercase}
 .x{width:40px;height:40px;display:grid;place-items:center;border-radius:8px;font-size:22px;color:var(--muted)}
 .segm.cur{grid-template-columns:repeat(3,1fr)}
+.segm.four{grid-template-columns:repeat(4,1fr)}
 .segm{display:grid;grid-template-columns:1fr 1fr;background:var(--surface2);border-radius:8px;padding:3px}
 .segm button{min-height:38px;border-radius:6px;font-weight:600;text-align:center;color:var(--muted)}
 .segm button.on{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.18)}
@@ -209,6 +214,9 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .un{display:block;font-size:12px;color:var(--muted)}
 .unit{font:800 30px/1 var(--font-display);overflow-wrap:anywhere}
 .quick.units button{border-style:dashed}
+.quick.froms button{flex:0 1 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick.froms button.on{background:var(--gold-bg);color:var(--on-gold);border-color:transparent}
+.field select{flex:1;min-width:0;border:0;background:none;color:var(--fg);height:48px;font:inherit;font-size:16px;font-weight:600;outline:none}
 .pill.cashed{color:var(--gold)}
 .pill.open{color:var(--muted)}.pill.won{color:var(--win)}.pill.lost{color:var(--loss)}.pill.void{color:var(--muted)}.pill.live{color:var(--live)}
 .leg{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
@@ -260,8 +268,14 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .impop .oph .x{width:32px;height:32px;font-size:20px}
 .impop .via{font-size:12px;color:var(--gold)}
 .impop .via button{text-decoration:underline;color:inherit}
+.impop .fix,.impop .fixed,.impgone button,.impforced button{font-size:12px}
+.impop .fix button,.impop .fixed button,.impgone button,.impforced button{text-decoration:underline;color:inherit}
+.impop .fixed{color:var(--gold)}
+.impraw{font-size:12px;color:var(--muted)}
+.impraw summary{cursor:pointer;padding:4px 0}
+.impraw pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;margin:6px 0;max-height:180px;overflow:auto}
 .impmiss{display:flex;flex-direction:column;gap:6px}
-.imppick{width:100%;min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:16px;padding:0 10px}
+.imppick,.impedit{width:100%;min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:16px;padding:0 10px}
 .opedit{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
 .opedit .field{flex:1 1 150px}
 .opedit .segm{flex:1 1 150px}

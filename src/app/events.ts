@@ -3,10 +3,10 @@ import { loadOdds } from './api';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
-import { clearImport, closeImport, dropOp, importImages, importToSlip, modeFor, pickFor, placeAll, renderImport, runImport, stakeFor, unpickFor } from './import';
+import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, swapFor, uneditFor, unpickFor } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
-import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
+import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import type { Currency } from '../core';
@@ -106,6 +106,11 @@ document.addEventListener('click', e => {
   else if (a === 'impuse') pickFor(Number(d.op), d.fid as string, d.key as string, Number(d.from));
   else if (a === 'impunpick') unpickFor(Number(d.op), d.fid as string);
   else if (a === 'impmode') modeFor(Number(d.op), d.m);
+  else if (a === 'impswap') swapFor(Number(d.op), Number(d.i));
+  else if (a === 'impunedit') uneditFor(Number(d.op), Number(d.i));
+  else if (a === 'impforce') forceFor(Number(d.op));
+  else if (a === 'impfixtext') { if (!imp.busy && !imp.placing) fixText(Number(d.op)); }
+  else if (a === 'impfromq') setFrom(d.v || '');
   else if (a === 'mode') { slip.mode = d.m as Slip['mode']; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = d.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(d.v); setStakeMoney(v); showStake(); ui.msg = ''; slipSummary(); }
   else if (a === 'stu') { if (wallet().unit > 0) { setStakeUnits(Number(d.u)); showStake(); ui.msg = ''; slipSummary(); } }
@@ -118,6 +123,15 @@ document.addEventListener('click', e => {
   }
   else if (a === 'place') place();
   else if (a === 'filter') { ui.filter = d.f as Ui['filter']; ui.cash = null; render(); }
+  else if (a === 'origin') { ui.origin = d.v == null ? null : d.v; ui.cash = null; render(); }
+  else if (a === 'period') { ui.period = d.m === '30d' || d.m === 'event' ? d.m : 'all'; render(); }
+  else if (a === 'sinceok' || a === 'sinceview') { S.seen = Date.now(); saveS(); if (a === 'sinceview') { ui.tab = 'apostas'; ui.filter = 'done'; ui.origin = null; ui.sheet = false; renderSheet(); window.scrollTo(0, 0); } render(); }
+  else if (a === 'copydrop') { const v = Number(d.m); if (isDrop(v)) S.copyDrop = v; else delete S.copyDrop; saveS(); render(); }
+  else if (a === 'orgrename') {
+    const from = valOf('#orgfrom'), r = Core.renameOrigin(S.bets, from, valOf('#orgto'));
+    if (!r.n) { toast('Escolhe a origem e escreve o nome novo.'); return; }
+    S.bets = r.bets; saveS(); blurField(); render(); toast(`${r.n} ${r.n > 1 ? 'apostas mudaram' : 'aposta mudou'} de origem.`);
+  }
   else if (a === 'cash') { ui.cash = d.id || null; ui.cashMsg = ''; render(); }
   else if (a === 'docash') doCashout(d.id);
   else if (a === 'again') repeatBet(d.id);
@@ -138,11 +152,11 @@ document.addEventListener('click', e => {
   else if (a === 'dorestore') {
     let s: unknown = null; try { s = JSON.parse(valOf('#rs') || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
-    setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0), ...settingsOf(s) });
+    setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0), ...settingsOf(s), seen: Date.now() });
     if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); applyTheme(); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, ...settingsOf(S) }); saveS(); slip.sels = []; slip.copy = null; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, ...settingsOf(S), seen: Date.now() }); saveS(); slip.sels = []; slip.copy = null; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 document.addEventListener('input', e => {
   const t = e.target as HTMLInputElement, typed = (e as InputEvent).data;
@@ -157,6 +171,7 @@ document.addEventListener('change', e => {
   const t = e.target as HTMLInputElement;
   if (t.id === 'impfile') importImages([...(t.files || [])]);
   else if (t.classList.contains('imppick')) pickFor(Number(t.dataset.op), t.dataset.fid as string, t.value);
+  else if (t.classList.contains('impedit')) editFor(Number(t.dataset.op), Number(t.dataset.i), t.value);
   else if (t.classList.contains('opstake')) stakeFor(Number(t.dataset.op), t.value);
 });
 document.addEventListener('paste', e => {

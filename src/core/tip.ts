@@ -35,6 +35,10 @@ const TIP = {
   moneyAfter: /(\d[\d.,]*\d|\d)\s*(?:brl|usd|eur|reais)(?![a-z])/,          // "1756 BRL", as some slips write it
   anyMoney: /(?:r\$|us\$|\$|€)\s*[\d.,]+|[\d.,]+\s*(?:brl|usd|eur|reais)(?![a-z])/g,
   odd: /(?:^|[^\d.,])(\d{1,2}[.,]\d{2,3})(?![\d.,])/,
+  // the OCR sometimes reads the point of an odd as a colon ("1:13"). Only at the end of a line, one digit before the
+  // colon, and never on a line with a date: a time of day is written "(14:14)" or "19:30" on the slips seen so far
+  oddColon: /(?:^|\s)(\d)[:;](\d{2,3})\s*$/,
+  date: /\d{1,2}\/\d{1,2}/,
   over: /(?:mais de|over|acima de|\+)\s*\(?\s*(\d)[.,]5/,
   under: /(?:menos de|under|abaixo de)\s*\(?\s*(\d)[.,]5|(?:^|\s)[-−](\d)[.,]5(?!\d)/,
   takedown: /queda|takedown/,
@@ -108,7 +112,12 @@ export function parseTip(text: unknown, fights: TipFight[]): Tip {
   const found = both.length ? both : clash ? [] : one;
   if (!found.length) { out.problems.push({ code: clash ? 'ambiguous' : 'nofight' }); return out; }
   const other = (i: number, f: TipFight): boolean => found.some(g => g !== f && (mentions(N[i], g.a) || mentions(N[i], g.b)));
-  const oddIn = (i: number): number | null => { const od = TIP.odd.exec(L[i].replace(TIP.anyMoney, ' ').replace(/(\d)[.,]5(?!\d)/g, ' ')); return od ? parseFloat(od[1].replace(',', '.')) : null; };
+  const oddIn = (i: number): number | null => {
+    const line = L[i].replace(TIP.anyMoney, ' ').replace(/(\d)[.,]5(?!\d)/g, ' '), od = TIP.odd.exec(line);
+    if (od) return parseFloat(od[1].replace(',', '.'));
+    const oc = TIP.date.test(line) ? null : TIP.oddColon.exec(line), v = oc ? parseFloat(oc[1] + '.' + oc[2]) : 0;
+    return v > 1 ? v : null;
+  };
   interface Sel { f: TipFight; pick: Side | null; start: number; at: number[]; mk: { key: string; assumed?: boolean }; odd: number | null; oddAt: number }
   const sels: Sel[] = [];
   for (const f of found) {

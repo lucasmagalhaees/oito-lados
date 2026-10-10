@@ -69,6 +69,10 @@ export interface AppState {
   theme?: 'light' | 'dark';
   /** The pair of colours of the two corners, for men's and for women's fights; an absent one means red and blue. */
   corners?: { men?: CornerPair; women?: CornerPair };
+  /** Copying a bet: leave it out of the batch when the odd of now is more than this many percent below the printed one. Absent: off. */
+  copyDrop?: 3 | 5 | 10;
+  /** Until when the person has seen what closed: bets settled after it are summed up in the "since last time" strip. */
+  seen?: number;
   deposits: Deposit[]; bets: Bet[];
 }
 
