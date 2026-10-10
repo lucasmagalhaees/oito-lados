@@ -41,7 +41,7 @@ for line in (block.group(1).splitlines() if block else []):
 
 # 3. files the spec names in backticks exist
 for rel in set(re.findall(r'`((?:tests|docs|scripts|\.github|\.claude)/[\w./-]+)`', spec + readme + read('CONTRIBUTING.md'))):
-    if rel.endswith('...') or rel.startswith('tests/shots'):
+    if rel.endswith('...') or rel.startswith('tests/shots') or rel.startswith('tests/.build'):
         continue                      # branch-name patterns such as docs/..., and output that only exists after a test run
     check('documented path exists', (ROOT / rel).exists(), rel)
 
