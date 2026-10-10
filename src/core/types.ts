@@ -75,8 +75,11 @@ export type TipStakeIn = { kind: 'units'; units: number; money?: number } | { ki
 /** The stake to copy: `units` when it comes from the units of the original, `same` when it is the money of the original. */
 export interface TipStake { how: 'units' | 'default' | 'same'; units: number | null; value: number }
 export interface TipItem { fid: string; key: string; printedOdd: number | null; assumed: boolean; quote: string }
-export interface TipProblem { code: 'empty' | 'nofight' | 'ambiguous' | 'nomarket'; fid?: string }
-export interface Tip { items: TipItem[]; stake: TipStakeIn; problems: TipProblem[] }
+/** Why part of a tip could not be read. `short`: the original says it is a multiple of `want` selections and only `got` were found. */
+export interface TipProblem { code: 'empty' | 'nofight' | 'ambiguous' | 'nomarket' | 'short'; fid?: string; want?: number; got?: number }
+/** What was read from a tip. `odd` is the printed odd of the whole bet, when one odd is given for several selections.
+ *  `kind` is what the original says it is (a single, or a multiple of `legs` selections), when it says so. */
+export interface Tip { items: TipItem[]; stake: TipStakeIn; problems: TipProblem[]; odd: number | null; kind: 'single' | 'multi' | null; legs: number | null }
 
 /** How one leg of a bet stands right now, as far as a cashout offer needs to know. */
 export interface LegNow { state: FightState; canceled: boolean; out: Outcome | null }

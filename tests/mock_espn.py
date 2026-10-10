@@ -37,11 +37,13 @@ def scoreboard():
             format=dict(regulation=dict(periods=f['rounds']))))
     return dict(events=[dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)])
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
+# knobs for the tests: the source unreachable, and the line of one fighter (Kessler, f2) moving
+ESPN = {'down': False, 'f2b': 170}
 def odds(fid):
     f = F[fid]
     side = lambda x, ml, ko, sub, dec: dict(moneyLine=ml, current=dict(moneyLine=am(ml), victoryMethod=dict(koTkoDq=am(ko), submission=am(sub), points=am(dec))), athlete={'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/%s?lang=en'%x[0]})
     if fid=='f3': h, a, ou = side(f['a'],-125,800,300,250), side(f['b'],105,200,2200,450), (3.5,-120,-110)
-    elif fid=='f2': h, a, ou = side(f['a'],-200,350,500,110), side(f['b'],170,700,1200,300), (2.5,-180,140)
+    elif fid=='f2': h, a, ou = side(f['a'],-200,350,500,110), side(f['b'],ESPN['f2b'],700,1200,300), (2.5,-180,140)
     else:
         h = dict(moneyLine=-150, current=dict(moneyLine=am(-150)), athlete={'$ref': 'http://x/athletes/%s?lang=en'%f['a'][0]})
         a = dict(moneyLine=125, current=dict(moneyLine=am(125)), athlete={'$ref': 'http://x/athletes/%s?lang=en'%f['b'][0]})
@@ -59,6 +61,7 @@ def handle(route):
     u = route.request.url; calls.append(u)
     def ok(o): route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps(o))
     if 'fonts.g' in u: return route.abort()
+    if ESPN['down'] and 'espn.com' in u: return route.abort()
     if 'api.frankfurter.dev' in u:
         FX['calls'] += 1
         return route.abort() if FX['down'] else ok(FX['body'])
@@ -121,4 +124,17 @@ PRINT_HTML = """<div id="print" style="width:420px;background:#2b3030;color:#fff
   <div style="display:flex;justify-content:space-between;margin-top:28px"><div>Aposta<br><b>R$250,00</b></div><div style="text-align:right">Retornos<br><b>R$512,50</b></div></div>
   <div style="background:#1b8a5e;text-align:center;padding:12px;margin-top:12px;font-weight:700">Encerrar Aposta R$250,00</div>
 </div>"""
+# two more prints, in the layout of a slip that names the market as "1X2: V2" and the stake as "100 BRL": a single, and
+# an accumulator that lists its two events but shows the market of the first one only (as such slips do)
+_SLIP = """<div id="print" style="width:460px;background:#fff;color:#222;font:18px Arial,sans-serif;padding:20px">
+  <div style="font-weight:700;font-size:19px">Cupom de apostas Nº %s</div><div style="color:#444;margin:4px 0 16px">10/10/2026 (14:14)</div>
+  <div style="background:#eef3f2;padding:12px;font-weight:700;margin-bottom:8px">Eventos: %s</div>%s
+  <div style="display:flex;justify-content:space-between;margin:10px 0"><span>Tipo de aposta</span><span>%s</span></div>
+  <div style="display:flex;justify-content:space-between;margin:10px 0"><span>%s</span><span>%s</span></div>
+  <div style="display:flex;justify-content:space-between;margin:10px 0"><span>Aposta</span><span>%s BRL</span></div>
+  <div style="display:flex;justify-content:space-between;margin:10px 0;font-weight:700"><span>Possíveis ganhos</span><span>%s BRL</span></div>
+</div>"""
+SLIP_HTML = _SLIP % ('70010001', '1', '', 'Aposta simples', '1X2: V2: Caio Brandt - Dario Kessler', '2.70', '100', '270.00')
+ACCA_HTML = _SLIP % ('70010002', '2 (finalizado 0)', '<div style="padding:8px 12px">Marina Teles - Joana Prado Jr.</div><div style="padding:8px 12px">Rafael Almeida - Connor Lee Dunne</div>',
+                     'Acumulador', '1X2: V1: Marina Teles - Joana Prado Jr.', '3.424', '80', '273.92')
 TIP_TEXT = "🥊 *Rafael Almeida vs. Connor Lee Dunne*\n\n🎰 *Connor Lee Dunne* - Para vencer a luta\n\n💰 Odd - 1.44\n💎 Stake - 0,5 unidade"

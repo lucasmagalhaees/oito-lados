@@ -82,6 +82,9 @@ export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'o
 export interface Slip { sels: { fid: string; key: string }[]; mode: 'single' | 'multi'; stake: string; units: string; unitsN: number }
 export const slip: Slip = { sels: [], mode: 'single', stake: '', units: '', unitsN: 0 };
 /** The "copy a bet" sheet. */
-export interface ImportState { open: boolean; text: string; busy: boolean; pct: number; res: Tip | null; err: string }
-export const imp: ImportState = { open: false, text: '', busy: false, pct: 0, res: null, err: '' };
+/** One bet read in the copy screen: from the text field, or from one picture. */
+export interface ImportOp { id: number; src: 'text' | 'image'; name: string; res: Tip }
+/** The copy screen. `ops` is the list of bets read so far; `at` and `of` count the pictures while they are being read. */
+export interface ImportState { open: boolean; text: string; busy: boolean; pct: number; at: number; of: number; ops: ImportOp[]; err: string; msg: string; placing: boolean }
+export const imp: ImportState = { open: false, text: '', busy: false, pct: 0, at: 0, of: 0, ops: [], err: '', msg: '', placing: false };
 export const bankEmpty = (): boolean => !S.deposits.length && !S.bets.length;
