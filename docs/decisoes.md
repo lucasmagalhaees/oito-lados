@@ -46,6 +46,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 15. PR #16 mesclado às 17:42 e PR #17 às 17:46. A checagem de produção do #16 foi cancelada pela do #17 (o workflow `Produção` cancela a execução anterior do mesmo branch); a do #17 passou no commit `3491921`. O Lucas perguntou por que a do #16 "falhou" (respondido: cancelada, não falha) e se compartilhar a sessão já exigiria um backend. Respondido, sem implementar nada: mandar uma cópia já sai pelo backup por texto; acompanhar ao vivo, ou a mesma banca em dois aparelhos, é a etapa 2 do `docs/escala.md` e só começa se ele pedir. Às 17:57: "falta trazer a quantidade de unidades apostadas no evento, e de outras visualizações de unidades também, ganhos potenciais em reais e em unidades" (D70).
 16. PR #18 mesclado às 18:33; o workflow `Produção` passou no commit `23ed70e`. Às 18:37, quatro coisas: perguntou se o retrospecto das três últimas lutas tinha sido feito (não tinha: ele mesmo tinha dito que avisaria; a pergunta voltou para ele); pediu busca pelo nome do lutador (D71); sugeriu separar o card em preliminar e principal para navegar melhor (D72); e perguntou da aposta com a luta em andamento, respondendo ele mesmo "deixa como tá" (D73).
 17. PR #19 mesclado às 19:03; o workflow `Produção` passou no commit `c425193`. Às 19:24, com o card rolando, uma captura do iPhone e o pedido: a sinalização da seleção que bateu e da que foi perdida numa múltipla não está clara. Às 19:26: é de interface que ele fala; "de resto, acho que está funcionando bem, ele está mostrando as apostas conforme o evento vai transcorrendo" (D74). É o primeiro retorno dele com luta de verdade: as apostas fecharam sozinhas, e um empate real foi lido como empate. Às 19:36, outra captura: as informações de gestão de banca no topo da Carteira eram só texto, sem cor nem formatação (D75). Às 19:40, mais dois pedidos, **fora deste PR**: colar uma imagem que não está na galeria, e marcar toda aposta que vem do copiar como do tipster, para comparar com as dele.
+18. PR #20 aberto às 19:53, com o CI verde em seguida. Os dois pedidos das 19:40 saem num PR em cima dele: colar imagem (D76) e tipster ou minha (D77). Às 20:00 ele perguntou de novo pelo cartel com as três últimas lutas de cada lutador; a pergunta foi tomada como o "pode fazer" que a D57 esperava, e fica para o PR seguinte, começando pela amostra real da ESPN. Às 20:15: o indicador de luta ao vivo, em vermelho, parece aposta perdida (D78); vai no mesmo PR.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -765,6 +766,38 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - O valor da unidade sobe para o topo. Continua também no cartão de configuração da unidade.
 - **Junto, sem ele pedir:** nos quadros de três números, valores a partir de R$ 100.000,00 quebravam no meio do número em 393 px. A banca dele é dessa ordem (R$ 100.000,00 depositados). Os quadros passam a dois por linha quando um número é longo.
 
+## D76. Colar uma imagem que só está na área de transferência
+
+- **Contexto (10/10/2026, 19:40):** "eu queria conseguir copiar e colar uma imagem. Não tá claro hoje para mim como fazer isso e eu não consegui fazer. Uma imagem que não tá na minha galeria, que eu não quero salvar. O cara mandou mais uma operação ali no ao vivo, eu só vou copiar e colar".
+- **O que existia:** o botão "Colar" só lia texto (D65), e a imagem entrava pelo gesto de colar na página. No iPhone esse gesto só aparece dentro de um campo de texto, e um campo de texto não oferece "Colar" quando o que foi copiado é uma imagem. Na prática não havia caminho.
+- **Decisão:** o botão "Colar" passa a ler a área de transferência inteira. Havendo imagem, ela vai para o leitor de prints; senão, o texto. O botão vira o principal da tela, e o texto de ajuda diz que não precisa salvar a imagem.
+- **Fato de terceiro, não conferido em 10/10/2026:** a leitura da área de transferência com imagem (`navigator.clipboard.read`) existe no Safari desde a versão 13.1, e no iPhone cada leitura mostra um balão "Colar" do sistema, que a pessoa toca. Isso vem da memória, não de documentação lida hoje. Se o Safari recusar, o botão cai para só texto e depois para a mensagem de colar no campo.
+- **Não verificado:** nada disso no iPhone. O teste troca a área de transferência por uma de mentira.
+
+## D77. Do tipster ou minha, e a comparação entre as duas
+
+- **Contexto (10/10/2026, 19:40):** "toda a operação que vier do copia e cola, você separa, você coloca uma label de benchmark ou tipster, para eu saber o que é a operação do benchmark e o que é a operação minha. O que vier da seleção natural é a operação minha. O que vier do copia e cola é a operação do tipster. E aí eu consigo fazer benchmark meu contra ele".
+- **Decisão:**
+  - Toda aposta que sai da tela de copiar é gravada com a marca `copied`. O nome ("De quem é") continua opcional; sem ele a aposta é de "Tipster sem nome".
+  - Cada aposta mostra no alto "Tipster" (com o nome) ou "Minha". A aba Apostas filtra por "Minhas", "Tipster" ou um nome.
+  - Na Carteira, a tabela que era "por origem" vira "Você × tipster": as próprias na primeira linha, os tipsters embaixo, e uma frase dizendo quem está na frente.
+  - A faixa "Desde a última vez" separa as próprias das de cada tipster.
+- **Interpretações que precisaram ser feitas:**
+  - **Quem está na frente é decidido pelo ROI** (resultado sobre o apostado) das apostas encerradas do período. O resultado em dinheiro favorece quem aposta mais, e as unidades favorecem quem aposta mais vezes; o ROI compara as duas escolhas na mesma régua. As três medidas ficam na tabela.
+  - **Apostas copiadas antes desta mudança** são reconhecidas pelo que só uma cópia tem: o nome, ou uma odd do print. Uma cópia antiga sem nome e sem odd no print não tem como ser distinguida e conta como própria.
+  - **Repetir uma aposta de tipster continua sendo do tipster** (revê a D48, que tirava a origem na repetição). A odd do print continua não indo junto, porque é da aposta original.
+  - **Uma cópia que a pessoa mexe no cupom** (tira ou acrescenta seleção) continua sendo do tipster, como já era com o nome.
+  - A palavra é "Tipster"; "benchmark" ficou no nome da função.
+  - Apostas de tipster sem nome podem receber um nome depois, no cartão "Ao copiar apostas".
+- **O que não muda:** é uma banca só. A aposta copiada continua saindo do mesmo saldo; a marca só separa as contas.
+
+## D78. "Ao vivo" deixa de ser vermelho
+
+- **Contexto (10/10/2026, 20:15):** "esse indicador da luta ao vivo tá aparecendo aposta perdida, porque ficou em vermelho. Não tá bacana".
+- **O que acontecia:** a cor de "ao vivo" era um vermelho quase igual ao de "perdeu". Na lista de apostas, a etiqueta da aposta, a linha da luta e a marca da seleção em andamento ficavam vermelhas.
+- **Decisão:** "ao vivo" passa a ser azul nos dois temas, com a marca da seleção pulsando. Vermelho fica só para o que foi perdido. O aviso de falta de conexão com a ESPN, que pegava a mesma cor, fica no vermelho.
+- **Interpretação:** a cor escolhida. Verde é ganho, vermelho é perda, dourado é seleção e tipster; azul era o que sobrava longe dos três. O canto azul do lutador é um quadradinho ao lado do nome, de outro tom.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -779,6 +812,9 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
 | Dizer se o retrospecto dos lutadores é para fazer agora (D57) | Lucas |
+| Confirmar o azul de "ao vivo" (D78) | Lucas |
+| Testar o "Colar" com um print copiado no iPhone, sem salvar na galeria (D76) | Lucas |
+| Confirmar: quem está na frente pelo ROI, a repetição de aposta de tipster continuar do tipster, e a palavra "Tipster" (D77) | Lucas |
 | Confirmar o quadro "se todas perderem" e a unidade no topo da Carteira (D75) | Lucas |
 | Confirmar as palavras de cada estado da seleção, e "Bateu" e "Perdeu" já com a luta rolando quando está decidido no papel (D74) | Lucas |
 | Gravar como amostra a resposta real de um empate e de uma luta em "STATUS_PRE_FIGHT" (D74) | Quem rodar `OL_SAMPLES=1 python3 tests/contract_live.py` de uma conexão comum |

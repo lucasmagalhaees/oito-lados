@@ -2,6 +2,19 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.16.0] - 2026-10-10
+
+### Adicionado
+- O botão "Colar" aceita imagem: o print que foi copiado e não está na galeria vai direto para o leitor.
+- Toda aposta que entra pelo "Copiar aposta" é marcada como do tipster, e a que é montada no card como própria. Cada aposta mostra a etiqueta, e a aba Apostas filtra por "Minhas" e "Tipster".
+- Tabela "Você × tipster" na Carteira, com uma frase dizendo quem está na frente pelo retorno sobre o apostado.
+- Dar nome, depois, às apostas de tipster que ficaram sem.
+
+### Alterado
+- "Ao vivo" passa a ser azul. Era um vermelho quase igual ao de aposta perdida.
+- Repetir uma aposta de tipster continua sendo do tipster. Antes a repetição perdia a origem.
+- A tabela "por origem" deu lugar à "Você × tipster"; a linha "Sem origem" virou "Minhas".
+
 ## [0.15.0] - 2026-10-10
 
 ### Alterado

@@ -479,6 +479,19 @@ export default function cases(Core) {
   eq('origin: renamed', [ren.n, ren.bets.map(b => b.from || null), closed.map(b => b.from || null)], [2, ['Canal Alfa', 'Canal B', 'Canal Alfa', null, null], ['Canal A', 'Canal B', 'Canal A', null, null]]);
   eq('origin: named after another one, the two are joined', Core.byOrigin(Core.renameOrigin(closed, 'Canal A', 'Canal B').bets).map(r => [r.k, r.n]), [['Canal B', 3], ['', 2]]);
   eq('origin: nothing to rename, and no new name changes nothing', [Core.renameOrigin(closed, 'Canal X', 'Y').n, Core.renameOrigin(closed, 'Canal A', 'Canal A').n, Core.renameOrigin(closed, '', 'Y').n, Core.renameOrigin(closed, 'Canal B', '   ').n, Core.renameOrigin(closed, 'Canal B', '   ').bets === closed, Core.renameOrigin(closed, 'Canal A', 'x'.repeat(60)).bets[0].from.length], [0, 0, 0, 0, true, 40]);
+  /* whose a bet is: the person's own pick, or a copy of a tipster's */
+  const mineB = hb('mi', 'single', 'won', 100, 250, [hl('f1', 'ml:a')], { unit: 100 }), markB = hb('mk', 'single', 'lost', 100, 0, [hl('f2', 'ml:a')], { copied: true, unit: 100 });
+  const namedB = hb('nm', 'single', 'won', 200, 300, [hl('f3', 'ml:a')], { from: 'Canal A', unit: 100 }), printB = hb('pr', 'single', 'lost', 50, 0, [hl('f3', 'ml:b', { printed: 2.1 })], { unit: 100 });
+  const wholeB = hb('wh', 'multi', 'void', 40, 40, [hl('f1', 'ml:a'), hl('f2', 'ml:b')], { printed: 3.4 }), cashB = hb('cs', 'single', 'cashed', 60, 60, [hl('f1', 'ml:b')]);
+  const sides = [mineB, markB, namedB, printB, wholeB, cashB];
+  eq('tip: a bet is a tipster\'s when it says so, or carries what only a copy has (a name, a printed odd)', sides.map(Core.isTip), [false, true, true, true, true, false]);
+  eq('tip: the results by whose the bets are keep the person\'s own apart from the copies with no name', Core.byOrigin(sides).map(r => [r.k, r.tip, r.n, r.st, r.ret]), [['', true, 3, 190, 40], ['Canal A', true, 1, 200, 300], ['', false, 2, 160, 310]].sort((a, b) => b[3] - a[3]));
+  eq('benchmark: each side summed up, and who is ahead by return on what was staked', (r => [r.ahead, r.mine, r.tip])(Core.benchmark(sides)),
+    ['mine', { n: 2, st: 160, ret: 310, won: 1, dec: 1, units: 1.5, unitBets: 1, pnl: 150, roi: 0.9375 }, { n: 4, st: 390, ret: 340, won: 1, dec: 3, units: -0.5, unitBets: 3, pnl: -50, roi: -0.1282 }]);       // voided and cashed-out bets count in the money, not in the hits
+  eq('benchmark: the tipster ahead, a tie, and nothing to compare while one side has no closed bet', [Core.benchmark([markB, namedB, hb('m2', 'single', 'lost', 10, 0, [hl('f1', 'ml:a')])]).ahead, Core.benchmark([mineB, hb('t2', 'single', 'won', 10, 25, [hl('f1', 'ml:a')], { copied: true })]).ahead, Core.benchmark([mineB]).ahead, Core.benchmark([namedB]).ahead, Core.benchmark([]).ahead], ['tip', 'tie', null, null, null]);
+  eq('since: the copies with no name are the tipster\'s, apart from the person\'s own', Core.sinceSummary([mineB, markB, printB], 0).by, [{ k: '', tip: true, n: 2, pnl: -150 }, { k: '', tip: false, n: 1, pnl: 150 }]);
+  const named = Core.renameOrigin(sides, '', 'Canal Novo');
+  eq('origin: with no origin given, the copies that have none get the name; the person\'s own bets never do', [named.n, named.bets.map(b => b.from || null)], [3, [null, 'Canal Novo', 'Canal A', 'Canal Novo', 'Canal Novo', null]]);
   const DAYMS = 24 * 3600e3, NOW = 100 * DAYMS;
   const past = [hb('old', 'single', 'won', 10, 20, [hl('f1', 'ml:a', { eid: 'e1', event: 'UFC 1: Almeida vs. Dunne', date: 60 * DAYMS })], { settledAt: 61 * DAYMS }),
     hb('mid', 'single', 'lost', 10, 0, [hl('f2', 'ml:a', { eid: 'e2', event: 'UFC 2: Teles vs. Prado', date: 90 * DAYMS })], { settledAt: 91 * DAYMS }),
@@ -489,7 +502,7 @@ export default function cases(Core) {
   eq('period: the event of the bet that closed last, by its latest fight', (r => [ids(r.bets), r.event])(Core.periodBets(past, 'event', NOW)), [['x', 'new'], 'UFC 3: Brandt vs. Kessler']);
   eq('period: nothing closed, or a period that does not exist', [Core.periodBets([], 'event', NOW), ids(Core.periodBets(past, 'banana', NOW).bets).length], [{ bets: [], event: null }, 4]);
   eq('since: what closed by itself after a moment, with the result by origin', Core.sinceSummary(closed.concat(hb('late', 'single', 'lost', 25, 0, [hl('f1', 'ml:a')], { from: 'Canal A', settledAt: 9000 }), hb('op', 'single', 'open', 5, 0, [hl('f1', 'ml:a')])), 4000),
-    { n: 5, pnl: -155, units: 0, unitBets: 0, by: [{ k: 'Canal A', n: 3, pnl: 125 }, { k: '', n: 1, pnl: 20 }, { k: 'Canal B', n: 1, pnl: -300 }] });                 // the cashout is not there: the person did that one
+    { n: 5, pnl: -155, units: 0, unitBets: 0, by: [{ k: 'Canal A', tip: true, n: 3, pnl: 125 }, { k: '', tip: false, n: 1, pnl: 20 }, { k: 'Canal B', tip: true, n: 1, pnl: -300 }] });                 // the cashout is not there: the person did that one
   eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, units: 0, unitBets: 0, by: [] }, 4]);
   eq('since: the result in units too, each bet by the unit it was placed with', (r => [r.n, r.pnl, r.units, r.unitBets])(Core.sinceSummary([hb('w', 'single', 'won', 100, 300, [hl('f1', 'ml:a')], { unit: 50 }), hb('l', 'single', 'lost', 1000, 0, [hl('f2', 'ml:a')], { unit: 500 }),
     hb('n', 'single', 'won', 20, 50, [hl('f3', 'ml:a')]), hb('k', 'single', 'cashed', 60, 90, [hl('f3', 'ml:b')], { unit: 10 })], 0)), [3, -770, 2, 2]);       // +4u and -2u; the bet with no unit only counts in money

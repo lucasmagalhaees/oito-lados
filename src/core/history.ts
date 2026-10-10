@@ -84,31 +84,54 @@ export function copyDrop(betOdd: number | null | undefined, legs: { fid: string;
   return each.length ? round(Math.min(...each)) : null;
 }
 
-/** Results by who the bets were copied from ('' for the ones with no origin), the origin with the most money first.
- *  Voided and cashed-out bets are not hits or misses. `units` is the result with each bet measured by the unit it was
- *  placed with (`unitBets` of them have one), so one large bet does not decide the comparison between origins.
- *  `edge` compares the odds taken with the printed ones. */
-export interface OriginRow { k: string; n: number; st: number; ret: number; won: number; dec: number; units: number; unitBets: number; edge: { n: number; avg: number; ahead: number } }
+/** A bet that came from copying someone else's, a tipster's, and not from the person's own picks: it says so itself,
+ *  or it carries what only a copy has (who it is from, or an odd its original printed). */
+export const isTip = (b: Bet): boolean => !!(b.copied || b.from || b.printed || b.legs.some(l => l.printed));
+
+/** Results by whose the bets are: the person's own (`tip` false, no name) and each tipster the others were copied from
+ *  (`k` is the name, '' for the copies with none), the one with the most money first. Voided and cashed-out bets are
+ *  not hits or misses. `units` is the result with each bet measured by the unit it was placed with (`unitBets` of them
+ *  have one), so one large bet does not decide the comparison. `edge` compares the odds taken with the printed ones. */
+export interface OriginRow { k: string; tip: boolean; n: number; st: number; ret: number; won: number; dec: number; units: number; unitBets: number; edge: { n: number; avg: number; ahead: number } }
+const whose = (b: Bet): string => isTip(b) ? 'T' + (b.from || '') : 'M';
+function tally(r: Pick<OriginRow, 'n' | 'st' | 'ret' | 'won' | 'dec' | 'units' | 'unitBets'>, b: Bet): void {
+  r.n++; r.st += b.stake; r.ret += b.payout;
+  if (b.unit && b.unit > 0) { r.unitBets++; r.units += (b.payout - b.stake) / b.unit; }
+  if (b.status === 'won' || b.status === 'lost') { r.dec++; if (b.status === 'won') r.won++; }
+}
 export function byOrigin(done: Bet[], all?: Bet[]): OriginRow[] {
   const m = new Map<string, OriginRow>();
   for (const b of done) {
-    const k = b.from || '', r = m.get(k) || { k, n: 0, st: 0, ret: 0, won: 0, dec: 0, units: 0, unitBets: 0, edge: { n: 0, avg: 0, ahead: 0 } };
-    r.n++; r.st += b.stake; r.ret += b.payout;
-    if (b.unit && b.unit > 0) { r.unitBets++; r.units += (b.payout - b.stake) / b.unit; }
-    if (b.status === 'won' || b.status === 'lost') { r.dec++; if (b.status === 'won') r.won++; }
-    m.set(k, r);
+    const key = whose(b), r = m.get(key) || { k: b.from || '', tip: isTip(b), n: 0, st: 0, ret: 0, won: 0, dec: 0, units: 0, unitBets: 0, edge: { n: 0, avg: 0, ahead: 0 } };
+    tally(r, b); m.set(key, r);
   }
   const rows = [...m.values()].sort((a, b) => b.st - a.st);
-  for (const r of rows) r.edge = edgeSummary((all || done).filter(b => (b.from || '') === r.k));
+  for (const r of rows) r.edge = edgeSummary((all || done).filter(b => isTip(b) === r.tip && (b.from || '') === r.k));
   return rows;
 }
 
-/** Gives the bets of one origin another name. Naming it after an origin that exists joins the two. Without a new name
- *  nothing changes. Returns a new list, and how many bets changed. */
+/** The person against the tipsters: the closed bets of each side summed up, and who is ahead by return on what was
+ *  staked (`roi`, null with nothing staked). `ahead` is null while one of the two has nothing to compare. */
+export interface BenchSide { n: number; st: number; ret: number; pnl: number; roi: number | null; won: number; dec: number; units: number; unitBets: number }
+export function benchmark(done: Bet[]): { mine: BenchSide; tip: BenchSide; ahead: 'mine' | 'tip' | 'tie' | null } {
+  const side = (bets: Bet[]): BenchSide => {
+    const r = { n: 0, st: 0, ret: 0, won: 0, dec: 0, units: 0, unitBets: 0 };
+    for (const b of bets) tally(r, b);
+    const pnl = r2(r.ret - r.st);
+    return { ...r, st: r2(r.st), ret: r2(r.ret), pnl, roi: r.st > 0 ? Math.round(pnl / r.st * 1e4) / 1e4 : null, units: Math.round(r.units * 1e4) / 1e4 };
+  };
+  const mine = side(done.filter(b => !isTip(b))), tip = side(done.filter(isTip));
+  return { mine, tip, ahead: mine.roi == null || tip.roi == null ? null : mine.roi > tip.roi ? 'mine' : mine.roi < tip.roi ? 'tip' : 'tie' };
+}
+
+/** Gives the bets of one origin another name. Naming it after an origin that exists joins the two. With no origin
+ *  given it names the copied bets that have none. Without a new name nothing changes. Returns a new list, and how many
+ *  bets changed. */
 export function renameOrigin(bets: Bet[], from: string, to: unknown): { bets: Bet[]; n: number } {
   const name = String(to == null ? '' : to).replace(/\s+/g, ' ').trim().slice(0, 40);
-  if (!from || !name || name === from) return { bets, n: 0 };
-  return { bets: bets.map(b => b.from === from ? { ...b, from: name } : b), n: bets.filter(b => b.from === from).length };
+  const hit = (b: Bet): boolean => from ? b.from === from : isTip(b) && !b.from;
+  if (!name || name === from) return { bets, n: 0 };
+  return { bets: bets.map(b => hit(b) ? { ...b, from: name } : b), n: bets.filter(hit).length };
 }
 
 /** The closed bets a period of the wallet covers. `30d` goes by when the bet closed. `event` is the event of the bet
@@ -126,11 +149,12 @@ export function periodBets(done: Bet[], period: unknown, now: number): { bets: B
 }
 
 /** What closed by itself after a moment: how many bets, the result (in money, and in units for the `unitBets` of them
- *  that have a unit), and the same by origin. A cashout is left out: the person did that one and saw it. */
-export function sinceSummary(bets: Bet[], since: unknown): { n: number; pnl: number; units: number; unitBets: number; by: { k: string; n: number; pnl: number }[] } {
+ *  that have a unit), and the same by whose the bets are (the person's own, and each tipster). A cashout is left out:
+ *  the person did that one and saw it. */
+export function sinceSummary(bets: Bet[], since: unknown): { n: number; pnl: number; units: number; unitBets: number; by: { k: string; tip: boolean; n: number; pnl: number }[] } {
   const t = Number(since) || 0, closed = bets.filter(b => (b.status === 'won' || b.status === 'lost' || b.status === 'void') && (b.settledAt || 0) > t);
-  const m = new Map<string, { k: string; n: number; pnl: number }>();
-  for (const b of closed) { const k = b.from || '', r = m.get(k) || { k, n: 0, pnl: 0 }; r.n++; r.pnl += b.payout - b.stake; m.set(k, r); }
+  const m = new Map<string, { k: string; tip: boolean; n: number; pnl: number }>();
+  for (const b of closed) { const key = whose(b), r = m.get(key) || { k: b.from || '', tip: isTip(b), n: 0, pnl: 0 }; r.n++; r.pnl += b.payout - b.stake; m.set(key, r); }
   const by = [...m.values()].map(r => ({ ...r, pnl: r2(r.pnl) })).sort((a, b) => b.n - a.n || a.k.localeCompare(b.k));
   const withUnit = closed.filter(b => (b.unit || 0) > 0);
   return { n: closed.length, pnl: r2(closed.reduce((a, b) => a + b.payout - b.stake, 0)), units: Math.round(withUnit.reduce((a, b) => a + (b.payout - b.stake) / b.unit!, 0) * 1e4) / 1e4, unitBets: withUnit.length, by };
