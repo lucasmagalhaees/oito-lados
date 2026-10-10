@@ -126,6 +126,43 @@ with sync_playwright() as p:
     assert bal().replace('\xa0',' ') == 'R$ 1.000,00' and pg.evaluate('window.__OL.S.conv.length') == 3, bal()
     pg.click('.tabbar [data-tab=lutas]')
     shot('s1-lutas.png')
+    # the card comes in its parts, by the hour the fights start, and one part can be shown alone
+    nfights = lambda: pg.locator('#list article.fight').count()
+    secs = lambda: [e.get_attribute('data-part') for e in pg.locator('#list .sec').element_handles()]
+    assert pg.locator('#parts button').all_inner_texts() == ['Tudo (3)', 'Principal (1)', 'Preliminares (2)'] and nfights() == 3 and secs() == ['main', 'prelims'], (pg.locator('#parts button').all_inner_texts(), secs())
+    pg.click('#parts [data-p=main]'); assert nfights() == 1 and secs() == ['main'] and 'DUNNE' in txt('#list').upper() and 'TELES' not in txt('#list').upper(), txt('#list')
+    pg.click('#parts [data-p=prelims]'); assert nfights() == 2 and secs() == ['prelims'] and pg.get_attribute('#parts [data-p=prelims]', 'aria-pressed') == 'true' and 'DUNNE' not in txt('#list').upper()
+    shot('s39-preliminares.png')
+    pg.click('#parts button >> nth=0'); assert nfights() == 3 and pg.get_attribute('#parts button >> nth=0', 'aria-pressed') == 'true'
+    # a fight is found by a piece of a fighter's name, whatever the accents and the case, and the field keeps the focus while the list changes
+    focused = lambda: pg.evaluate('document.activeElement && document.activeElement.id')
+    pg.click('#q'); pg.keyboard.type('TÉLES')
+    assert nfights() == 1 and txt('#qinfo') == '1 luta com "TÉLES".' and pg.locator('#parts').count() == 0 and focused() == 'q' and pg.is_visible('[data-act=qclear]'), (nfights(), txt('#qinfo'), focused())
+    assert secs() == ['prelims'] and pg.locator('#list .qev').count() == 1, 'what is found keeps its event and its part of the card'
+    # on a phone a tapped button leaves the focus in the field: the pick still shows, because the list under the field is repainted
+    tap = lambda sel: pg.evaluate('s => document.querySelector(s).dispatchEvent(new MouseEvent("click", { bubbles: true }))', sel)
+    tap('[data-act=pick][data-fid="f1"][data-key="ml:a"]')
+    assert focused() == 'q' and pg.get_attribute('[data-act=pick][data-fid="f1"][data-key="ml:a"]', 'aria-pressed') == 'true' and pg.input_value('#q') == 'TÉLES' and pg.evaluate('window.__OL.slip.sels.length') == 1
+    tap('[data-act=pick][data-fid="f1"][data-key="ml:a"]'); assert pg.get_attribute('[data-act=pick][data-fid="f1"][data-key="ml:a"]', 'aria-pressed') == 'false' and pg.evaluate('window.__OL.slip.sels.length') == 0
+    shot('s40-busca.png')
+    pg.fill('#q', 'almeida dunne'); assert nfights() == 1 and secs() == ['main']
+    pg.fill('#q', 'jr'); assert nfights() == 1 and 'PRADO' in txt('#list').upper()
+    pg.fill('#q', 'almeida teles'); assert nfights() == 0 and txt('#qinfo') == 'Nenhuma luta com "almeida teles" nos eventos carregados.', txt('#qinfo')
+    pg.fill('#q', '<b>zz</b>'); assert nfights() == 0 and '"<b>zz</b>"' in txt('#qinfo') and pg.locator('#qinfo b').count() == 0, 'what is typed is shown as text'
+    pg.click('[data-act=qclear]'); assert pg.input_value('#q') == '' and nfights() == 3 and pg.locator('#parts').count() == 1 and focused() == 'q' and not pg.is_visible('[data-act=qclear]'), 'the x empties the field and leaves it ready'
+    # with another event on the board the search covers it too, and a tap on its name opens that card with the search still there
+    ESPN['next'] = True; assert focused() == 'q'; tap('[data-act=refresh]'); assert focused() != 'q', 'a tap outside the list lets go of the field, so the whole screen can follow'
+    pg.wait_for_function('window.__OL.D.events.length === 2'); assert pg.locator('.events .ev').count() == 2
+    pg.fill('#q', 'teles'); assert nfights() == 2 and txt('#qinfo') == '2 lutas com "teles", nos 2 eventos carregados.' and pg.locator('#list .qev').count() == 2, txt('#qinfo')
+    assert 'TELES VS. FARIAS' in txt('#list button.qev').upper() and 'abrir este card' in txt('#list button.qev').lower() and pg.locator('#list .qev >> nth=0').evaluate('e => e.tagName') == 'DIV', 'the event on screen comes first, and the other one is a button'
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; shot('s41-busca-dois-eventos.png')
+    pg.click('#list button.qev'); pg.wait_for_function('window.__OL.ui.eventId === "600000002"')
+    assert pg.input_value('#q') == 'teles' and nfights() == 2 and 'TELES VS. FARIAS' in pg.locator('#list .qev >> nth=0').inner_text().upper() and 'on' in pg.get_attribute('.events .ev >> nth=1', 'class'), 'that card is the one on screen now, and the search is still there'
+    pg.fill('#q', ''); assert nfights() == 1 and pg.locator('#parts').count() == 0, 'a card with one hour has no parts to choose'
+    # the keyboard's own "search" puts the keyboard away; picking an event at the top leaves the search
+    pg.fill('#q', 'farias'); pg.press('#q', 'Enter'); assert focused() != 'q' and nfights() == 1 and pg.input_value('#q') == 'farias'
+    pg.click('.events .ev >> nth=0'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"'); assert pg.input_value('#q') == '' and nfights() == 3
+    ESPN['next'] = False; pg.click('[data-act=refresh]'); pg.wait_for_function('window.__OL.D.events.length === 1'); assert nfights() == 3 and pg.locator('.events .ev').count() == 1
     pick = lambda fid, key: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     shot('s2-markets.png', True)

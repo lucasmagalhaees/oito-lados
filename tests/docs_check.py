@@ -206,6 +206,14 @@ check('every event and everything open get the same totals, and an open bet says
 check('the slip and the copy list say the gain too, priced the way the slip prices', 'id="slipgain"' in rend_src and 'id="impgain"' in imp_src and 'class="impgain"' in imp_src and 'export function payoutOf' in help_src and 'payoutOf(' in imp_src and '`payoutOf`' in spec)
 check('the wallet and the fight card say the units at stake', 'id="heropot"' in rend_src and "ex.unitBets ? ' · ' + fu(ex.units) : ''" in rend_src and '"N apostas · R$ X · Yu"' in spec)
 
+# 5d1h. the fights screen: the parts of the card and the search by a fighter's name
+ev_src = read('src/app/events.ts'); card_src = read('src/core/card.ts')
+check('the parts of the card and the search have tests and are in the spec', all(('Core.' + f) in unit_src and ('`Core.' + f + '`') in spec for f in ('cardSections', 'findFights')))
+check('early prelims only exist with three hours or more, as the spec says', "i === times.length - 1 && times.length > 2 ? 'early'" in card_src and 'com três horas ou mais' in spec)
+check('typing in the search only repaints the list: it asks the source for nothing', "else if (t.id === 'q') { ui.q = t.value; paintList(); }" in ev_src and 'load' not in rend_src[rend_src.index('export function paintList'):rend_src.index('export function paintList') + 400] and 'Buscar não faz chamada à ESPN' in spec)
+check('with the focus in the search field only the list is repainted', "else if (ae.id === 'q') paintList();" in rend_src and '(`#list`)' in spec)
+check('a tap outside the list lets go of the search field', "!b.closest('#list')) q.blur();" in ev_src and 'qualquer toque fora dela solta o campo' in spec)
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

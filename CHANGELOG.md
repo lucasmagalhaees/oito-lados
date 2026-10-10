@@ -2,6 +2,12 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.14.0] - 2026-10-10
+
+### Adicionado
+- Busca na tela de Lutas: acha a luta por um pedaço do nome do lutador, em todos os eventos carregados, sem depender de acento ou caixa. Não faz chamada à ESPN.
+- Botões para ver uma parte do card só: principal, preliminares ou primeiras preliminares.
+
 ## [0.13.0] - 2026-10-10
 
 ### Adicionado

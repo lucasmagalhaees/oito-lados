@@ -196,6 +196,13 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .field span{color:var(--muted);font-weight:600;white-space:nowrap}
 .field input{flex:1;min-width:0;border:0;background:none;height:48px;font-size:18px;font-weight:600;outline:none}
 .field:focus-within{border-color:var(--gold)}
+.field.search{margin-top:10px}
+.field.search span{font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.field.search input{font-size:17px}
+.field.search .x{flex:none;margin-right:-8px}
+#parts{margin-top:10px}
+#qinfo{margin-top:6px}
+button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .field .step{flex:none;width:40px;height:40px;border-radius:8px;border:1px solid var(--line);font-size:22px;font-weight:600;line-height:1;color:var(--fg);display:flex;align-items:center;justify-content:center;padding:0}
 .field .step:first-child{margin-left:-6px}
 .field .step:last-child{margin-right:-6px}

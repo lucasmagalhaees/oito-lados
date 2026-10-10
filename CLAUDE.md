@@ -103,6 +103,9 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 19. As apostas abertas aparecem agrupadas por evento, na ordem das lutas, com o total em jogo, o retorno e o ganho se todas baterem.
 20. Onde aparece dinheiro em jogo aparece também em unidades, e onde aparece o retorno possível aparece o ganho possível (retorno menos a stake), em dinheiro e em unidades: em cada aposta aberta, em cada evento, no total em aberto, no card da luta, na Carteira, no cupom e na lista de copiar. O resultado de aposta encerrada também vem em unidades.
 
+21. Na tela de Lutas, um campo de busca acha a luta por um pedaço do nome de um lutador, em todos os eventos carregados, sem depender de acento ou caixa.
+22. O card de um evento vem separado em card principal, preliminares e primeiras preliminares, e um toque mostra uma parte só.
+
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
 ## Por que uma página estática chamando a ESPN direto
@@ -164,6 +167,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/core/fx.ts` | `normFx`, `fxRate`, `convertState`, `balanceOf` |
 | `src/core/tip.ts` | `parseTip`, `tipStake`, `completeTip` (preenche a seleção que o original não mostra), `printedEdge` e `edgeSummary` (a odd do original contra a odd pega) |
 | `src/core/history.ts` | Perguntas feitas ao histórico de apostas: `selSig`, `dupBets` (a aposta já está aberta?), `exposure` (quanto já está em jogo numa luta), `openTotals` (o que um conjunto de abertas tem em jogo e pode pagar, em dinheiro e em unidades), `openByEvent` (as abertas por evento, na ordem das lutas), `copyDrop` (quanto a odd caiu em relação ao print), `byOrigin`, `renameOrigin`, `periodBets` e `sinceSummary` |
+| `src/core/card.ts` | O card de um evento: `cardSections` (as partes do card, pela hora em que as lutas começam) e `findFights` (as lutas com o que foi digitado no nome dos lutadores) |
 | `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
 
 ### `src/app/`: a página
@@ -180,7 +184,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/app/import.ts` | Copiar aposta: leitor de imagem, a lista de apostas lidas (`runImport`, `importImages`, `renderImport`), o que cada item vira agora (`impResolve`: seleções, correções, avisos), `importToSlip` e `placeAll`, que faz várias de uma vez |
 | `src/app/sync.ts` | `sync`, `schedule`, `pickEvent` |
 | `src/app/helpers.ts` | `wallet`, `statsOf` (os números de um conjunto de apostas encerradas), `priceOf`, `slipCalc`, `groupsOf` e `payoutOf` (o preço por luta e o que uma stake devolve, do jeito que o cupom calcula), `exposureNotes`, valor do cupom em dinheiro e em unidades |
-| `src/app/render.ts` | `render` e as três telas, cupom (`renderSheet`, `slipSummary`), gráfico, `place` e as duas partes dele que o lote também usa (`recheck`, `writeBets`) |
+| `src/app/render.ts` | `render` e as três telas, a lista de lutas que se repinta sozinha debaixo da busca (`paintList`), cupom (`renderSheet`, `slipSummary`), gráfico, `place` e as duas partes dele que o lote também usa (`recheck`, `writeBets`) |
 | `src/app/events.ts` | Um listener delegado por `data-act`, depósito e troca de moeda |
 | `src/app/update.ts` | Registro do service worker, aviso de versão nova (`initUpdates`, `applyUpdate`, `checkNow`) e `builtFrom`, o commit da página |
 | `src/main.ts` | Entrada: liga os listeners, expõe `window.__OL`, dispara a primeira sincronização e registra o service worker |
@@ -192,7 +196,7 @@ Os módulos de `src/app/` se importam em círculo (a tela chama ações, ações
 
 `window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, settling, S, FX}` para teste.
 
-Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando.
+Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando. A exceção é o campo de busca da tela de Lutas: com o foco nele, `render()` repinta só a lista de lutas (`#list`), e o campo fica como está.
 
 ### Estado no `localStorage`
 
@@ -411,13 +415,20 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - **No card da luta** (D59): a luta com aposta aberta mostra "N apostas · R$ X · Yu" (`Core.exposure`, a múltipla contando inteira), e o toque leva à aba Apostas.
 - **Na Carteira** (D70): embaixo do saldo, o que está em jogo vem também em unidades, com o retorno e o ganho se todas baterem. As tabelas por mercado e por evento trazem o resultado em unidades embaixo do resultado em dinheiro, como a tabela por origem.
 
+## Tela de Lutas: partes do card e busca
+
+- **Partes do card** (D72): a ESPN só diz a hora de cada luta, então as partes saem das horas (`Core.cardSections`): as lutas da hora mais tardia são o card principal; com três horas ou mais, as da mais cedo são as primeiras preliminares; o resto, preliminares. Dentro de cada parte, a luta que acontece por último vem em cima. Com mais de uma parte, botões logo acima da lista ("Tudo", "Principal", "Preliminares", "Primeiras", cada um com o número de lutas) mostram uma parte só (`ui.part`). A escolha não é guardada, e volta a "Tudo" num evento que não tem aquela parte.
+- **Busca** (D71): o campo "Buscar" acha a luta por um pedaço do nome de qualquer um dos dois lutadores (`Core.findFights`). Cada palavra digitada tem que aparecer nos nomes; acento e caixa não contam. Procura em todos os eventos carregados, o que está na tela primeiro, e cada luta achada aparece com o evento e a parte do card dela. O nome de outro evento é um botão que abre aquele card com a busca ainda lá; é nesse toque que as odds dele são pedidas, como ao escolher o evento no alto. Luta de outro evento aparece com a odd que estiver guardada, ou "sem odds ainda". **Buscar não faz chamada à ESPN.**
+- O "×" limpa o campo e deixa o cursor nele. Escolher um evento no alto limpa a busca. A tecla "buscar" do teclado só guarda o teclado.
+- No iPhone um botão tocado não tira o foco do campo. Por isso o que é tocado dentro da lista (uma odd, "Método, rounds e quedas") repinta só a lista, com o campo no lugar, e qualquer toque fora dela solta o campo antes.
+
 ## Sincronização
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 16 dias à frente.
 - `loadOdds`: por evento, só lutas `pre`, no máximo a cada 5 min; forçado no botão Atualizar e antes de aceitar aposta.
 - Intervalo do laço: 8 s enquanto uma aposta aberta espera por uma luta que já acabou (o resultado, ou as quedas fecharem; `settling`), por até 30 min depois de a luta aparecer como encerrada; 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta. Uma página restaurada da memória (`pageshow`) e a volta da conexão (`online`) também sincronizam, se a última sincronização foi há mais de 5 s.
 - Antes de gravar uma aposta, `place()` recarrega placar e odds das lutas envolvidas. Se a luta começou, recusa; se a odd mudou, mostra a nova e pede confirmação.
-- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo. O cashout congela enquanto houver luta da aposta em andamento.
+- Apostas travam quando a luta sai de `pre`. Não há aposta ao vivo, e é decisão (D73): a ESPN não publica odd com a luta em andamento. O cashout congela enquanto houver luta da aposta em andamento.
 - Só atualiza com o app aberto; ao reabrir, busca os resultados e liquida o que ficou pendente.
 
 ## App guardado no aparelho (offline e versão nova)
@@ -478,7 +489,7 @@ Os casos são JavaScript, não TypeScript: muitos passam de propósito dados tor
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%). `cov.stop` para a medição e solta a página: com o medidor ainda preso, uma página fechada continuava contando como aberta para o service worker.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), renomeia origem, filtra as apostas por origem, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), mostra uma parte do card só e busca luta pelo nome (com um segundo evento no placar, e com o toque que não tira o foco do campo), renomeia origem, filtra as apostas por origem, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 `settle.py` aposta pela interface na primeira luta do card (vencedor, o outro lado, método, quedas e uma múltipla) e faz a ESPN simulada segurar respostas: primeiro a luta acaba com o vencedor marcado e sem resultado (as duas de vencedor fecham, o resto espera, e a fonte é consultada de novo em menos de 10 s); depois o resultado vem com um nome inventado (nada anula, o nome aparece); depois vem certo (método e quedas fecham). Confere também a volta ao app e a múltipla perdida na luta principal. O `e2e.py` liquida com tudo chegando de uma vez; este é o que cobre a noite em que não chega.
 

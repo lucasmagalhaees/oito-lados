@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { isCurrency, setFmt } from './format';
-import type { AppState, AthleteStats, CornerPair, Currency, Fight, FightEvent, Odds, Period, Result, Takedowns, Tip, TipPick, TipStakeIn } from '../core';
+import type { AppState, AthleteStats, CardPart, CornerPair, Currency, Fight, FightEvent, Odds, Period, Result, Takedowns, Tip, TipPick, TipStakeIn } from '../core';
 
 /* ================= persistent state ================= */
 export const LS = {
@@ -85,8 +85,10 @@ export interface Ui {
   origin: string | null;
   /** Which closed bets the wallet's numbers cover. */
   period: Period;
+  /** What is typed in the search of the fights screen, and the part of the card it shows (null shows all of it). */
+  q: string; part: CardPart | null;
 }
-export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all' };
+export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */

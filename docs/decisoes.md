@@ -44,6 +44,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 13. Às 17:09: "deixa quieto esse lance da notificação" e "só garante que está numa forma bacana esse lance de resolver a aposta, pra ganho e pra perda; seria bacana não demorar tanto depois que a luta acabou, mas eu consigo esperar um tempo". É a primeira noite com luta de verdade. Revisão do caminho de liquidação (D64), num PR à frente dos outros pedidos da fila.
 14. PR #15 mesclado às 17:19 (depois de um conserto: o `docs_check.py` falhou no CI por exigir uma pasta que só existe depois de um teste rodar). PR #16, da liquidação, aberto com o CI verde. Em seguida, os pedidos do item 12: botão de colar (D65), stake sugerida em múltipla longa (D66), setas no campo de unidades (D67), a regra de valor ao copiar seguida à risca (D68) e a stake e a hora à vista em cada aposta lida (D69).
 15. PR #16 mesclado às 17:42 e PR #17 às 17:46. A checagem de produção do #16 foi cancelada pela do #17 (o workflow `Produção` cancela a execução anterior do mesmo branch); a do #17 passou no commit `3491921`. O Lucas perguntou por que a do #16 "falhou" (respondido: cancelada, não falha) e se compartilhar a sessão já exigiria um backend. Respondido, sem implementar nada: mandar uma cópia já sai pelo backup por texto; acompanhar ao vivo, ou a mesma banca em dois aparelhos, é a etapa 2 do `docs/escala.md` e só começa se ele pedir. Às 17:57: "falta trazer a quantidade de unidades apostadas no evento, e de outras visualizações de unidades também, ganhos potenciais em reais e em unidades" (D70).
+16. PR #18 mesclado às 18:33; o workflow `Produção` passou no commit `23ed70e`. Às 18:37, quatro coisas: perguntou se o retrospecto das três últimas lutas tinha sido feito (não tinha: ele mesmo tinha dito que avisaria; a pergunta voltou para ele); pediu busca pelo nome do lutador (D71); sugeriu separar o card em preliminar e principal para navegar melhor (D72); e perguntou da aposta com a luta em andamento, respondendo ele mesmo "deixa como tá" (D73).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -710,6 +711,35 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
   - "Se todas baterem" vale para o total de um evento e para o total em aberto, mesmo quando há apostas uma contra a outra, que não batem juntas (como na D60).
 - **O que já existia:** as unidades em jogo por evento entraram no PR #17 (D69), entre parênteses numa linha de texto, 11 minutos antes do pedido. O app do aparelho só troca de versão com o toque em "Atualizar agora" (D37), então é possível que o pedido tenha sido feito olhando a versão anterior. Não foi confirmado.
 
+## D71. Busca de luta pelo nome do lutador
+
+- **Contexto (10/10/2026, 18:37):** "teria como pesquisar pelo nome dos lutadores, se eu quiser achar rápido".
+- **Decisão:** um campo "Buscar" na tela de Lutas. Acha por um pedaço do nome de qualquer um dos dois lutadores, sem depender de acento ou caixa; com mais de uma palavra, todas têm que aparecer. A lista muda enquanto se digita.
+- **Interpretações que precisaram ser feitas:**
+  - A busca cobre **todos os eventos carregados**, não só o que está na tela: "achar rápido" inclui o lutador que luta na semana que vem. A luta achada em outro evento aparece com o nome do evento, que é um botão para abrir aquele card.
+  - **Buscar não faz chamada à ESPN.** Procura no placar que o app já tem. As odds de outro evento só são pedidas quando o card dele é aberto, como já acontece ao trocar de evento no alto. Carregar as odds de cada evento a cada letra digitada custaria uma chamada por luta.
+  - Procura por pedaço do nome, não por palavra inteira: "kess" acha Kessler. O custo é uma busca curta ("ar") achar muita coisa.
+- **Cuidado de iPhone:** um botão tocado não tira o foco de um campo, e o app não repinta a tela com o foco num campo (para não derrubar o que se digita). Sem tratar isso, a odd tocada durante a busca não apareceria marcada. A lista debaixo do campo passou a ser repintada sozinha. Testado com um clique que não move o foco; **não visto no iPhone**.
+
+## D72. Card principal e preliminares, com um toque para ver uma parte só
+
+- **Contexto (10/10/2026, 18:37):** "teria como você separar em card preliminar e principal para ficar mais fácil navegar também".
+- **O que já existia:** a lista já vinha com os títulos "Card principal", "Preliminares" e "Primeiras preliminares", em letra pequena, numa lista só.
+- **Decisão:** botões acima da lista ("Tudo", "Principal", "Preliminares", "Primeiras"), cada um com o número de lutas, que mostram uma parte só. Os títulos continuam.
+- **De onde vêm as partes:** das horas das lutas, como antes. A ESPN, nos campos que o app lê, não diz a que parte do card a luta pertence. A hora mais tardia é o card principal; com três horas ou mais, a mais cedo são as primeiras preliminares. A regra foi para o núcleo (`Core.cardSections`) e ganhou testes; **não mudou**.
+- **Interpretação:** "separar" foi lido como poder ver uma parte por vez. O app abre em "Tudo" e a escolha não é guardada.
+- **Não verificado:** se num card de verdade as lutas do card principal têm todas a mesma hora na ESPN. É a suposição que a tela já fazia.
+
+## D73. Aposta com a luta em andamento fica de fora
+
+- **Contexto (10/10/2026, 18:37):** "ficaria muito ruim habilitar a aposta durante a luta? Acho que sim, né? Deixa como tá, porque pode complicar muito e forçar muita chamada para a ESPN".
+- **Decisão do Lucas:** fica como está. A aposta trava quando a luta começa.
+- **O que pesa além das chamadas:** a ESPN não publica odd com a luta em andamento (é por isso que o cashout congela). Não haveria preço para cobrar; seria preciso estimar a odd ao vivo, e errar isso é dar dinheiro de graça ou tirar.
+
+## Retrospecto dos lutadores, de novo (D57)
+
+Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você conseguiu fazer aquele lance de quantas por finalização, quantas por KO, quantas por decisão? Eu não vi isso implementado". Respondido: não foi feito, porque ele tinha dito que avisaria. A pergunta foi devolvida a ele ("é pra fazer agora?"), sem presumir a resposta. O que falta antes do código continua sendo gravar a resposta real da ESPN (regra 2 do `CLAUDE.md`): desta máquina o terminal não alcança a ESPN, então a amostra teria que ser capturada por um workflow no GitHub ou por ele.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -723,6 +753,9 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
+| Dizer se o retrospecto dos lutadores é para fazer agora (D57) | Lucas |
+| Confirmar: a busca em todos os eventos carregados e sem chamada à ESPN, e "separar o card" como ver uma parte por vez (D71, D72) | Lucas |
+| Ver num card de verdade se as partes do card saem certas das horas das lutas (D72) | Lucas, no próximo card |
 | Confirmar: "ganhos potenciais" como lucro (retorno menos a stake), o retorno sem unidades e as telas escolhidas (D70) | Lucas |
 | Confirmar: "mais de quatro" como cinco ou mais, sugestão sem preencher sozinha, seta indo à meia unidade mais próxima, e a hora da aposta como a hora da luta (D66, D67, D69) | Lucas |
 | Confirmar as interpretações da terceira leva: item pronto recolhido de início, a aposta nova fora do topo das abertas, a ordem pela primeira luta e a marca do card contando a múltipla inteira (D58 a D60) | Lucas |

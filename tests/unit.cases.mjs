@@ -478,6 +478,21 @@ export default function cases(Core) {
   eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, units: 0, unitBets: 0, by: [] }, 4]);
   eq('since: the result in units too, each bet by the unit it was placed with', (r => [r.n, r.pnl, r.units, r.unitBets])(Core.sinceSummary([hb('w', 'single', 'won', 100, 300, [hl('f1', 'ml:a')], { unit: 50 }), hb('l', 'single', 'lost', 1000, 0, [hl('f2', 'ml:a')], { unit: 500 }),
     hb('n', 'single', 'won', 20, 50, [hl('f3', 'ml:a')]), hb('k', 'single', 'cashed', 60, 90, [hl('f3', 'ml:b')], { unit: 10 })], 0)), [3, -770, 2, 2]);       // +4u and -2u; the bet with no unit only counts in money
+  /* the card of an event: its parts by the hour, and finding a fight by a fighter's name */
+  const cf = (id, date, idx, a, b) => ({ id, date, idx, a: { name: a }, b: { name: b } });
+  const night = [cf('c1', 100, 0, 'Ana Souza', 'Bia Moura'), cf('c2', 100, 1, 'José Aldana', 'Leo Vance'), cf('c3', 200, 2, 'Caio Brandt', 'Dario Kessler'), cf('c4', 200, 3, 'Igor Sampaio', 'Otto Farias'),
+    cf('c5', 300, 4, 'Marina Teles', 'Joana Prado Jr.'), cf('c6', 300, 5, 'Rafael Almeida', 'Connor Lee Dunne')];
+  const parts = fs => Core.cardSections(fs).map(s => [s.part, s.date, s.fights.map(f => f.id)]);
+  eq('card: three hours are main card, prelims and early prelims, the main event on top', parts(night), [['main', 300, ['c6', 'c5']], ['prelims', 200, ['c4', 'c3']], ['early', 100, ['c2', 'c1']]]);
+  eq('card: with two hours there are no early prelims', parts(night.slice(2)), [['main', 300, ['c6', 'c5']], ['prelims', 200, ['c4', 'c3']]]);
+  eq('card: with four hours only the earliest is early prelims', parts(night.concat(cf('c0', 50, 6, 'Nina Kovac', 'Lia Prates'))).map(p => p[0]), ['main', 'prelims', 'prelims', 'early']);
+  eq('card: a single hour is all main card, and no fights is no card', [parts(night.slice(4)), parts([])], [[['main', 300, ['c6', 'c5']]], []]);
+  const found = q => Core.findFights(night, q).map(f => f.id);
+  eq('search: by a piece of the name, whatever the accents and the case', [found('aldana'), found('JOSE'), found('josé ald'), found('kess')], [['c2'], ['c2'], ['c2'], ['c3']]);
+  eq('search: either fighter of the fight, and every word typed has to be there', [found('dunne'), found('almeida dunne'), found('almeida teles'), found('lee')], [['c6'], ['c6'], [], ['c6']]);
+  eq('search: a piece of name on more than one fight finds them all, in the order given', found('ar'), ['c3', 'c4', 'c5']);       // Dario, Farias, Marina
+  eq('search: a suffix with a dot is found with or without it', [found('prado jr'), found('prado jr.')], [['c5'], ['c5']]);
+  eq('search: nothing typed, only spaces or signs, or a name nobody has', [found(''), found('   '), found('.-'), found(undefined), found('zzz')], [[], [], [], [], []]);
   eq('tip: empty', tip("  \n ").problems, [{ code: 'empty' }]);
   eq('tip: a name inside another word is not a match', tip("Almeidas x Dunnes\nvence").problems, [{ code: 'nofight' }]);
   return { n, fails };

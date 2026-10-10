@@ -4,7 +4,7 @@ import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
 import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
-import { place, render, renderSheet, slipSummary, toast } from './render';
+import { paintList, place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
 import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
 import { sync } from './sync';
@@ -81,8 +81,14 @@ document.addEventListener('click', e => {
   const t = e.target as HTMLElement;
   const b = t.closest<HTMLElement>('[data-act]'); if (!b) { if (t.id === 'sheet' && !imp.busy) { ui.sheet = false; if (imp.open) closeImport(); else { renderSheet(); render(); } } return; }
   const a = b.dataset.act, d = b.dataset;
+  // on iOS a tapped button does not take the focus from the search field, and a focused field holds the screen as it
+  // is: what is tapped in the list under the field repaints that list; anything else lets go of the field first
+  const q = $<HTMLInputElement>('#q');
+  if (q && document.activeElement === q && a !== 'qclear' && !b.closest('#list')) q.blur();
   if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
-  else if (a === 'event') { ui.eventId = d.id ?? null; render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
+  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
+  else if (a === 'part') { ui.part = d.p === 'main' || d.p === 'prelims' || d.p === 'early' ? d.p : null; render(); }
+  else if (a === 'qclear') { ui.q = ''; if (q) { q.value = ''; q.focus(); } paintList(); }
   else if (a === 'refresh') { sync(true); render(); }
   else if (a === 'more') { const id = d.fid as string; if (ui.open.has(id)) ui.open.delete(id); else ui.open.add(id); render(); }
   else if (a === 'pick') {
@@ -168,6 +174,7 @@ document.addEventListener('input', e => {
   if (t.id === 'stake') { setStakeMoney(parseMoney(applyMask(t, typed))); slip.stake = t.value; ui.msg = ''; slipSummary(); }
   else if (t.id === 'stakeu') { const u = Core.maskUnits(t.value); if (t.value !== u) t.value = u; setStakeUnits(Core.parseUnits(u)); slip.units = u; ui.msg = ''; slipSummary(); }
   else if (t.id === 'dep') ui.dep = applyMask(t, typed);
+  else if (t.id === 'q') { ui.q = t.value; paintList(); }
   else if (t.id === 'imptext') imp.text = t.value;
   else if (t.id === 'impfrom') imp.from = t.value;
   else if (t.classList.contains('opstake')) { const v = S.stakeIn === 'units' && wallet().unit > 0 ? Core.maskUnits(t.value) : Core.maskMoney(t.value); if (t.value !== v) t.value = v; }
@@ -189,5 +196,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; if (imp.open) closeImport(); else { renderSheet(); render(); } }
   if (e.key === 'Enter' && id === 'unitpct') press('unit');
   if (e.key === 'Enter' && id === 'dep') press('deposit');
+  if (e.key === 'Enter' && id === 'q') { blurField(); render(); }          // "buscar" on the keyboard puts it away; the list is already there
 });
 }
