@@ -239,13 +239,37 @@ with sync_playwright() as p:
     assert 'Ao copiar um print: mesma stake.' in txt('#tiphow') and 'vira 2u sua (R$ 200,00)' in txt('#tiphow'), txt('#tiphow')
     pg.locator('#stakecard').scroll_into_view_if_needed(); shot('s14-print-config.png')
     assert copied(BOTH_TIP, '2u do print · o original também traz R$ 250,00') == 'R$ 200,00 · 2u', 'in units, an original that states both brings its units, and says what it left out'
-    assert copied(MONEY_TIP, 'mesmo valor do print') == 'R$ 250,00 · 2,5u', 'in units, an original with money only brings that money, counted in units'
+    assert copied(MONEY_TIP, '1u, pela sua configuração: o print só traz R$ 250,00, que não é copiado') == 'R$ 100,00 · 1u', 'in units the setting is followed: an original that states no units is one unit, whatever money it shows'
     assert copied(TIP_TEXT, '0,5u do print') == 'R$ 50,00 · 0,5u'
+    # in units the value of an item has steps of half a unit, up and down
+    pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert 'print que não diz unidades entra com 1u' in txt('#panel') and pg.input_value('.opstake') == '0,5' and pg.locator('[data-act=impstep]').count() == 2
+    pg.click('[data-act=impstep][data-d="1"]'); assert pg.input_value('.opstake') == '1' and txt('#impvalue') == 'R$ 100,00 · 1u' and 'valor que você escreveu' in txt('#panel'), txt('#impvalue')
+    pg.click('[data-act=impstep][data-d="1"]'); assert pg.input_value('.opstake') == '1,5' and txt('#impvalue') == 'R$ 150,00 · 1,5u'
+    pg.click('[data-act=impstep][data-d="-1"]'); pg.click('[data-act=impstep][data-d="-1"]'); assert pg.input_value('.opstake') == '0,5' and txt('#impvalue') == 'R$ 50,00 · 0,5u'
+    pg.click('[data-act=impstep][data-d="-1"]'); assert pg.input_value('.opstake') == '0,5' and '0,5u do print' in txt('#panel'), 'below half a unit there is nothing to bet: the item goes back to what the original says'
+    pg.click('[data-act=impclear]'); pg.click('[data-act=impclose]')
     pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.fill('#imptext', BOTH_TIP); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
     pg.click('[data-act=impgo]'); pg.wait_for_selector('#stakeu')
     assert pg.input_value('#stakeu') == '2' and 'R$ 200,00 · 2u' in txt('#slipsum'), (pg.input_value('#stakeu'), txt('#slipsum'))
     pg.click('#panel [data-act=unpick]')
     pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=money]'); pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
+    # the paste button takes the text on the clipboard and reads it at once (the clipboard of the test is a stand-in)
+    assert pg.locator('[data-act=impstep]').count() == 0, 'in money there are no unit steps'
+    clip = lambda js: pg.evaluate('f => { window.__clip = navigator.clipboard; Object.defineProperty(navigator, "clipboard", { configurable: true, value: { readText: new Function("return " + f)() } }); }', js)
+    clip('async () => "Almeida x Dunne\\nDunne para vencer a luta\\nR$ 250,00"'); pg.click('[data-act=imppaste]'); pg.wait_for_selector('#impres')
+    assert pg.input_value('#imptext') == MONEY_TIP and 'Connor Lee Dunne vence' in txt('#impres') and txt('#impvalue') == 'R$ 250,00 · 2,5u', (pg.input_value('#imptext'), txt('#impvalue'))
+    assert 'sáb' in txt('#impres') or 'dom' in txt('#impres') or ':' in txt('#impres'), 'each selection says when its fight is'
+    clip('async () => "   "'); pg.click('[data-act=imppaste]'); pg.wait_for_selector('#imperr'); assert 'não tem texto' in txt('#imperr') and pg.input_value('#imptext') == MONEY_TIP, txt('#imperr')
+    clip('async () => { throw new Error("denied"); }'); pg.click('[data-act=imppaste]'); pg.wait_for_function('document.getElementById("imperr").textContent.includes("Não consegui ler")')
+    pg.evaluate('Object.defineProperty(navigator, "clipboard", { configurable: true, value: window.__clip })'); pg.click('[data-act=impclear]')
+    # with a card of five fights, a multiple of five read from a text is a long shot: a fraction of a unit is suggested, a tap away
+    ESPN['extra'] = True; sync()
+    pg.fill('#imptext', 'QUÍNTUPLA\nTeles + Brandt + Almeida + Sampaio + Kovac - para vencer a luta\nR$ 100,00'); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
+    assert txt('.impkind') == 'Múltipla de 5 seleções' and pg.locator('.impsug button').all_inner_texts() == ['0,2u', '0,3u', '0,4u'] and 'Múltipla de 5 seleções: stake sugerida de 0,2u a 0,4u' in txt('#panel'), txt('#panel')
+    pg.click('.impsug [data-u="0.3"]'); assert txt('#impvalue') == 'R$ 30,00 · 0,3u' and 'valor que você escreveu' in txt('#panel'), txt('#impvalue')
+    pg.click('[data-act=impmode][data-m=single]'); assert pg.locator('.impsug').count() == 0, 'five singles are not a long shot'
+    pg.click('[data-act=impclear]'); ESPN['extra'] = False; sync(); assert pg.evaluate('window.__OL.D.fights.size') == 3
     # "Limpar" empties the copy screen; closing it does not
     assert pg.is_disabled('[data-act=impclear]'), 'nothing to clear yet'
     pg.fill('#imptext', MONEY_TIP); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
@@ -282,7 +306,13 @@ with sync_playwright() as p:
     # each item of a list is one line: what is ready, or only a reference, starts folded, with what it is and where it stands
     assert pg.locator('.impop.folded').count() == 4 and pg.locator('.impres').count() == 0 and [t.lower() for t in pg.locator('.impop .st').all_inner_texts()] == ['pronta', 'pronta', 'pronta', 'referência'], pg.locator('.impop .st').all_inner_texts()
     assert pg.locator('.impop .brief').all_inner_texts() == ['Connor Lee Dunne vence', 'Dario Kessler vence', 'Marina Teles vence + Connor Lee Dunne vence', 'Marina Teles vence + Connor Lee Dunne vence'], pg.locator('.impop .brief').all_inner_texts()
-    assert [t.replace('\xa0', ' ') for t in pg.locator('.impop .amt').all_inner_texts()] == ['R$ 250,00', 'R$ 100,00', 'R$ 80,00'], 'the value is on the line whole; the list with no value has none'
+    assert [t.replace('\xa0', ' ') for t in pg.locator('.impop .amt').all_inner_texts()] == ['R$ 250,00 · 2,5u', 'R$ 100,00 · 1u', 'R$ 80,00 · 0,8u'], 'the stake is on the line whole, in money and in units; the list with no value has none'
+    assert pg.locator('.impop .fold .when').count() == 4 and all(':' in t for t in pg.locator('.impop .fold .when').all_inner_texts()) and txt('#imptotalu') == '4,3u', 'each line says when its first fight is, and the total is in units too'
+    # with the setting on units the same prints are one unit each: the money they show is not copied, and they still go in the batch
+    pg.click('[data-act=impclose]'); pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=units]'); pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
+    assert [t.replace('\xa0', ' ') for t in pg.locator('.impop .amt').all_inner_texts()] == ['1u · R$ 100,00', '1u · R$ 100,00', '1u · R$ 100,00'] and txt('#imptotal') == 'R$ 300,00' and txt('#imptotalu') == '3u' and txt('[data-act=impall]') == 'Apostar as 3 de uma vez', (pg.locator('.impop .amt').all_inner_texts(), txt('.impall'))
+    pg.click('[data-act=impclose]'); pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=stakein][data-m=money]'); pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
+    assert txt('#imptotal') == 'R$ 430,00' and pg.locator('.impop.folded').count() == 4
     assert all(pg.evaluate('e => e.getBoundingClientRect().right <= e.closest(".oph").getBoundingClientRect().right', e) for e in pg.locator('.impop .amt').element_handles()), 'and it is never pushed off the line by a long selection'
     assert txt('#imptotal') == 'R$ 430,00' and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; shot('s33-lista-recolhida.png')
     opn(1).locator('[data-act=impopen]').click(); assert opn(1).locator('.impres').count() == 1 and pg.locator('.impop.folded').count() == 3 and opn(1).locator('.brief').count() == 0
@@ -369,7 +399,7 @@ with sync_playwright() as p:
                     ['multi', 80, 3.42, 'Canal do Zé', 3.424, [['ml:a', 1.67, 1.67], ['ml:b', 2.05, 2.05]]]], made
     assert '3 apostas feitas' in pg.inner_text('#toast') and bal().replace('\xa0', ' ') == 'R$ 520,00', (pg.inner_text('#toast'), bal())
     # open bets go by event, in the order the fights happen, with what is at stake and what the event can pay
-    assert pg.locator('.grp').count() == 1 and 'almeida vs. dunne' in txt('.grp').lower() and txt('.grpsum') == '3 apostas · R$ 480,00 em jogo · R$ 1.161,10 se todas baterem', (txt('.grp'), txt('.grpsum'))    # 512,50 + 375,00 + 273,60
+    assert pg.locator('.grp').count() == 1 and 'almeida vs. dunne' in txt('.grp').lower() and txt('.grpsum') == '3 apostas · R$ 480,00 em jogo (4,8u) · R$ 1.161,10 se todas baterem', (txt('.grp'), txt('.grpsum'))    # 512,50 + 375,00 + 273,60
     assert [b.locator('.leg b').first.inner_text() for b in pg.locator('.bet').all()] == ['Marina Teles vence', 'Dario Kessler vence', 'Connor Lee Dunne vence'], 'the bet whose first fight comes first is on top'
     # and each fight on the card says what is already riding on it, a tap away from the bets
     pg.click('.tabbar [data-tab=lutas]')
@@ -501,7 +531,17 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=carteira]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
     pg.fill('#unitpct', '2,5'); pg.click('[data-act=unit]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 25,00', pg.inner_text('#unitnow')
     pg.fill('#unitpct', '10'); pg.keyboard.press('Enter'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
-    pg.click('.tabbar [data-tab=lutas]'); pick('f1', 'ml:a'); pg.click('#slipbtn')
+    pg.click('.tabbar [data-tab=lutas]')
+    # five selections in one multiple (two of the fights with a combination) is a long shot: the slip suggests a fraction of a unit
+    for fid, key in (('f1', 'ml:a'), ('f2', 'ml:a'), ('f2', 'dist:yes'), ('f3', 'ml:a'), ('f3', 'tot:o:3.5')): pick(fid, key)
+    pg.click('#slipbtn'); pg.wait_for_selector('#stake'); pg.click('[data-act=mode][data-m=multi]')
+    assert pg.locator('#slipsug button').all_inner_texts() == ['0,2u', '0,3u', '0,4u'] and 'de 5 seleções: stake sugerida de 0,2u a 0,4u' in txt('#panel'), txt('#panel')
+    pg.click('#slipsug [data-u="0.3"]'); assert pg.input_value('#stake') == '30' and 'R$ 30,00 · 0,3u' in txt('#slipsum'), (pg.input_value('#stake'), txt('#slipsum'))
+    pg.click('[data-act=mode][data-m=single]'); assert pg.locator('#slipsug').count() == 0, 'five singles are five bets, not a long shot'
+    pg.click('[data-act=mode][data-m=multi]'); pg.click('#panel [data-act=unpick] >> nth=4'); assert pg.locator('#slipsug').count() == 0, 'four selections get no suggestion'
+    pg.fill('#stake', '')
+    while pg.evaluate('window.__OL.slip.sels.length'): pg.click('#panel [data-act=unpick] >> nth=0')            # the last one closes the slip
+    pick('f1', 'ml:a'); pg.click('#slipbtn')
     # value shortcuts add to what is in the field, up to a million at a time; "Tudo" puts the whole balance
     assert pg.locator('[data-act=stq]').all_inner_texts() == ['+10', '+50', '+100', 'Tudo', '+10.000', '+100.000', '+1.000.000'], pg.locator('[data-act=stq]').all_inner_texts()
     for v, want in [('10000', '10.000'), ('100000', '110.000'), ('1000000', '1.110.000'), ('10', '1.110.010')]:
@@ -521,6 +561,13 @@ with sync_playwright() as p:
     pg.fill('#stakeu', ''); pg.click('#stakeu'); pg.keyboard.type('2.5x')
     assert pg.input_value('#stakeu') == '2,5' and 'R$ 250,00 · 2,5u' in txt('#slipsum') and 'Apostar R$ 250,00' in txt('[data-act=place]'), (pg.input_value('#stakeu'), txt('#slipsum'))
     pg.click('[data-act=stu][data-u="0.5"]'); assert pg.input_value('#stakeu') == '0,5' and 'R$ 50,00 · 0,5u' in txt('#slipsum'), txt('#slipsum')
+    # the arrows of the units field go half a unit up and down, to the next half
+    pg.click('[data-act=ustep][data-d="1"]'); assert pg.input_value('#stakeu') == '1' and 'R$ 100,00 · 1u' in txt('#slipsum'), txt('#slipsum')
+    pg.fill('#stakeu', '1,2'); pg.click('[data-act=ustep][data-d="1"]'); assert pg.input_value('#stakeu') == '1,5' and 'R$ 150,00 · 1,5u' in txt('#slipsum')
+    pg.click('[data-act=ustep][data-d="-1"]'); pg.click('[data-act=ustep][data-d="-1"]'); assert pg.input_value('#stakeu') == '0,5'
+    pg.click('[data-act=ustep][data-d="-1"]'); assert pg.input_value('#stakeu') == '' and 'Aposta mínima' in txt('[data-act=place]'), 'down from half a unit is nothing'
+    pg.click('[data-act=ustep][data-d="1"]'); assert pg.input_value('#stakeu') == '0,5'
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; shot('s35-setinhas.png')
     pg.click('[data-act=stq][data-v=max]'); assert pg.input_value('#stakeu') == '10' and 'R$ 1.000,00 · 10u' in txt('#slipsum'), txt('#slipsum')
     assert pg.locator('[data-act=stq]').count() == 1, 'in units the money shortcuts give way; only "Tudo" stays'
     shot('s17-em-unidades.png')

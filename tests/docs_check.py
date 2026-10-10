@@ -188,6 +188,16 @@ check('the settlement test holds answers back, and is part of the full verify', 
 check('the live check sweeps the result names of finished fights', 'every result name seen in ${swept} finished fights is one the app classifies' in read('tests/contract_live.py') and 'tko---doctors-stoppage' in spec)
 check('the result names the spec lists as seen are ones the reader classifies', all(re.search(pat, nm) for nm, pat in (('kotko', 'ko'), ('decision---unanimous', 'dec'), ('decision---split', 'dec'), ('submission', 'sub'), ('dq', 'dq'), ('tko---doctors-stoppage', 'ko|stoppage'))) and "/ko|dq|disq|stoppage|retire/" in html)
 
+# 5d1f. copying follows the setting to the letter; the suggestion for long multiples; the steps of the units field; the paste button
+tip_src = read('src/core/tip.ts'); money_src = read('src/core/money.ts')
+check('in units an original that states no units is one unit, and its money is not copied', "if (mode === 'units') return { how: 'one', units: 1, value: r2(u) };" in tip_src and 'aposta **1u**: o dinheiro do print não é copiado' in spec)
+check('the one unit the setting gives counts as a stated value for the batch; the presumed one does not', "ts.how !== 'default' && !held;" in imp_src and 'conta como valor dito' in spec)
+check('a long multiple is five selections or more, and what is suggested for it is 0.2u to 0.4u', 'export const LONG_MULTI = 5;' in money_src and 'export const LONG_STAKES = [0.2, 0.3, 0.4];' in money_src and 'cinco seleções ou mais' in spec and '0,2u, 0,3u e 0,4u' in spec)
+check('the suggestion is offered in the slip and in the copy list, and fills nothing in by itself', 'id="slipsug"' in rnd and 'impsug' in imp_src and 'nada é preenchido sozinho' in spec)
+check('the units field steps by half a unit, in the slip and in the copy list', 'next * 0.5' in money_src and 'data-act="ustep"' in rnd and 'data-act="impstep"' in imp_src and 'meia unidade seguinte ou anterior' in spec)
+check('the paste button reads text only, and says so when it cannot', 'navigator.clipboard.readText()' in imp_src and 'data-act="imppaste"' in imp_src and '`navigator.clipboard.readText`' in spec)
+check('the stake rule, the suggestion and the steps have tests', all(w in unit_src for w in ("how: 'one'", 'Core.suggestedUnits', 'Core.stepUnits')))
+
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
 css_all = (ROOT / 'src' / 'styles.css').read_text(encoding='utf-8')
 pairs = re.findall(r"\{ id: '([a-z-]+)', a: '(\w+)', b: '(\w+)' \}", html)

@@ -196,6 +196,9 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .field span{color:var(--muted);font-weight:600;white-space:nowrap}
 .field input{flex:1;min-width:0;border:0;background:none;height:48px;font-size:18px;font-weight:600;outline:none}
 .field:focus-within{border-color:var(--gold)}
+.field .step{flex:none;width:40px;height:40px;border-radius:8px;border:1px solid var(--line);font-size:22px;font-weight:600;line-height:1;color:var(--fg);display:flex;align-items:center;justify-content:center;padding:0}
+.field .step:first-child{margin-left:-6px}
+.field .step:last-child{margin-right:-6px}
 .quick{display:flex;gap:6px;flex-wrap:wrap}
 .quick button{flex:1 1 auto;min-height:38px;padding:0 12px;border-radius:8px;border:1px solid var(--line);font-weight:600;font-size:13px;text-align:center}
 .sum{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
@@ -264,11 +267,14 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .rowbtns{display:flex;gap:8px;flex-wrap:wrap}
 .rowbtns .btn{flex:1 1 140px}
 .rowbtns.three .btn{flex:1 1 96px;padding-inline:8px}
+.rowbtns.four .btn{flex:1 1 40%;padding-inline:8px}
 /* the copy screen: one block per bet read, and the batch at the end */
 .impop{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
 .impop .oph{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .impop .oph .x{width:32px;height:32px;font-size:20px}
-.impop .oph .fold{flex:1;min-width:0;min-height:36px;display:flex;align-items:center;gap:8px;text-align:left}
+.impop .oph .fold{flex:1;min-width:0;min-height:36px;display:flex;flex-direction:column;gap:4px;text-align:left}
+.impop .fold .row1,.impop .fold .row2{display:flex;align-items:center;gap:8px;min-width:0}
+.impop .fold .when{margin-left:auto;flex:none;font-size:12px;color:var(--muted)}
 .impop .oph .fold .label{flex:none}
 .impop .st{flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--fg)}
 .impop .st.wait{color:var(--gold);border-color:var(--gold)}

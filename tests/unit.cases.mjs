@@ -253,11 +253,18 @@ export default function cases(Core) {
   eq('copied stake, in money: an original with units only brings those units', Core.tipStake(UNITS, 'money', MYU), { how: 'units', units: 0.5, value: 50 });
   eq('copied stake, in units: the same stake', Core.tipStake(UNITS, 'units', MYU), { how: 'units', units: 0.5, value: 50 });
   eq('copied stake, in units: an original that states both brings its units', Core.tipStake(BOTH, 'units', MYU), { how: 'units', units: 2, value: 200 });
-  eq('copied stake, in units: an original with money only brings that money, counted in my units', Core.tipStake(MONEY, 'units', MYU), { how: 'same', units: 17.5, value: 1750 });
+  eq('copied stake, in units: an original that states no units is one unit, whatever money it shows', Core.tipStake(MONEY, 'units', MYU), { how: 'one', units: 1, value: 100 });        // the setting is followed: the stake, not the value
   for (const mode of ['money', 'units', undefined, 'whatever'])
     eq(`copied stake: no stake in the original is one unit (${mode})`, Core.tipStake(NONE, mode, MYU), { how: 'default', units: 1, value: 100 });
   eq('copied stake: anything that is not "units" is money', [undefined, null, 'same', 7].map(m => Core.tipStake(BOTH, m, MYU).value), [1750, 1750, 1750, 1750]);
-  eq('copied stake: no bankroll, no unit', [Core.tipStake(UNITS, 'units', 0), Core.tipStake(MONEY, 'units', 0), Core.tipStake(NONE, 'money', 0)], [{ how: 'units', units: 0.5, value: 0 }, { how: 'same', units: null, value: 1750 }, { how: 'default', units: 1, value: 0 }]);
+  eq('copied stake: no bankroll, no unit', [Core.tipStake(UNITS, 'units', 0), Core.tipStake(MONEY, 'units', 0), Core.tipStake(MONEY, 'money', 0), Core.tipStake(NONE, 'money', 0)], [{ how: 'units', units: 0.5, value: 0 }, { how: 'one', units: 1, value: 0 }, { how: 'same', units: null, value: 1750 }, { how: 'default', units: 1, value: 0 }]);
+  eq('copied stake: each setting keeps to its own side', [Core.tipStake(MONEY, 'money', MYU).how, Core.tipStake(MONEY, 'units', MYU).how, Core.tipStake(BOTH, 'money', MYU).how, Core.tipStake(BOTH, 'units', MYU).how, Core.tipStake(UNITS, 'money', MYU).how], ['same', 'one', 'same', 'units', 'units']);
+  /* stakes in units: what is suggested for a long multiple, and the steps of the field */
+  eq('suggested stake: a multiple of five selections or more', [Core.suggestedUnits(5, 'multi'), Core.suggestedUnits(8, 'multi')], [[0.2, 0.3, 0.4], [0.2, 0.3, 0.4]]);
+  eq('suggested stake: not for four selections, nor for singles', [Core.suggestedUnits(4, 'multi'), Core.suggestedUnits(6, 'single'), Core.suggestedUnits(0, 'multi'), Core.LONG_MULTI], [[], [], [], 5]);
+  eq('units step: up to the next half unit', [0, 0.2, 0.3, 0.5, 0.75, 1, 2.5].map(v => Core.stepUnits(v, 1)), [0.5, 0.5, 0.5, 1, 1, 1.5, 3]);
+  eq('units step: down to the half unit below, never under zero', [0, 0.2, 0.5, 0.75, 1, 3].map(v => Core.stepUnits(v, -1)), [0, 0, 0, 0.5, 0.5, 2.5]);
+  eq('units step: nonsense counts as zero, and the top of the field holds', [Core.stepUnits('x', 1), Core.stepUnits(undefined, -1), Core.stepUnits(9999.99, 1)], [0.5, 0, 9999.5]);
   eq('the setting that used to say what a unit of the source is worth is gone', [typeof Core.tipCfg, typeof Core.TIP_MODES], ['undefined', 'undefined']);
 
   /* ---- copying a bet from a pasted tip or from the text read off a print ---- */

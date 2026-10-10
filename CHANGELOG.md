@@ -2,6 +2,17 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.12.0] - 2026-10-10
+
+### Adicionado
+- Botão "Colar" na tela de copiar: puxa o texto da área de transferência e já lê.
+- Numa múltipla de cinco seleções ou mais, atalhos de 0,2u, 0,3u e 0,4u como stake sugerida, no cupom e na lista de copiar.
+- Setas de meia unidade no campo de unidades, no cupom e na lista de copiar.
+- Cada aposta lida mostra a hora da luta e a stake em unidades e em dinheiro; o total do lote e o de cada evento na aba Apostas vêm também em unidades.
+
+### Alterado
+- Ao copiar com a configuração em unidades, o print que não diz unidades entra com 1u. Antes entrava com o dinheiro do print, mostrado em unidades.
+
 ## [0.11.0] - 2026-10-10
 
 ### Alterado

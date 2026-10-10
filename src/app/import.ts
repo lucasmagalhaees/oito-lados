@@ -57,6 +57,8 @@ interface Resolved {
   /** Warnings that hold a bet back from the batch until the person says "bet it anyway": open bets that are this same
    *  bet, an earlier item of the list with the same selections, and an odd that fell past the limit set in the wallet. */
   dups: Bet[]; twin: ImportOp | null; drop: number | null; low: boolean; held: boolean;
+  /** The money the original shows, when it shows any; and when the first of its fights starts. */
+  shown: number; when: number;
   /** What is already at stake on the fights it touches. */
   expo: string[];
   value: number; how: TipStake['how']; units: number | null; unit: number; also: string; mode: Slip['mode'];
@@ -123,10 +125,13 @@ function impResolve(o: ImportOp): Resolved {
   const low = !!S.copyDrop && drop != null && drop < -S.copyDrop / 100 - 1e-9;
   const held = (dups.length > 0 || !!twin || low) && !o.force;
   const whole = complete && ts.value >= 1 && ts.how !== 'default' && !held;
-  return { tip, ok, notes, missing, value: ts.value, how: ts.how, units: ts.units, unit: w.unit, also, mode, ref, whole, dups, twin, drop, low, held, expo: complete && !dups.length ? exposureNotes(sels) : [] };
+  const shown = !o.stake && (st.kind === 'money' || st.kind === 'units') && st.money ? st.money : 0;
+  return { tip, ok, notes, missing, value: ts.value, how: ts.how, units: ts.units, unit: w.unit, also, mode, ref, whole, dups, twin, drop, low, held, shown, when: ok.length ? Math.min(...ok.map(k => k.f.date)) : 0, expo: complete && !dups.length ? exposureNotes(sels) : [] };
 }
 // what is copied from the original follows the one setting for stakes (money: the same amount; units: the same stake)
-export const TIP_HINT = { money: 'o valor é o mesmo do print.', units: 'a stake é a mesma do print, na sua unidade.' };
+export const TIP_HINT = { money: 'o valor é o mesmo do print.', units: 'a stake é a do print, na sua unidade; print que não diz unidades entra com 1u.' };
+/** A stake said both ways, the way the setting asks for it first: units and money, or money and units. */
+const stakeBoth = (value: number, unit: number): string => !(unit > 0) ? money(value) : S.stakeIn === 'units' ? `${fu(value / unit)} · ${money(value)}` : `${money(value)} · ${fu(value / unit)}`;
 let opSeq = 0, photoSeq = 0;
 const newOp = (src: ImportOp['src'], name: string, res: Tip, text: string): ImportOp => ({ id: ++opSeq, src, name, res, text, picks: [], noauto: [], stake: null, mode: null, edits: {}, swap: null, force: false, open: null });
 const opOf = (id: number): ImportOp | undefined => imp.ops.find(o => o.id === id);
@@ -189,7 +194,7 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
   if (o.open == null) o.open = !(r.whole || r.ref);
   const open = !many || o.open, st = standing(r);
   let h = `<div class="impop${open ? '' : ' folded'}" data-op="${o.id}">`;
-  if (many) h += `<div class="oph"><button class="fold" data-act="impopen" data-op="${o.id}" aria-expanded="${open}"><span class="label">${esc(label(o))}</span><span class="st ${st.cls}">${st.text}</span>${open ? '' : `<span class="brief">${esc(r.ok.map(k => k.x.sel).join(' + ') || 'nada lido')}</span>${r.ok.length && r.value > 0 && r.how !== 'default' ? `<span class="amt">${money(r.mode === 'single' ? r.value * r.ok.length : r.value)}</span>` : ''}`}</button><button class="x" data-act="impdrop" data-op="${o.id}" aria-label="Tirar da lista">×</button></div>`;
+  if (many) h += `<div class="oph"><button class="fold" data-act="impopen" data-op="${o.id}" aria-expanded="${open}"><span class="row1"><span class="label">${esc(label(o))}</span><span class="st ${st.cls}">${st.text}</span>${r.when ? `<span class="when">${esc(dWhen.format(r.when))}</span>` : ''}</span>${open ? '' : `<span class="row2"><span class="brief">${esc(r.ok.map(k => k.x.sel).join(' + ') || 'nada lido')}</span>${r.ok.length && r.value > 0 && r.how !== 'default' ? `<span class="amt">${stakeBoth(r.mode === 'single' ? r.value * r.ok.length : r.value, r.unit)}</span>` : ''}</span>`}</button><button class="x" data-act="impdrop" data-op="${o.id}" aria-label="Tirar da lista">×</button></div>`;
   if (!open) return h + '</div>';
   if (r.ok.length) {
     h += `<div class="impres"${i ? '' : ' id="impres"'}>`;
@@ -199,11 +204,11 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
       const how = via === 'read' ? `<span class="fix"><button data-act="impswap" ${mine}>${o.swap === at ? 'cancelar' : 'trocar'}</button></span>`
         : via === 'swap' ? `<span class="fixed">Trocada por você · <button data-act="impunedit" ${mine}>desfazer</button></span>`
         : `<span class="via">${via === 'hand' ? 'Escolhida por você' : `Completada com a ${esc(src ? label(src).toLowerCase() : 'outra')}`} · <button data-act="impunpick" data-op="${o.id}" data-fid="${esc(f.id)}">desfazer</button></span>`;
-      h += `<div class="sel"><div class="t"><b>${sideDot(it.key, f.weight)}${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span>${how}</div></div>`;
+      h += `<div class="sel"><div class="t"><b>${sideDot(it.key, f.weight)}${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)} · ${esc(dWhen.format(f.date))}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span>${how}</div></div>`;
       const pr = via === 'read' && o.swap === at ? priceOf(f) : null;
       if (pr) h += `<select class="impedit" ${mine} aria-label="Trocar a seleção em ${esc(f.a.last)} x ${esc(f.b.last)}"><option value="">Trocar por…</option>${marketOptions(pr)}<option value="__drop">Tirar esta seleção</option></select>`;
     }
-    const src = { units: `${fu(r.units || 0)} do print`, same: 'mesmo valor do print', default: 'o print não diz o valor, considerei 1u' }[r.how];
+    const src = { units: `${fu(r.units || 0)} do print`, same: 'mesmo valor do print', default: 'o print não diz o valor, considerei 1u', one: `1u, pela sua configuração${r.shown ? `: o print só traz ${money(r.shown)}, que não é copiado` : ''}` }[r.how];
     // the odd the original gives for the whole multiple, next to what the same selections pay now (different fights multiply)
     const fights = new Set(r.ok.map(k => k.f.id)), all = r.ok.length === r.tip.items.length && !r.tip.problems.length && fights.size === r.ok.length;
     const betOdd = r.tip.odd ? `<dt>Odd da aposta no print</dt><dd class="impodd">${fo(r.tip.odd)}${all && r.mode === 'multi' ? ` · agora ${r.ok.some(k => k.x.src === 'est') ? '≈' : ''}${fo(Core.r2(r.ok.reduce((p, k) => p * k.x.odd, 1)))}` : ''}</dd>` : '';
@@ -213,9 +218,13 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
     h += `</div><dl class="sum" style="margin-top:10px"><dt>Tipo</dt><dd class="impkind">${KIND(r)}</dd><dt>${r.mode === 'single' && r.ok.length > 1 ? 'Valor de cada uma' : 'Valor'}</dt><dd class="impvalue"${i ? '' : ' id="impvalue"'}>${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${o.stake ? 'valor que você escreveu' : src}${r.also ? ` · ${r.also}` : ''}</dd>${betOdd}</dl>${check}`;
     if (!(r.value > 0)) h += '<p class="msg">Sem banca não dá pra calcular a unidade. Deposita primeiro; as seleções vão pro cupom sem valor.</p>';
     // what can be changed here, without going through the slip: the value, and single or multiple
-    h += `<div class="opedit"><div class="field">${iu ? '' : `<span>${esc(sym())}</span>`}<input class="opstake" data-op="${o.id}" inputmode="decimal" autocomplete="off" value="${esc(r.value > 0 ? (iu ? Core.unitsText(r.units != null && r.how !== 'same' ? r.units : r.value / r.unit) : Core.moneyText(r.value)) : '')}" aria-label="Valor desta aposta${iu ? ', em unidades' : ''}">${iu ? '<span>unidades</span>' : ''}</div>` +
+    const inU = r.unit > 0 ? (r.units != null && r.how !== 'same' ? r.units : r.value / r.unit) : 0, step = (d: number, t: string): string => `<button class="step" data-act="impstep" data-op="${o.id}" data-d="${d}" aria-label="${d > 0 ? 'Meia unidade a mais' : 'Meia unidade a menos'}">${t}</button>`;
+    h += `<div class="opedit"><div class="field">${iu ? step(-1, '−') : `<span>${esc(sym())}</span>`}<input class="opstake" data-op="${o.id}" inputmode="decimal" autocomplete="off" value="${esc(r.value > 0 ? (iu ? Core.unitsText(inU) : Core.moneyText(r.value)) : '')}" aria-label="Valor desta aposta${iu ? ', em unidades' : ''}">${iu ? '<span>unidades</span>' + step(1, '+') : ''}</div>` +
       (r.ok.length > 1 ? `<div class="segm" role="group" aria-label="Simples ou múltipla">${(['multi', 'single'] as const).map(m => `<button class="${r.mode === m ? 'on' : ''}" data-act="impmode" data-op="${o.id}" data-m="${m}" aria-pressed="${r.mode === m}">${m === 'multi' ? 'Múltipla' : 'Simples'}</button>`).join('')}</div>` : '') + '</div>';
   }
+  // a long multiple is a long shot: a fraction of a unit is what is suggested for it, a tap away
+  const sug = r.unit > 0 ? Core.suggestedUnits(r.ok.length, r.mode) : [];
+  if (sug.length) h += `<div class="quick units impsug">${sug.map(u => `<button data-act="impstu" data-op="${o.id}" data-u="${u}">${fu(u)}</button>`).join('')}</div><p class="hint">Múltipla de ${r.ok.length} seleções: stake sugerida de ${fu(sug[0])} a ${fu(sug[sug.length - 1])}.</p>`;
   for (const m of r.missing) {
     h += `<div class="impmiss" data-fid="${esc(m.f.id)}"><p class="msg">Achei ${esc(m.f.a.last)} x ${esc(m.f.b.last)}, mas ${r.tip.kind === 'multi' ? 'a aposta nela não está nessa imagem' : 'não entendi qual é a aposta'}.</p>`;
     for (const hnt of m.hints) h += `<button class="btn ghost block" data-act="impuse" data-op="${o.id}" data-from="${hnt.o.id}" data-fid="${esc(m.f.id)}" data-key="${esc(hnt.it.key)}">Usar da ${esc(label(hnt.o).toLowerCase())}: ${esc(hnt.x.sel)}${hnt.it.printedOdd ? ` · ${fo(hnt.it.printedOdd)}` : ''}</button>`;
@@ -247,7 +256,7 @@ export function renderImport(): void {
     <textarea id="imptext" placeholder="Ex.: Fulano vs. Beltrano · Fulano para vencer a luta · Stake 1 unidade" aria-label="Texto da aposta">${esc(imp.text)}</textarea>
     <div class="field"><span>De quem é</span><input id="impfrom" maxlength="40" autocomplete="off" placeholder="canal ou tipster (opcional)" value="${esc(imp.from)}" aria-label="De quem é a aposta: canal ou tipster"></div>
     ${known.length ? `<div class="quick froms" id="impfroms" role="group" aria-label="Origens já usadas">${known.map(k => `<button class="${imp.from.trim() === k ? 'on' : ''}" data-act="impfromq" data-v="${esc(k)}" aria-pressed="${imp.from.trim() === k}">${esc(k)}</button>`).join('')}</div>` : ''}
-    <div class="rowbtns three"><button class="btn" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><label class="btn ghost" for="impfile">Escolher fotos</label><input type="file" id="impfile" accept="image/*" multiple hidden ${imp.busy ? 'disabled' : ''}><button class="btn ghost" data-act="impclear" ${imp.busy || !something ? 'disabled' : ''}>Limpar</button></div>
+    <div class="rowbtns four"><button class="btn ghost" data-act="imppaste" ${imp.busy ? 'disabled' : ''}>Colar</button><label class="btn ghost" for="impfile">Escolher fotos</label><input type="file" id="impfile" accept="image/*" multiple hidden ${imp.busy ? 'disabled' : ''}><button class="btn" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><button class="btn ghost" data-act="impclear" ${imp.busy || !something ? 'disabled' : ''}>Limpar</button></div>
     <p class="hint" id="impstatus">${esc(impStatus())}</p>`;
   if (imp.err) h += `<p class="msg" id="imperr">${esc(imp.err)}</p>`;
   if (!imp.busy) {
@@ -259,7 +268,8 @@ export function renderImport(): void {
       h += '<div class="impall">';
       if (out) h += `<p class="hint" id="impout">${out === 1 ? '1 da lista fica de fora' : `${out} da lista ficam de fora`} do "apostar todas": falta alguma seleção, odd ou valor, já está apostada, a odd caiu, ou é só uma lista de referência. Dá pra levar pro cupom uma a uma.</p>`;
       if (ready.length) {
-        h += `<dl class="sum"><dt>${bets} ${bets > 1 ? 'apostas' : 'aposta'}</dt><dd class="big" id="imptotal">${money(total)}</dd></dl>`;
+        const u = wallet().unit;
+        h += `<dl class="sum"><dt>${bets} ${bets > 1 ? 'apostas' : 'aposta'}</dt><dd class="big"><span id="imptotal">${money(total)}</span>${u > 0 ? ` <small id="imptotalu">${fu(total / u)}</small>` : ''}</dd></dl>`;
         if (total > bal + 0.004) h += `<p class="msg" id="impshort">Saldo insuficiente: você tem ${money(bal)}.</p>`;
         if (imp.msg) h += `<p class="msg" id="impmsg">${esc(imp.msg)}</p>`;
         h += `<button class="btn block" data-act="impall" ${imp.placing || total > bal + 0.004 ? 'disabled' : ''}>${imp.placing ? 'Conferindo odds…' : ready.length > 1 ? `Apostar as ${ready.length} de uma vez` : 'Apostar a que está pronta'}</button>`;
@@ -359,6 +369,24 @@ export function forceFor(id: number): void { const o = opOf(id); if (!o) return;
 export function fixText(id: number): void { const o = opOf(id); if (!o) return; imp.text = o.text; imp.ops = imp.ops.filter(x => x !== o); imp.msg = ''; renderImport(); const el = $<HTMLTextAreaElement>('#imptext'); if (el) el.focus(); }
 /** An origin used before, chosen with a tap; a second tap takes it off. */
 export function setFrom(v: string): void { imp.from = imp.from.trim() === v ? '' : v; renderImport(); }
+/** One step of half a unit on the value of one item, and a stake chosen from the ones suggested. Both are a value
+ *  the person set, in units. */
+export function stepFor(id: number, dir: number): void {
+  const o = opOf(id); if (!o) return;
+  const r = impResolve(o), now = r.unit > 0 ? (r.units != null && r.how !== 'same' ? r.units : r.value / r.unit) : 0, n = Core.stepUnits(now, dir);
+  o.stake = n > 0 ? { kind: 'units', units: n } : null; imp.msg = ''; renderImport();
+}
+export function unitsFor(id: number, units: number): void { const o = opOf(id); if (!o || !(units > 0)) return; o.stake = { kind: 'units', units }; imp.msg = ''; renderImport(); }
+/** The button that pastes: what is on the clipboard goes to the text field and is read at once. Only text is asked
+ *  for; a picture goes through "Escolher fotos" or through the paste gesture on the page. */
+export async function pasteClip(): Promise<void> {
+  if (imp.busy) return;
+  let text = '';
+  try { text = await navigator.clipboard.readText(); }
+  catch (e) { imp.err = 'Não consegui ler a área de transferência. Toca no campo de texto e cola por lá.'; renderImport(); return; }
+  if (!text.trim()) { imp.err = 'A área de transferência não tem texto. Se for uma imagem, usa "Escolher fotos".'; renderImport(); return; }
+  await runImport(text);
+}
 /** Unfolds or folds one item of the list. */
 export function openFor(id: number): void { const o = opOf(id); if (!o) return; o.open = !o.open; renderImport(); }
 export function modeFor(id: number, mode: string | undefined): void { const o = opOf(id); if (!o) return; o.mode = mode === 'single' ? 'single' : 'multi'; imp.msg = ''; renderImport(); }

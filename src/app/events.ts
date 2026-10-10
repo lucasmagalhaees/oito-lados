@@ -3,7 +3,7 @@ import { loadOdds } from './api';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
-import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, swapFor, uneditFor, unpickFor } from './import';
+import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
 import { place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
 import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
@@ -108,6 +108,10 @@ document.addEventListener('click', e => {
   else if (a === 'impmode') modeFor(Number(d.op), d.m);
   else if (a === 'impswap') swapFor(Number(d.op), Number(d.i));
   else if (a === 'impopen') openFor(Number(d.op));
+  else if (a === 'impstep') stepFor(Number(d.op), Number(d.d));
+  else if (a === 'impstu') unitsFor(Number(d.op), Number(d.u));
+  else if (a === 'imppaste') pasteClip();
+  else if (a === 'ustep') { if (wallet().unit > 0) { setStakeUnits(Core.stepUnits(slip.unitsN, Number(d.d))); showStake(); ui.msg = ''; slipSummary(); } }
   else if (a === 'impunedit') uneditFor(Number(d.op), Number(d.i));
   else if (a === 'impforce') forceFor(Number(d.op));
   else if (a === 'impfixtext') { if (!imp.busy && !imp.placing) fixText(Number(d.op)); }

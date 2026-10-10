@@ -137,7 +137,7 @@ function vApostas(): string {
   const head = new Map(groups.map(g => [g.bets[0].id, g] as const));
   for (const b of ui.filter === 'open' ? groups.flatMap(g => g.bets) : list) {
     const isOpen = b.status === 'open', g = head.get(b.id);
-    if (g) h += `<div class="seg label grp" data-eid="${esc(g.eid)}">${g.eid ? esc(evLabel({ name: g.event }).main) : 'Vários eventos'} · ${esc(dDay.format(g.date))}</div><p class="hint grpsum">${g.bets.length} ${g.bets.length > 1 ? 'apostas' : 'aposta'} · ${money(g.stake)} em jogo · ${money(g.ret)} se ${g.bets.length > 1 ? 'todas baterem' : 'bater'}</p>`;
+    if (g) h += `<div class="seg label grp" data-eid="${esc(g.eid)}">${g.eid ? esc(evLabel({ name: g.event }).main) : 'Vários eventos'} · ${esc(dDay.format(g.date))}</div><p class="hint grpsum">${g.bets.length} ${g.bets.length > 1 ? 'apostas' : 'aposta'} · ${money(g.stake)} em jogo${g.bets.some(x => (x.unit || 0) > 0) ? ` (${fu(g.bets.reduce((a, x) => a + ((x.unit || 0) > 0 ? x.stake / x.unit! : 0), 0))})` : ''} · ${money(g.ret)} se ${g.bets.length > 1 ? 'todas baterem' : 'bater'}</p>`;
     const anyLive = isOpen && b.legs.some(l => { const f = D.fights.get(l.fid); return f && f.state === 'in'; });
     const odd = b.odd || Core.r2(b.legs.reduce((p, l) => p * l.odd, 1)), same = isCombo(b);
     h += `<article class="bet"><div class="bh"><b>${b.type === 'multi' ? `${same ? 'Combinada' : 'Múltipla'} · ${b.legs.length} seleções` : 'Simples'}</b><span class="pill ${anyLive ? 'live' : b.status}">${anyLive ? 'Ao vivo' : PILL[b.status]}</span></div>`;
@@ -280,7 +280,7 @@ function vCarteira(w: Wallet): string {
       : w.unit > 0 ? `Você digita quantas unidades quer apostar. Hoje 1u = ${money(w.unit)}.`
       : 'Ainda não há unidade, porque a banca está vazia. Até o primeiro depósito, o cupom pede o valor em dinheiro.'}</p>
     <p class="hint" id="tiphow">${!su ? `Ao copiar um print: mesmo valor. Um print de ${money(1750)} vira uma aposta de ${money(1750)}. Se o original só falar em unidades, entram essas unidades na sua unidade.`
-      : `Ao copiar um print: mesma stake. "Stake 2 unidades" vira ${fu(2)} sua${w.unit > 0 ? ` (${money(Core.r2(2 * w.unit))})` : ''}. Print que só traz dinheiro entra com o mesmo valor, mostrado em unidades.`}</p></section>`;
+      : `Ao copiar um print: mesma stake. "Stake 2 unidades" vira ${fu(2)} sua${w.unit > 0 ? ` (${money(Core.r2(2 * w.unit))})` : ''}. Print que não diz quantas unidades entra com ${fu(1)}; o dinheiro que ele mostra não é copiado.`}</p></section>`;
   const cd = S.copyDrop || 0, froms = [...new Set(S.bets.map(b => b.from).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   h += `<section class="card" id="copycard"><span class="label">Ao copiar apostas</span>
     <span class="label">Odd mínima</span>
@@ -323,12 +323,13 @@ export function renderSheet(): void {
   }
   h += '</div>';
   if (slip.mode === 'multi' && c.groups.some(g => g.combo)) h += '<p class="hint">Na mesma luta as odds não se multiplicam: o preço vem da chance de tudo acontecer junto.</p>';
-  const iu = inUnits();
+  const iu = inUnits(), sug = c.unit > 0 && c.ok ? Core.suggestedUnits(c.n, slip.mode) : [];
   h += `<label class="label" for="${iu ? 'stakeu' : 'stake'}">${slip.mode === 'multi' ? 'Valor da ' + mname.toLowerCase() : c.n > 1 ? 'Valor de cada aposta' : 'Valor da aposta'}</label>
-    ${iu ? `<div class="field"><input id="stakeu" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(slip.units)}" aria-label="Valor em unidades"><span>unidades</span></div>`
+    ${iu ? `<div class="field"><button class="step" data-act="ustep" data-d="-1" aria-label="Meia unidade a menos">−</button><input id="stakeu" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(slip.units)}" aria-label="Valor em unidades"><span>unidades</span><button class="step" data-act="ustep" data-d="1" aria-label="Meia unidade a mais">+</button></div>`
       : `<div class="field"><span>${esc(sym())}</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
     <div class="quick">${[10, 50, 100].map(v => `<button data-act="stq" data-v="${v}">+${v}</button>`).join('')}<button data-act="stq" data-v="max">Tudo</button></div>
     <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="stq" data-v="${v}">+${Core.moneyText(v)}</button>`).join('')}</div>`}
+    ${sug.length ? `<div class="quick units" id="slipsug">${sug.map(u => `<button data-act="stu" data-u="${u}">${fu(u)}</button>`).join('')}</div><p class="hint">${mname} de ${c.n} seleções: stake sugerida de ${fu(sug[0])} a ${fu(sug[sug.length - 1])}.</p>` : ''}
     <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}${iu ? '<button data-act="stq" data-v="max">Tudo</button>' : ''}</div>
     <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'} · Valor em ${iu ? 'unidades' : 'dinheiro'}: <button data-act="tab" data-tab="carteira" style="text-decoration:underline">mudar nas configurações</button></p>
     ${c.ok ? exposureNotes(slip.sels).map(n => `<p class="hint slipexpo">${esc(n)}</p>`).join('') : ''}

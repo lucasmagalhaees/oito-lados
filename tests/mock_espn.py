@@ -16,6 +16,13 @@ F = {
  'f2': dict(a=('201','Caio Brandt','C. Brandt','15-4-0'), b=('202','Dario Kessler','D. Kessler','12-3-0'), rounds=3, w='Lightweight'),
  'f3': dict(a=('301','Rafael Almeida','R. Almeida','27-7-0'), b=('302','Connor Lee Dunne','C. Dunne','15-2-0'), rounds=5, w='Middleweight'),
 }
+# two more fights, on the card only while a test asks for them (ESPN['extra']): enough fights for a multiple of five
+XF = {
+ 'f4': dict(a=('401','Igor Sampaio','I. Sampaio','9-1-0'), b=('402','Leo Vance','L. Vance','7-2-0'), rounds=3, w='Welterweight'),
+ 'f5': dict(a=('501','Nina Kovac','N. Kovac','6-0-0'), b=('502','Bia Moura','B. Moura','5-1-0'), rounds=3, w='W Strawweight'),
+}
+ALL = {**XF, **F}
+PRE = ('pre','STATUS_SCHEDULED',0,0,'-',None)
 # status per phase: (state, name, period, clock, displayClock, winner)
 ST = {
  'f1': [('pre','STATUS_SCHEDULED',0,0,'-',None), ('in','STATUS_IN_PROGRESS',2,70,'1:10',None), ('post','STATUS_FINAL',2,192,'3:12','a'), ('post','STATUS_FINAL',2,192,'3:12','a')],
@@ -28,8 +35,8 @@ RES = {'f1': dict(id=356,name='kotko',displayName='KO/TKO',description='Punch',d
 TD = {'f1': [None,(1,0),(2,1),(2,1)], 'f2': [None,None,(0,0),(0,0)], 'f3': [None,None,None,(3,0)]}
 def scoreboard():
     comps = []
-    for i,(fid,f) in enumerate(F.items()):
-        st = ST[fid][PHASE['n']]
+    for i,(fid,f) in enumerate((ALL if ESPN['extra'] else F).items()):
+        st = ST[fid][PHASE['n']] if fid in ST else PRE
         mk = lambda x, order, side: dict(id=x[0], order=order, winner=(st[5]==side), athlete=dict(displayName=x[1], fullName=x[1], shortName=x[2], flag=dict(alt='Brazil')), records=[dict(summary=x[3])])
         comps.append(dict(id=fid, date=iso(NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)), type=dict(abbreviation=f['w']),
             competitors=[mk(f['b'],2,'b'), mk(f['a'],1,'a')],
@@ -39,9 +46,9 @@ def scoreboard():
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
 # knobs for the tests: the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
 # is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None}
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False}
 def odds(fid):
-    f = F[fid]
+    f = ALL[fid]
     side = lambda x, ml, ko, sub, dec: dict(moneyLine=ml, current=dict(moneyLine=am(ml), victoryMethod=dict(koTkoDq=am(ko), submission=am(sub), points=am(dec))), athlete={'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/%s?lang=en'%x[0]})
     if fid=='f3': h, a, ou = side(f['a'],-125,800,300,250), side(f['b'],105,200,2200,450), (3.5,-120,-110)
     elif fid=='f2': h, a, ou = side(f['a'],-200,350,500,110), side(f['b'],ESPN['f2b'],700,1200,300), (2.5,-180,140)
@@ -73,13 +80,13 @@ def handle(route):
     if m: return ok(odds(m.group(1)))
     m = re.search(r'/competitions/(\w+)/status', u)
     if m:
-        fid = m.group(1); st = ST[fid][PHASE['n']]
+        fid = m.group(1); st = ST[fid][PHASE['n']] if fid in ST else PRE
         o = dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post'))
         if st[0]=='post' and not ESPN['noresult']: o['result'] = dict(RES[fid], **ESPN['resname']) if ESPN['resname'] else RES[fid]
         return ok(o)
     m = re.search(r'/competitions/(\w+)/competitors/(\w+)/statistics', u)
     if m:
-        fid, aid = m.groups(); t = TD[fid][PHASE['n']]
+        fid, aid = m.groups(); t = TD[fid][PHASE['n']] if fid in TD else None
         if t is None: return route.fulfill(status=404, body='{}')
         v = t[0] if aid == F[fid]['a'][0] else t[1]
         return ok(dict(splits=dict(categories=[dict(name='general', stats=[dict(name='takedownsAttempted', value=9), dict(name='takedownsLanded', value=v)])])))
