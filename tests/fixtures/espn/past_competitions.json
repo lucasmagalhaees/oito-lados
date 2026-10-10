@@ -1,0 +1,134 @@
+[
+ {
+  "id": "401855749",
+  "date": "2026-03-29T00:00Z",
+  "description": "3 Rnd (5-5-5)",
+  "type": {
+   "id": "969",
+   "text": "Welterweight",
+   "abbreviation": "Welterweight"
+  },
+  "format": {
+   "regulation": {
+    "periods": 3,
+    "clock": 300.0
+   }
+  },
+  "cardSegment": {
+   "id": "173",
+   "description": "Main Card",
+   "name": "main"
+  },
+  "competitors": [
+   {
+    "id": "2960681",
+    "order": 1,
+    "winner": true,
+    "type": "athlete",
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/2960681?lang=en&region=us"
+    }
+   },
+   {
+    "id": "4077451",
+    "order": 2,
+    "winner": false,
+    "type": "athlete",
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/4077451?lang=en&region=us"
+    }
+   }
+  ],
+  "status": {
+   "$ref": "http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/600057366/competitions/401855749/status?lang=en&region=us"
+  }
+ },
+ {
+  "id": "401859133",
+  "date": "2026-02-07T22:00Z",
+  "description": "3 Rnd (5-5-5)",
+  "type": {
+   "id": "969",
+   "text": "Welterweight",
+   "abbreviation": "Welterweight"
+  },
+  "format": {
+   "regulation": {
+    "periods": 3,
+    "clock": 300.0
+   }
+  },
+  "cardSegment": {
+   "id": "174",
+   "description": "Prelims",
+   "name": "prelims1"
+  },
+  "competitors": [
+   {
+    "id": "4077451",
+    "order": 2,
+    "winner": false,
+    "type": "athlete",
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/4077451?lang=en&region=us"
+    }
+   },
+   {
+    "id": "4700616",
+    "order": 1,
+    "winner": true,
+    "type": "athlete",
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/4700616?lang=en&region=us"
+    }
+   }
+  ],
+  "status": {
+   "$ref": "http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/600057328/competitions/401859133/status?lang=en&region=us"
+  }
+ },
+ {
+  "id": "401783702",
+  "date": "2025-06-28T23:00Z",
+  "description": "3 Rnd (5-5-5)",
+  "type": {
+   "id": "969",
+   "text": "Welterweight",
+   "abbreviation": "Welterweight"
+  },
+  "format": {
+   "regulation": {
+    "periods": 3,
+    "clock": 300.0
+   }
+  },
+  "cardSegment": {
+   "id": "175",
+   "description": "Early Prelims",
+   "name": "prelims2"
+  },
+  "competitors": [
+   {
+    "id": "4077451",
+    "order": 1,
+    "winner": false,
+    "type": "athlete",
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/4077451?lang=en&region=us"
+    }
+   },
+   {
+    "id": "5149961",
+    "order": 2,
+    "winner": true,
+    "type": "athlete",
+    "athlete": {
+     "$ref": "http://sports.core.api.espn.com/v2/sports/mma/athletes/5149961?lang=en&region=us"
+    }
+   }
+  ],
+  "status": {
+   "$ref": "http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/600053168/competitions/401783702/status?lang=en&region=us"
+  }
+ }
+]

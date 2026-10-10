@@ -1,0 +1,18 @@
+{
+ "clock": 300.0,
+ "displayClock": "5:00",
+ "period": 3,
+ "type": {
+  "id": "3",
+  "name": "STATUS_FINAL",
+  "state": "post",
+  "completed": true,
+  "description": "Final"
+ },
+ "result": {
+  "id": 269,
+  "name": "draw",
+  "displayName": "Draw",
+  "shortDisplayName": "Draw"
+ }
+}
