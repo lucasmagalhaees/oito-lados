@@ -2,6 +2,21 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.1] - 2026-10-09
+
+### Adicionado
+- Atalhos de valor no cupom para +10.000, +100.000 e +1.000.000.
+- Valor da aposta digitado em unidades da banca, com uma chave no cupom que fica salva.
+- Cor do canto do lutador nas opções de método, vencedor e round e quedas por lutador, e nas seleções do cupom e das apostas.
+- Checagem automática de que a produção serve o `index.html` da `main` depois de cada merge.
+
+### Alterado
+- Mais e menos de uma linha aparecem como + e −.
+- Copiar print em dinheiro tem só duas opções: mesmo valor ou mesma stake. O modo "fixo" saiu.
+
+### Corrigido
+- Merges em sequência deixaram a produção na versão de um PR antigo. O próximo merge republica a versão certa, e a checagem nova acusa se voltar a acontecer.
+
 ## [0.3.0] - 2026-10-09
 
 ### Adicionado

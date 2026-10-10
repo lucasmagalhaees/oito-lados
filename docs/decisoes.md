@@ -23,6 +23,8 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 15. Pedido de cobertura de testes: cobertura do `index.html` passa a ser medida e cobrada no `verify.sh`.
 16. Respostas do Lucas às interpretações pendentes: cashout dinâmico em múltipla (D27), moeda só no depósito e com conversão (D28), banca e unidade confirmadas (D24), valor do print configurável (D29).
 17. Pedido de um botão para converter a banca sem depositar (ajuste na D28). Dúvida do Lucas sobre o modo "fixo" do valor de print (D29), explicada; ele ainda não disse se fica.
+18. O Lucas mesclou os PRs #4 a #7 em sequência e a produção ficou na versão do #4 (D32). Pedidos seguintes: atalhos de valor altos e valor em unidades (D30), print só com "mesmo valor" ou "mesma stake" (D29), + e − e cores dos lutadores (D31).
+19. Perguntas sobre mais de um usuário e sobre custo de backend, respondidas e anotadas em `docs/escala.md`. O Lucas pediu a migração para Vite + TypeScript (etapa 1 da escala), a fazer num PR separado.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -246,15 +248,45 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 - **Descartado:** carteiras por moeda; cotação digitada à mão; converter só o saldo e deixar o histórico na moeda antiga (o gráfico e as tabelas somariam moedas diferentes).
 - **Consequência:** segunda dependência de terceiros em tempo de execução, depois do leitor de imagem. Se o serviço sair do ar ou mudar o formato, só a troca de moeda para; o resto do app não depende dele.
 
-## D29. Valor de print em dinheiro é configurável
+## D29. Print em dinheiro: mesmo valor ou mesma stake
 
 - **Contexto:** perguntado se um print de R$ 1.750,00 deveria ser copiado como R$ 1.750,00 ou convertido em unidades, o Lucas respondeu: "quero ter uma opção, mas configuração que parametrize isso".
-- **Decisão:** um cartão na Carteira com três modos. **Mesmo valor** (padrão, o comportamento da D26); **Em unidades**, com o parâmetro "quanto vale 1u de quem fez o print"; **Fixo**, com o parâmetro "quantas unidades suas".
-- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
-  - O terceiro modo (fixo) não foi pedido com essas palavras; entrou por ser o jeito de seguir um print sem conhecer a unidade de quem o fez.
-  - A configuração vale para todos os prints. Não há unidade de origem por canal ou por pessoa.
-  - Texto que já fala em unidades não é afetado.
+- **Primeira versão (algumas horas):** três modos, "Mesmo valor", "Em unidades" e "Fixo". O terceiro foi acréscimo meu.
+- **Correção do Lucas, no mesmo dia:** "não precisa ter a opção de fixo; ou você copia o mesmo valor ou a mesma stake", e "quando for em unidades, copia a stake do print".
+- **Decisão:** dois modos. **Mesmo valor** (padrão): o print de R$ 1.750,00 vira aposta de R$ 1.750,00. **Mesma stake**: o valor do print é dividido pelo valor de 1u de quem o fez e a aposta usa essa quantidade da unidade do Lucas. Print ou texto que já fala em unidades copia as unidades nos dois modos.
+- **Por que o campo "1u do print" continua:** um print que só traz dinheiro não diz quantas unidades aquilo é para quem apostou. Sem esse número não há como copiar a stake, e o app cai no mesmo valor avisando.
+- **Interpretações que seguem valendo:** a configuração é uma só para todos os prints (não há unidade de origem por canal ou por pessoa).
 - **Limite conhecido:** o leitor não considera a moeda do print. Com a banca em dólar, um print de R$ 250,00 no modo "mesmo valor" vira US$ 250,00.
+- **Consequência:** quem tinha salvo o modo "Fixo" volta para "Mesmo valor" (`Core.tipCfg` não reconhece mais o modo).
+
+## D30. Valor da aposta em dinheiro ou em unidades, e atalhos altos
+
+- **Contexto:** dois pedidos seguidos: "nas opções de aposta precisa ter 10000 e 100000 e 1000000" e "na hora de apostar quero a opção em unidades da banca".
+- **Decisão:** uma segunda linha de atalhos no cupom (+10.000, +100.000, +1.000.000), somando como os que já existiam. E uma chave "Em R$ / Em unidades" que troca o campo de valor por um campo em unidades; a escolha fica salva.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Os atalhos de 0,5u a 3u já existiam; entendi o pedido como poder **digitar** qualquer quantidade de unidades.
+  - Em unidades, os atalhos de dinheiro saem da tela e ficam só os de unidade e o "Tudo".
+  - Os atalhos altos são do cupom. Os do depósito continuam em 100, 500, 1.000 e 5.000.
+- **Descartado:** trocar o padrão para unidades sem ele pedir.
+
+## D31. Mais e menos como + e −, e cor de canto nas opções
+
+- **Contexto:** "em vez de usar a linguagem menos use − e em vez de mais use +; e quando tiver rounds + vencedor (seja round exato ou mais/menos) precisa ter cores e diferenciação dos lutadores, encontre uma forma bacana de fazer isso".
+- **Decisão:** total de rounds e de quedas passam a "+2.5" e "−2.5", com uma legenda curta no título do mercado. Toda opção que pertence a um lutador (método por lutador, vencedor e round, acerta queda) ganha barra e fundo leve na cor do canto dele, o cabeçalho da coluna ganha um traço da cor, e no cupom e nas apostas a seleção leva um quadradinho da cor.
+- **Interpretações que precisaram ser feitas (confirmar com o Lucas):**
+  - Usei o sinal de menos tipográfico (−), que tem a largura do +. O leitor de texto aceita também o hífen.
+  - Não existe um mercado único de "vencedor e mais/menos rounds". Essa aposta é feita combinando as duas seleções da mesma luta no cupom, e ali a seleção do lutador aparece com a cor dele. Não criei mercado novo.
+- **Consequência:** apostas antigas guardam o texto da época ("Mais de 2.5 rounds").
+
+## D32. Produção servindo versão antiga depois de merges em sequência
+
+- **O que aconteceu (09/10/2026):** os PRs #4, #5, #6 e #7 foram mesclados em menos de um minuto. A Vercel criou um deploy de produção para cada merge. O do #4 (o mais antigo) terminou às 00:00:28 UTC, dois minutos depois do #7 (23:58:39), e o endereço de produção ficou com ele. O Lucas procurou o copiar aposta e a unidade e não achou.
+- **Como foi confirmado:** aberto https://oito-lados.vercel.app no navegador do computador do Lucas, o arquivo servido tinha 90.037 bytes e o mesmo sha256 do `index.html` do merge do #4 (`f76c9fdf…`). O da `main` tinha 127.845 bytes.
+- **Por que nada acusou:** o CI confere o código, não o que está no ar. Os quatro deploys aparecem como sucesso.
+- **Decisão:** um workflow novo (`Produção`) compara, depois de cada push na `main`, o que a produção serve com o `index.html` do commit, e continua olhando por 5 minutos depois de bater. Em PR só informa.
+- **Descartado:** carimbo de versão dentro do `index.html` (exigiria etapa de build, contra a D10) e promover deploy pela API da Vercel (exigiria guardar um token).
+- **Regra de uso:** mesclar um PR por vez e esperar o deploy; quando um PR contém os anteriores, mesclar só ele.
+- **O que não se sabe:** se a Vercel sempre aponta a produção para o último deploy a terminar, ou se foi circunstância. Fato de terceiro, visto uma vez.
 
 ## Pendências em 09/10/2026
 
@@ -263,7 +295,9 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
 | Confirmar as interpretações da conversão de moeda (D28) | Lucas |
-| Testar o copiar aposta no iPhone com prints reais, e ver se os três modos do valor de print servem (D29) | Lucas |
+| Testar o copiar aposta no iPhone com prints reais | Lucas |
+| Confirmar as interpretações do valor em unidades (D30) e de + / − e cores (D31) | Lucas |
+| Ver o workflow `Produção` rodar no primeiro merge depois dele, e se o runner do GitHub alcança a produção | Quem fizer o próximo merge |
 | Testar num evento ao vivo de verdade | Lucas, no próximo card |
 | Instalar no iPhone e conferir ícone, tela cheia e persistência | Lucas |
 | Conferir o hook de parada dentro do Claude Code | Lucas, na primeira sessão pelo CLI |

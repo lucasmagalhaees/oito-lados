@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command that answers "is this still correct?".
-#   scripts/verify.sh           docs + unit + contract + end-to-end (both themes) + code coverage minimums
-#   scripts/verify.sh --quick   docs + unit + contract (a few seconds; what the Stop hook runs)
+#   scripts/verify.sh           docs + unit + contract + production-check self-test + end-to-end (both themes) + code coverage minimums
+#   scripts/verify.sh --quick   docs + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
 # Exit: 0 all passed, 1 something failed, 3 test dependencies missing.
 set -u
 cd "$(dirname "$0")/.."
@@ -36,12 +36,17 @@ run() {
     fail=1
     printf 'FALHA  %-10s\n' "$name"
     printf '%s\n' "$out" | tail -n 25 | sed 's/^/         /'
+    # on GitHub Actions the tail of the failing output also becomes an annotation, readable without opening the log
+    if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+      printf '::error title=verify %s::%s\n' "$name" "$(printf '%s\n' "$out" | tail -n 12 | tr '\n' '|' | cut -c1-1800)"
+    fi
   fi
 }
 
 run docs     python3 tests/docs_check.py
 run unit     python3 tests/unit.py
 run contract python3 tests/contract.py
+run prod     python3 scripts/check_production.py --selftest
 if [ "$full" -eq 1 ]; then
   run e2e-dark  python3 tests/e2e.py dark
   run e2e-light python3 tests/e2e.py light

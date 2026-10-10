@@ -23,8 +23,9 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Ao vivo:** round, relógio e quedas das lutas em andamento. A aposta fecha sozinha quando sai o resultado oficial.
 - **Cashout:** devolve o valor integral enquanto nenhuma luta da aposta foi decidida. Se parte da múltipla já bateu e o resto ainda não começou, oferece um valor para encerrar, calculado pelas odds de agora. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
-- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. O que fazer com um print que traz o valor em dinheiro é configurável: mesmo valor, convertido em unidades ou um número fixo de unidades. A imagem é lida no próprio aparelho.
-- **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). O cupom aceita valor em unidades e a Carteira mostra o resultado em unidades.
+- **Copiar aposta:** cola o texto de um palpite ou escolhe o print de uma aposta; o app acha a luta e a seleção e monta o cupom com a odd de agora. Se o original fala em unidades, copia as unidades. Se traz dinheiro, você escolhe: mesmo valor ou mesma stake. A imagem é lida no próprio aparelho.
+- **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). No cupom o valor pode ser digitado em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades.
+- **Leitura rápida:** mais e menos de uma linha aparecem como + e −, e cada opção ligada a um lutador leva a cor do canto dele.
 - **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
 - **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
 
@@ -69,8 +70,9 @@ scripts/verify.sh           # roda tudo
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
 | `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
 | `tests/contract_live.py` | A API real da ESPN e o serviço de câmbio. Roda toda semana no GitHub Actions e avisa se o formato mudar |
+| `scripts/check_production.py` | Depois de cada merge, se a produção está servindo o `index.html` da `main` e continua servindo |
 
-Tudo, menos o último, roda no GitHub Actions em cada PR e em cada push na `main`.
+Tudo, menos os dois últimos, roda no GitHub Actions em cada PR e em cada push na `main`. Se mesclar vários PRs, faça um por vez e espere o deploy: merges em sequência já deixaram a produção numa versão antiga.
 
 ## Desenvolvimento com IA
 
@@ -95,6 +97,7 @@ No iPhone: abra a URL de produção no Safari, toque em Compartilhar e em Adicio
 index.html                           o app inteiro (HTML, CSS e JS)
 vercel.json                          publicação como site estático
 scripts/verify.sh                    comando único de verificação
+scripts/check_production.py          confere a produção contra a main
 tests/unit.py                        testes do núcleo (preço e liquidação)
 tests/contract.py                    leitores da ESPN contra respostas reais gravadas
 tests/contract_live.py               conferência da API real da ESPN
@@ -111,6 +114,7 @@ docs/escala.md                       caminho de escala
 docs/screenshots/                    telas usadas neste README
 .github/workflows/ci.yml             testes em cada PR e push na main
 .github/workflows/espn-contract.yml  conferência semanal da API real
+.github/workflows/producao.yml       conferência da produção depois de cada merge
 .claude/settings.json                hook de parada do Claude Code
 CLAUDE.md                            especificação e regras do projeto
 ```

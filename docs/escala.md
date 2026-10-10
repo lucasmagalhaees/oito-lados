@@ -23,6 +23,26 @@ São sugestões de o que observar nas primeiras semanas de uso.
 | O app é usado toda semana | Olhar o próprio histórico de apostas depois de um mês |
 | Faz falta ter outra pessoa (ranking, comparar bancas) | Só escalar para multiusuário se isso for pedido de verdade |
 
+## E se mais de uma pessoa abrir o link hoje?
+
+Funciona, cada uma no seu mundo: banca e apostas ficam no aparelho de cada pessoa e ninguém vê nada de ninguém. Não existe conta (trocar de aparelho começa do zero, salvo o backup por texto), nem ranking, nem proteção contra alterar o próprio saldo. Cada aparelho consulta a ESPN direto: com poucos amigos não muda nada; com muita gente multiplica as chamadas a uma API que não é oficial.
+
+## Quanto custa um backend (conferido em 09/10/2026; reconferir antes de decidir)
+
+No tamanho de "eu e algumas dezenas de amigos", dá para ficar em US$ 0:
+
+| Item | Plano grátis | Quando passa a custar |
+|---|---|---|
+| Vercel Hobby | 1 milhão de chamadas de função e 4 h de CPU por mês; estourou, o recurso para até virar o mês, sem cobrança | Uso comercial (anúncio, assinatura) ou cron mais de 1 vez por dia: Pro, US$ 20/mês com US$ 20 de crédito de uso |
+| Banco e login (Supabase) | 500 MB, 50 mil usuários ativos, 2 projetos; o projeto pausa depois de 1 semana sem uso | Pro a partir de US$ 25/mês |
+| Banco (Neon) | 1 GB por projeto; desliga quando ocioso e religa na chamada seguinte | Paga por uso no plano seguinte |
+
+A Vercel não tem mais banco próprio: os bancos entram por integração (Neon, Supabase e outros). Os números do Supabase e do Neon foram lidos por um resumo das páginas, não pela página crua.
+
+Fontes: https://vercel.com/docs/plans/hobby · https://vercel.com/docs/plans/pro-plan · https://vercel.com/docs/cron-jobs/usage-and-pricing · https://vercel.com/docs/limits/fair-use-guidelines · https://supabase.com/pricing · https://neon.com/docs/introduction/plans
+
+O custo que pesa não é esse: é manter login, banco e liquidação no servidor funcionando em noite de evento.
+
 ## Gatilhos: o que cada sintoma pede
 
 | Sintoma | Etapa |

@@ -109,6 +109,14 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .opt.on .est{color:inherit}
 .opt[disabled]{opacity:.55;cursor:default}
 .opt.ml{flex:none;min-width:76px;justify-content:center}
+.opt.sa,.opt.sb{position:relative;padding-left:15px;overflow:hidden}
+.opt.sa::before,.opt.sb::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--red)}
+.opt.sb::before{background:var(--blue)}
+.opt.sa{background:color-mix(in srgb,var(--red) 10%,var(--surface2))}
+.opt.sb{background:color-mix(in srgb,var(--blue) 10%,var(--surface2))}
+.opt.on.sa,.opt.on.sb{background:var(--gold-bg)}
+.sd{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--red);margin-right:6px;vertical-align:1px}
+.sd.b{background:var(--blue)}
 .noodds{font-size:12px;color:var(--muted);flex:none}
 .more{display:flex;width:100%;justify-content:space-between;align-items:center;padding:11px 12px;border-top:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted);margin-top:4px}
 .mk{padding:0 12px 14px;border-top:1px solid var(--line)}
@@ -117,7 +125,8 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .grid{display:grid;gap:6px}
 .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
 .g3 .opt{flex-direction:column;align-items:flex-start;justify-content:center;gap:2px}
-.colh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere}
+.colh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;min-width:0;overflow-wrap:anywhere;padding-bottom:5px;border-bottom:2px solid var(--red)}
+.colh.b{border-bottom-color:var(--blue)}
 .colh i{width:8px;height:8px;border-radius:2px;background:var(--red);flex:none}
 .colh.b i{background:var(--blue)}
 .legend{font-size:12px;color:var(--muted);margin-top:14px}
@@ -489,10 +498,10 @@ const Core = (() => {
       const isReal = !!(o.total && o.total.line === L);
       if (L === 0.5 && !isReal) continue;
       const pu = P.F * cumShare(P.sh, L);
-      tot.push(isReal ? real(`tot:o:${L}`, 'Mais de ' + L, `Mais de ${L} rounds`, o.total.over) : est(`tot:o:${L}`, 'Mais de ' + L, `Mais de ${L} rounds`, 1 - pu));
-      tot.push(isReal ? real(`tot:u:${L}`, 'Menos de ' + L, `Menos de ${L} rounds`, o.total.under) : est(`tot:u:${L}`, 'Menos de ' + L, `Menos de ${L} rounds`, pu));
+      tot.push(isReal ? real(`tot:o:${L}`, '+' + L, `+${L} rounds`, o.total.over) : est(`tot:o:${L}`, '+' + L, `+${L} rounds`, 1 - pu));
+      tot.push(isReal ? real(`tot:u:${L}`, '−' + L, `−${L} rounds`, o.total.under) : est(`tot:u:${L}`, '−' + L, `−${L} rounds`, pu));
     }
-    add({ id: 'tot', cat: 'Rounds', title: 'Total de rounds', note: 'X.5 = metade do round seguinte (2:30)', cols: 2, opts: tot });
+    add({ id: 'tot', cat: 'Rounds', title: 'Total de rounds', note: '+ é mais de, − é menos de · X.5 = metade do round seguinte (2:30)', cols: 2, opts: tot });
 
     add({ id: 'rnd', cat: 'Rounds', title: 'Round em que a luta acaba', note: 'por nocaute ou finalização', cols: 3,
       opts: P.sh.map((s, i) => est('rnd:' + (i + 1), 'Round ' + (i + 1), 'Luta acaba no round ' + (i + 1), P.F * s)) });
@@ -506,10 +515,10 @@ const Core = (() => {
     let best = 0.5, bd = 9;
     for (let L = 0.5; L <= 9.5; L += 1) { po[L] = J.prob(['td:o:' + L]); const d = Math.abs(po[L] - 0.5); if (d < bd) { bd = d; best = L; } }
     for (const L of [best - 1, best, best + 1].filter(x => x >= 0.5)) {
-      td.push(est(`td:o:${L}`, 'Mais de ' + L, `Mais de ${L} quedas na luta`, po[L]));
-      td.push(est(`td:u:${L}`, 'Menos de ' + L, `Menos de ${L} quedas na luta`, 1 - po[L]));
+      td.push(est(`td:o:${L}`, '+' + L, `+${L} quedas na luta`, po[L]));
+      td.push(est(`td:u:${L}`, '−' + L, `−${L} quedas na luta`, 1 - po[L]));
     }
-    add({ id: 'td', cat: 'Quedas', title: 'Quedas na luta', note: 'soma dos dois lutadores', cols: 2, opts: td });
+    add({ id: 'td', cat: 'Quedas', title: 'Quedas na luta', note: '+ é mais de, − é menos de · soma dos dois lutadores', cols: 2, opts: td });
 
     const tda = [];
     for (const s of ['a', 'b']) {
@@ -523,6 +532,9 @@ const Core = (() => {
     const chance = keys => (keys.length === 1 && keys[0] === 'ml:a') ? P.pa : (keys.length === 1 && keys[0] === 'ml:b') ? P.pb : J.prob(keys);
     return { groups, map, P, J, chance };
   }
+
+  // the corner a selection belongs to ('a' or 'b'), or null when it is about the fight as a whole
+  const sideOf = key => { const q = String(key).split(':'); return ['ml', 'mov', 'wr', 'tda'].includes(q[0]) && (q[1] === 'a' || q[1] === 'b') ? q[1] : null; };
 
   /* ---------- settlement ----------
      f: normalised fight, res: normalised result (or null), td: {a,b,final} takedowns landed (or null).
@@ -604,24 +616,31 @@ const Core = (() => {
   const UNIT_PCT_DEFAULT = 10;
   const unitPct = v => { const n = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : Number(v); return isFinite(n) && n > 0 ? clamp(r2(n), 0.1, 100) : UNIT_PCT_DEFAULT; };
   const unitValue = (bankroll, pct) => r2(Math.max(0, Number(bankroll) || 0) * unitPct(pct) / 100);
+  // a stake typed in units: digits and one comma (a dot counts as the comma), two decimals, at most 9999,99
+  function maskUnits(text) {
+    const t = String(text == null ? '' : text).replace(/\./g, ',').replace(/[^\d,]/g, ''), i = t.indexOf(',');
+    const int = (i < 0 ? t : t.slice(0, i)).replace(/^0+(?=\d)/, '').slice(0, 4);
+    return i < 0 ? int : (int || '0') + ',' + t.slice(i + 1).replace(/,/g, '').slice(0, 2);
+  }
+  const parseUnits = text => { const n = parseFloat(maskUnits(text).replace(',', '.')); return isFinite(n) && n > 0 ? r2(n) : 0; };
+  const unitsText = n => (isFinite(n) && n > 0 ? String(r2(n)).replace('.', ',') : '');
 
   /* ---------- the stake of a copied bet ----------
      A tip that speaks in units always uses those units. What to do with one that brings an amount of money is a setting:
-       same  - stake the same amount (the default)
-       units - turn it into units by what one unit is worth to whoever made the print (srcUnit), and stake that many of mine
-       fixed - ignore the amount and stake a fixed number of my units (fixU) */
-  const TIP_MODES = ['same', 'units', 'fixed'];
+       same  - the same amount (the default)
+       units - the same stake: the amount is turned into units by what one unit is worth to whoever made the print
+               (srcUnit), and that many of my units are staked */
+  const TIP_MODES = ['same', 'units'];
   function tipCfg(c) {
     c = c && typeof c === 'object' ? c : {};
-    const src = Number(c.srcUnit), fix = Number(c.fixU);
-    return { mode: TIP_MODES.includes(c.mode) ? c.mode : 'same', srcUnit: isFinite(src) && src > 0 ? r2(src) : 0, fixU: isFinite(fix) && fix > 0 ? clamp(r2(fix), 0.01, 100) : 1 };
+    const src = Number(c.srcUnit);
+    return { mode: TIP_MODES.includes(c.mode) ? c.mode : 'same', srcUnit: isFinite(src) && src > 0 ? r2(src) : 0 };
   }
   function tipStake(stake, cfg, unit) {
     const c = tipCfg(cfg), u = Math.max(0, Number(unit) || 0);
     if (stake.kind === 'units') return { how: 'units', units: stake.units, value: r2(stake.units * u) };
     if (stake.kind !== 'money') return { how: 'default', units: 1, value: r2(u) };
     if (c.mode === 'units' && c.srcUnit > 0) { const n = stake.money / c.srcUnit; return { how: 'conv', units: n, value: r2(n * u) }; }
-    if (c.mode === 'fixed') return { how: 'fixed', units: c.fixU, value: r2(c.fixU * u) };
     return { how: 'same', units: null, value: stake.money };
   }
 
@@ -670,7 +689,7 @@ const Core = (() => {
     anyMoney: /(?:r\$|us\$|\$|€)\s*[\d.,]+/g,
     odd: /(?:^|[^\d.,])(\d{1,2}[.,]\d{2})(?![\d.,])/,
     over: /(?:mais de|over|acima de|\+)\s*(\d)[.,]5/,
-    under: /(?:menos de|under|abaixo de)\s*(\d)[.,]5/,
+    under: /(?:menos de|under|abaixo de)\s*(\d)[.,]5|(?:^|\s)[-−](\d)[.,]5(?!\d)/,
     takedown: /queda|takedown/,
     distNo: /nao (?:vai|chega)\s+(?:ate|para|a)\s+(?:a\s+|o\s+)?(?:decisao|distancia|final)|sem decisao|antes do (?:fim|tempo)|inside the distance/,
     dist: /(?:vai|ir|chega|chegar)\s+(?:ate|para|a)\s+(?:a\s+|o\s+)?(?:decisao|distancia|final)|go(?:es)? the distance|luta completa/,
@@ -692,7 +711,7 @@ const Core = (() => {
     }
     const ov = TIP.over.exec(win), un = TIP.under.exec(win);
     if (ov || un) {
-      const line = +(ov || un)[1] + 0.5, side = ov ? 'o' : 'u';
+      const line = +(ov ? ov[1] : un[1] || un[2]) + 0.5, side = ov ? 'o' : 'u';
       if (TIP.takedown.test(win)) return { key: `td:${side}:${line}` };
       if (line < f.rounds) return { key: `tot:${side}:${line}` };
     }
@@ -777,7 +796,7 @@ const Core = (() => {
     if (value < 0.01) return { ok: false, why: 'noprice' };
     return { ok: true, kind: 'market', value, full, chance: prob };
   }
-  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipCfg, tipStake, TIP_MODES, maskMoney, parseMoney, moneyText, unitPct, unitValue, parseTip, ML };
+  return { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, sideOf, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipCfg, tipStake, TIP_MODES, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, parseTip, ML };
 })();
 
 /* ================= formatting ================= */
@@ -839,7 +858,7 @@ function index() { D.fights = new Map(); for (const e of D.events) for (const f 
 function saveCache() { LS.set('oitolados.cache.v1', { events: D.events, odds: D.odds, results: D.results, td: D.td, astats: D.astats, finalSeen: D.finalSeen, lastSync: D.lastSync, from: D.from }); }
 
 const ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null };
-const slip = { sels: [], mode: 'single', stake: '' };
+const slip = { sels: [], mode: 'single', stake: '', units: '', unitsN: 0 };
 
 /* ================= ESPN API ================= */
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/mma/ufc';
@@ -981,7 +1000,7 @@ function repeatBet(id) {
   if (!b || !repeatable(b)) { render(); return; }
   slip.sels = b.legs.map(l => ({ fid: l.fid, key: l.key }));
   slip.mode = b.type === 'multi' ? 'multi' : 'single';
-  slip.stake = Core.moneyText(b.stake);
+  setStakeMoney(b.stake);
   ui.msg = ''; ui.cash = null; ui.sheet = true;
   renderSheet(); render();
 }
@@ -1061,8 +1080,8 @@ function impResolve(res) {
 }
 // the mode that is really in force: "units" only works once the value of the source's unit has been given
 const tipEffective = () => { const c = Core.tipCfg(S.tip); return c.mode === 'units' && !c.srcUnit ? 'same' : c.mode; };
-const TIP_HINT = { same: 'o valor é o mesmo do print.', units: 'o valor do print vira unidades e entra na sua unidade.', fixed: 'print com valor em dinheiro entra com o valor fixo que você configurou.' };
-const TIP_MODE = { same: 'Mesmo valor', units: 'Em unidades', fixed: 'Fixo' };
+const TIP_HINT = { same: 'o valor é o mesmo do print.', units: 'a stake é a mesma do print, na sua unidade.' };
+const TIP_MODE = { same: 'Mesmo valor', units: 'Mesma stake' };
 async function runImport(text) {
   imp.text = text; imp.err = ''; imp.res = null;
   const pre = [...D.fights.values()].filter(f => f.state === 'pre' && !f.canceled);
@@ -1096,8 +1115,8 @@ function renderImport() {
     if (r.ok.length) {
       h += '<div id="impres">';
       for (const { it, f, x } of r.ok)
-        h += `<div class="sel"><div class="t"><b>${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span></div></div>`;
-      const how = { units: `${fu(r.units)} do print`, same: 'mesmo valor do print', conv: `${money(r.st.money)} do print ÷ ${money(Core.tipCfg(S.tip).srcUnit)} por unidade = ${fu(r.units)}`, fixed: `valor fixo de ${fu(r.units)}, pela sua configuração`, default: 'o print não diz o valor, considerei 1u' }[r.how];
+        h += `<div class="sel"><div class="t"><b>${sideDot(it.key)}${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span></div></div>`;
+      const how = { units: `${fu(r.units)} do print`, same: 'mesmo valor do print', conv: `mesma stake do print: ${money(r.st.money)} ÷ ${money(Core.tipCfg(S.tip).srcUnit)} por unidade = ${fu(r.units)}`, default: 'o print não diz o valor, considerei 1u' }[r.how];
       h += `</div><dl class="sum" style="margin-top:10px"><dt>Valor</dt><dd id="impvalue">${r.value > 0 ? money(r.value) + (r.unit > 0 ? ' · ' + fu(r.value / r.unit) : '') : '—'}</dd><dt>De onde veio</dt><dd>${how}</dd></dl>`;
       if (!(r.value > 0)) h += '<p class="msg">Sem banca não dá pra calcular a unidade. Deposita primeiro; as seleções vão pro cupom sem valor.</p>';
     }
@@ -1111,7 +1130,7 @@ function importToSlip() {
   const r = impResolve(imp.res); if (!r.ok.length) return;
   slip.sels = r.ok.map(o => ({ fid: o.f.id, key: o.it.key }));
   slip.mode = r.ok.length > 1 ? 'multi' : 'single';
-  slip.stake = r.value > 0 ? Core.moneyText(r.value) : '';
+  setStakeMoney(r.value);
   imp.open = false; imp.res = null; imp.text = ''; ui.msg = ''; ui.sheet = true;
   renderSheet(); render();
 }
@@ -1180,6 +1199,12 @@ function resolveSlip() {
     return { s, f, x, ok: !!x };
   });
 }
+// The stake can be typed in money or in units of the bankroll (S.stakeIn). Both forms are kept in step:
+// slip.stake is the money text, slip.units the units text and slip.unitsN the exact number of units behind it.
+const inUnits = () => S.stakeIn === 'units' && wallet().unit > 0;
+function setStakeMoney(v) { const u = wallet().unit; slip.stake = v > 0 ? Core.moneyText(v) : ''; slip.unitsN = v > 0 && u > 0 ? v / u : 0; slip.units = Core.unitsText(slip.unitsN); }
+function setStakeUnits(n) { slip.unitsN = n > 0 ? n : 0; slip.units = Core.unitsText(slip.unitsN); slip.stake = slip.unitsN ? Core.moneyText(Core.r2(slip.unitsN * wallet().unit)) : ''; }
+function showStake() { const a = $('#stake'), b = $('#stakeu'); if (a) a.value = slip.stake; if (b) b.value = slip.units; }
 function slipCalc() {
   const rs = resolveSlip(), ok = rs.length > 0 && rs.every(r => r.ok), n = rs.length;
   const groups = [];                                   // one per fight; two or more selections in a fight are priced together
@@ -1192,11 +1217,11 @@ function slipCalc() {
   }
   const multiOk = ok && n >= 2 && groups.every(g => g.ok);
   if (slip.mode === 'multi' && !multiOk) slip.mode = 'single';
-  const stake = parseMoney(slip.stake);
+  const w = wallet();
+  const stake = inUnits() ? Core.r2(slip.unitsN * w.unit) : parseMoney(slip.stake);     // in units, the amount follows the unit of right now
   const odd = multiOk ? Core.r2(groups.reduce((p, g) => p * g.odd, 1)) : (ok && n === 1 ? rs[0].x.odd : 0);
   const total = slip.mode === 'multi' ? stake : Core.r2(stake * n);
   const ret = !ok ? 0 : slip.mode === 'multi' ? Core.r2(stake * odd) : Core.r2(sum(rs, r => stake * r.x.odd));
-  const w = wallet();
   return { rs, ok, groups, multiOk, sameFight: groups.length === 1 && n > 1, stake, n, odd, total, ret, balance: w.balance, unit: w.unit, unitPct: w.unitPct };
 }
 
@@ -1255,9 +1280,11 @@ function vLutas(w) {
   });
   return h;
 }
+const sideDot = key => { const sd = Core.sideOf(key); return sd ? `<i class="sd ${sd}"></i>` : ''; };
 function optBtn(f, x, cls) {
   const on = slip.sels.some(s => s.fid === f.id && s.key === x.key);
-  return `<button class="opt ${cls || ''} ${on ? 'on' : ''}" data-act="pick" data-fid="${esc(f.id)}" data-key="${esc(x.key)}" aria-pressed="${on}">${cls === 'ml' ? '' : `<span class="ol">${esc(x.label)}</span>`}<span class="ov">${x.src === 'est' ? '<i class="est" title="odd estimada">≈</i>' : ''}${fo(x.odd)}</span></button>`;
+  const side = cls === 'ml' ? null : Core.sideOf(x.key);        // the winner buttons already sit on the fighter's own row
+  return `<button class="opt ${cls || ''} ${side ? 's' + side : ''} ${on ? 'on' : ''}" data-act="pick" data-fid="${esc(f.id)}" data-key="${esc(x.key)}" aria-pressed="${on}">${cls === 'ml' ? '' : `<span class="ol">${esc(x.label)}</span>`}<span class="ov">${x.src === 'est' ? '<i class="est" title="odd estimada">≈</i>' : ''}${fo(x.odd)}</span></button>`;
 }
 function fightCard(f, isMain) {
   const p = priceOf(f), can = canBet(f), res = D.results[f.id];
@@ -1283,7 +1310,7 @@ function fightCard(f, isMain) {
         if (g.heads) h += `<div class="colh"><i></i>${esc(f.a.last)}</div><div class="colh b"><i></i>${esc(f.b.last)}</div>`;
         h += g.opts.map(x => optBtn(f, x)).join('') + '</div>';
       }
-      h += `<p class="legend">≈ odd estimada pelo modelo do app a partir das linhas reais e do histórico dos lutadores. Sem o símbolo, é a odd publicada pela ${esc(D.odds[f.id].book)}.</p><p class="legend">Dá pra combinar seleções desta luta no mesmo cupom, tipo KO/TKO com mais de 1.5 rounds.</p></div>`;
+      h += `<p class="legend">≈ odd estimada pelo modelo do app a partir das linhas reais e do histórico dos lutadores. Sem o símbolo, é a odd publicada pela ${esc(D.odds[f.id].book)}.</p><p class="legend">Dá pra combinar seleções desta luta no mesmo cupom, tipo KO/TKO com +1.5 rounds.</p></div>`;
     }
   }
   return h + '</article>';
@@ -1312,7 +1339,7 @@ function vApostas() {
       } else if (f && f.state === 'post') line2 = `<span>${esc(resultText(f, D.results[l.fid]))}</span>`;
       else if (!isOpen && l.res) line2 = `<span>${esc(l.res)}</span>`;
       else line2 = `<span>${esc(dWhen.format(l.date))}</span>`;
-      h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
+      h += `<div class="leg"><i class="g ${cls}" aria-label="${out ? PILL[out] : 'pendente'}">${g}</i><div class="t"><b>${sideDot(l.key)}${esc(l.sel)}</b><span>${esc(l.market)} · ${esc(l.fight)}</span>${line2}</div><span class="o">${l.src === 'est' ? '≈' : ''}${fo(l.odd)}</span></div>`;
     }
     const profit = b.payout - b.stake;
     h += `<div class="bf"><div><small>Apostado</small><b>${money(b.stake)}</b>${b.unit > 0 ? `<span class="un">${fu(b.stake / b.unit)}</span>` : ''}</div><div><small>Odd</small><b>${fo(odd)}</b></div>` +
@@ -1408,15 +1435,14 @@ function vCarteira(w) {
     <p class="hint">${pctText(w.unitPct)}% da banca de ${money(w.bank)} (saldo mais o que está em jogo). Muda sozinha quando a banca muda.</p>
     <div class="field"><input id="unitpct" inputmode="decimal" autocomplete="off" value="${esc(pctText(w.unitPct))}" aria-label="Porcentagem da banca que vale uma unidade"><span>% da banca</span></div>
     <button class="btn ghost block" data-act="unit">Aplicar</button></section>`;
-  const tc = Core.tipCfg(S.tip), ex = 1750;
-  h += `<section class="card" id="tipcard"><span class="label">Valor ao copiar um print</span>
-    <p class="hint">Vale pra print ou texto que traz o valor em dinheiro. Se ele já fala em unidades, valem as unidades dele.</p>
-    <div class="segm cur" role="group" aria-label="O que fazer com o valor do print">${Core.TIP_MODES.map(m => `<button class="${tc.mode === m ? 'on' : ''}" data-act="tipmode" data-m="${m}" aria-pressed="${tc.mode === m}">${TIP_MODE[m]}</button>`).join('')}</div>`;
+  const tc = Core.tipCfg(S.tip), ex = tc.srcUnit || 1750, exStake = Core.tipStake({ kind: 'money', money: ex }, tc, w.unit);
+  h += `<section class="card" id="tipcard"><span class="label">Ao copiar um print</span>
+    <p class="hint">Print ou texto que fala em unidades ("Stake 1 unidade") sempre entra com as mesmas unidades, na sua unidade. A escolha abaixo vale pra print que traz o valor em dinheiro.</p>
+    <div class="segm" role="group" aria-label="O que copiar de um print em dinheiro">${Core.TIP_MODES.map(m => `<button class="${tc.mode === m ? 'on' : ''}" data-act="tipmode" data-m="${m}" aria-pressed="${tc.mode === m}">${TIP_MODE[m]}</button>`).join('')}</div>`;
   if (tc.mode === 'units') h += `<div class="field"><span>1u do print =</span><input id="tipsrc" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(tc.srcUnit ? Core.moneyText(tc.srcUnit) : '')}" aria-label="Quanto vale uma unidade de quem fez o print"></div><button class="btn ghost block" data-act="tipsave">Aplicar</button>`;
-  if (tc.mode === 'fixed') h += `<div class="field"><input id="tipfix" inputmode="decimal" autocomplete="off" value="${esc(pctText(tc.fixU))}" aria-label="Quantas unidades apostar"><span>unidades</span></div><button class="btn ghost block" data-act="tipsave">Aplicar</button>`;
-  const exStake = Core.tipStake({ kind: 'money', money: ex }, tc, w.unit);
-  h += `<p class="hint" id="tiphow">${tc.mode === 'units' && !tc.srcUnit ? 'Falta dizer quanto vale 1u de quem fez o print. Até lá, a aposta copiada usa o mesmo valor do print.'
-    : `Exemplo: um print de ${money(ex)} vira uma aposta de ${money(exStake.value)}${exStake.units != null ? ` (${fu(exStake.units)})` : ''}.`}</p></section>`;
+  h += `<p class="hint" id="tiphow">${tc.mode === 'same' ? `Um print de ${money(ex)} vira uma aposta de ${money(exStake.value)}.`
+    : !tc.srcUnit ? 'Pra copiar a stake de um print em dinheiro, diz quanto quem fez o print aposta por unidade. Sem isso, a aposta copiada usa o mesmo valor do print.'
+    : `Um print de ${money(ex)} é ${fu(exStake.units)} de quem fez, então vira ${fu(exStake.units)} sua: ${money(exStake.value)}.`}</p></section>`;
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
     <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
@@ -1439,16 +1465,20 @@ function renderSheet() {
   for (const g of c.groups) {
     const f = g.f, names = f ? `${f.a.last} x ${f.b.last}` : 'Luta fora do card';
     for (const r of g.rs)
-      h += `<div class="sel"><div class="t">${r.ok ? `<b>${esc(r.x.sel)}</b><span>${esc(r.x.market)} · ${esc(names)}</span>` : `<b>${esc(names)}</b><span class="bad">Mercado fechado. Remove pra continuar.</span>`}</div>${r.ok ? `<span class="o">${r.x.src === 'est' ? '≈' : ''}${fo(r.x.odd)}</span>` : ''}<button class="x" data-act="unpick" data-fid="${esc(r.s.fid)}" data-key="${esc(r.s.key)}" aria-label="Remover seleção">×</button></div>`;
+      h += `<div class="sel"><div class="t">${r.ok ? `<b>${sideDot(r.s.key)}${esc(r.x.sel)}</b><span>${esc(r.x.market)} · ${esc(names)}</span>` : `<b>${esc(names)}</b><span class="bad">Mercado fechado. Remove pra continuar.</span>`}</div>${r.ok ? `<span class="o">${r.x.src === 'est' ? '≈' : ''}${fo(r.x.odd)}</span>` : ''}<button class="x" data-act="unpick" data-fid="${esc(r.s.fid)}" data-key="${esc(r.s.key)}" aria-label="Remover seleção">×</button></div>`;
     if (g.combo && !g.ok) h += `<div class="combo bad"><span>${g.why === 'impossible' ? `As seleções de ${esc(names)} não podem acontecer juntas. Tira uma pra combinar.` : `Em ${esc(names)}, uma seleção já garante a outra. Tira uma pra combinar.`}</span></div>`;
     else if (g.combo && slip.mode === 'multi') h += `<div class="combo"><span>Juntas em ${esc(names)}${g.same ? ` · mesmo que "${esc(g.same)}"` : ''}</span><b>${g.same ? '' : '≈'}${fo(g.odd)}</b></div>`;
   }
   h += '</div>';
   if (slip.mode === 'multi' && c.groups.some(g => g.combo)) h += '<p class="hint">Na mesma luta as odds não se multiplicam: o preço vem da chance de tudo acontecer junto.</p>';
-  h += `<label class="label" for="stake">${slip.mode === 'multi' ? 'Valor da ' + mname.toLowerCase() : c.n > 1 ? 'Valor de cada aposta' : 'Valor da aposta'}</label>
-    <div class="field"><span>${esc(sym())}</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
+  const iu = inUnits();
+  h += `<label class="label" for="${iu ? 'stakeu' : 'stake'}">${slip.mode === 'multi' ? 'Valor da ' + mname.toLowerCase() : c.n > 1 ? 'Valor de cada aposta' : 'Valor da aposta'}</label>
+    <div class="segm" role="group" aria-label="Como informar o valor"><button class="${iu ? '' : 'on'}" data-act="stakein" data-m="money" aria-pressed="${!iu}">Em ${esc(sym())}</button><button class="${iu ? 'on' : ''}" data-act="stakein" data-m="units" aria-pressed="${iu}" ${c.unit > 0 ? '' : 'disabled'}>Em unidades</button></div>
+    ${iu ? `<div class="field"><input id="stakeu" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(slip.units)}" aria-label="Valor em unidades"><span>unidades</span></div>`
+      : `<div class="field"><span>${esc(sym())}</span><input id="stake" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${esc(slip.stake)}"></div>
     <div class="quick">${[10, 50, 100].map(v => `<button data-act="stq" data-v="${v}">+${v}</button>`).join('')}<button data-act="stq" data-v="max">Tudo</button></div>
-    <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}</div>
+    <div class="quick">${[10000, 100000, 1000000].map(v => `<button data-act="stq" data-v="${v}">+${Core.moneyText(v)}</button>`).join('')}</div>`}
+    <div class="quick units">${[0.5, 1, 2, 3].map(u => `<button data-act="stu" data-u="${u}" ${c.unit > 0 ? '' : 'disabled'}>${fu(u)}</button>`).join('')}${iu ? '<button data-act="stq" data-v="max">Tudo</button>' : ''}</div>
     <p class="hint">${c.unit > 0 ? `1u = ${money(c.unit)} (${pctText(c.unitPct)}% da banca)` : 'Deposite para ter uma unidade: ela é uma porcentagem da banca.'}</p>
     <div id="slipsum"></div>`;
   $('#panel').innerHTML = h;
@@ -1498,7 +1528,7 @@ async function place() {
   } else c.rs.forEach((r, i) => S.bets.push(mk('single', [leg(r)], i, r.x.odd, null)));
   saveS(); saveCache();
   const made = slip.mode === 'multi' ? 1 : c.n;
-  slip.sels = []; slip.stake = ''; slip.mode = 'single'; ui.sheet = false; ui.msg = ''; ui.tab = 'apostas'; ui.filter = 'open';
+  slip.sels = []; setStakeMoney(0); slip.mode = 'single'; ui.sheet = false; ui.msg = ''; ui.tab = 'apostas'; ui.filter = 'open';
   renderSheet(); render(); window.scrollTo(0, 0);
   toast(made > 1 ? `${made} apostas feitas. Boa sorte.` : 'Aposta feita. Boa sorte.');
 }
@@ -1525,8 +1555,9 @@ document.addEventListener('click', e => {
   else if (a === 'impread') { if (!imp.busy) runImport(($('#imptext') || {}).value || ''); }
   else if (a === 'impgo') importToSlip();
   else if (a === 'mode') { slip.mode = b.dataset.m; renderSheet(); }
-  else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = b.dataset.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(b.dataset.v); slip.stake = v ? Core.moneyText(v) : ''; const el = $('#stake'); if (el) el.value = slip.stake; slipSummary(); }
-  else if (a === 'stu') { const w = wallet(); if (w.unit > 0) { slip.stake = Core.moneyText(Core.r2(w.unit * Number(b.dataset.u))); const el = $('#stake'); if (el) el.value = slip.stake; ui.msg = ''; slipSummary(); } }
+  else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = b.dataset.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(b.dataset.v); setStakeMoney(v); showStake(); ui.msg = ''; slipSummary(); }
+  else if (a === 'stu') { if (wallet().unit > 0) { setStakeUnits(Number(b.dataset.u)); showStake(); ui.msg = ''; slipSummary(); } }
+  else if (a === 'stakein') { S.stakeIn = b.dataset.m === 'units' ? 'units' : 'money'; saveS(); if (inUnits()) setStakeUnits(Core.parseUnits(slip.units)); ui.msg = ''; if (document.activeElement) document.activeElement.blur(); renderSheet(); }
   else if (a === 'unit') {
     const el = $('#unitpct'), raw = el ? el.value : '', n = parseFloat(String(raw).replace(',', '.'));
     if (!(n > 0)) { toast('Digita a porcentagem da banca que vale uma unidade.'); return; }
@@ -1541,11 +1572,11 @@ document.addEventListener('click', e => {
   else if (a === 'depq') { ui.dep = Core.moneyText(parseMoney(ui.dep) + Number(b.dataset.v)); const el = $('#dep'); if (el) el.value = ui.dep; }
   else if (a === 'tipmode') { S.tip = Object.assign(Core.tipCfg(S.tip), { mode: Core.TIP_MODES.includes(b.dataset.m) ? b.dataset.m : 'same' }); saveS(); if (document.activeElement) document.activeElement.blur(); render(); }
   else if (a === 'tipsave') {
-    const c = Core.tipCfg(S.tip), src = $('#tipsrc'), fix = $('#tipfix');
-    if (src) { const v = parseMoney(src.value); if (!v) { toast('Digita quanto vale 1u de quem fez o print.'); return; } c.srcUnit = v; }
-    if (fix) { const n = parseFloat(String(fix.value).replace(',', '.')); if (!(n > 0)) { toast('Digita quantas unidades apostar.'); return; } c.fixU = n; }
+    const c = Core.tipCfg(S.tip), src = $('#tipsrc'), v = src ? parseMoney(src.value) : 0;
+    if (!v) { toast('Digita quanto vale 1u de quem fez o print.'); return; }
+    c.srcUnit = v;
     S.tip = Core.tipCfg(c); saveS(); if (document.activeElement) document.activeElement.blur(); render();
-    toast(S.tip.mode === 'units' ? `Print em dinheiro vira unidades: 1u do print = ${money(S.tip.srcUnit)}.` : `Print em dinheiro entra com ${fu(S.tip.fixU)}.`);
+    toast(`Mesma stake do print: 1u de quem fez = ${money(S.tip.srcUnit)}.`);
   }
   else if (a === 'depcur') pickDepCur(b.dataset.c);
   else if (a === 'deposit') deposit();
@@ -1560,10 +1591,10 @@ document.addEventListener('click', e => {
     let s = null; try { s = JSON.parse(($('#rs') || {}).value || ''); } catch (err) { /* handled below */ }
     if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
     S = { v: 1, deposits: s.deposits.filter(d => d && d.v > 0 && d.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0) };
-    S.unitPct = Core.unitPct(s.unitPct); if (s.tip) S.tip = Core.tipCfg(s.tip); if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && CUR[c.from] && CUR[c.to] && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
+    S.unitPct = Core.unitPct(s.unitPct); if (s.tip) S.tip = Core.tipCfg(s.tip); if (s.stakeIn === 'units') S.stakeIn = 'units'; if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && CUR[c.from] && CUR[c.to] && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); saveS(); ui.restore = false; if (document.activeElement) document.activeElement.blur(); render(); toast('Backup restaurado.'); sync(true);
   }
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
-  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct, ...(S.tip ? { tip: S.tip } : {}) }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
+  else if (a === 'doreset') { S = { v: 1, deposits: [], bets: [], cur: S.cur, unitPct: S.unitPct, ...(S.tip ? { tip: S.tip } : {}), ...(S.stakeIn ? { stakeIn: S.stakeIn } : {}) }; saveS(); slip.sels = []; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
 // The currency is chosen where the money comes in. Picking another one only shows what the deposit will do;
 // nothing changes until the deposit is made.
@@ -1591,7 +1622,7 @@ async function switchCurrency(to) {
     const from = S.cur;
     S = Core.convertState(S, to, rate);
     S.conv = [...(S.conv || []), { t: Date.now(), from, to, rate, date: fx.date }].slice(-20);
-    slip.stake = '';
+    setStakeMoney(0);
   }
   setCurrency(to);
   return true;
@@ -1628,7 +1659,8 @@ function applyMask(el, typed) {
   return m;
 }
 document.addEventListener('input', e => {
-  if (e.target.id === 'stake') { slip.stake = applyMask(e.target, e.data); ui.msg = ''; slipSummary(); }
+  if (e.target.id === 'stake') { setStakeMoney(parseMoney(applyMask(e.target, e.data))); slip.stake = e.target.value; ui.msg = ''; slipSummary(); }
+  else if (e.target.id === 'stakeu') { const t = Core.maskUnits(e.target.value); if (e.target.value !== t) e.target.value = t; setStakeUnits(Core.parseUnits(t)); slip.units = t; ui.msg = ''; slipSummary(); }
   else if (e.target.id === 'dep') ui.dep = applyMask(e.target, e.data);
   else if (e.target.id === 'tipsrc') applyMask(e.target, e.data);
   else if (e.target.id === 'imptext') imp.text = e.target.value;
@@ -1642,7 +1674,7 @@ document.addEventListener('paste', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; imp.open = false; renderSheet(); render(); }
   if (e.key === 'Enter' && e.target.id === 'unitpct') { const b = document.querySelector('[data-act="unit"]'); if (b) b.click(); }
-  if (e.key === 'Enter' && (e.target.id === 'tipsrc' || e.target.id === 'tipfix')) { const b = document.querySelector('[data-act="tipsave"]'); if (b) b.click(); }
+  if (e.key === 'Enter' && e.target.id === 'tipsrc') { const b = document.querySelector('[data-act="tipsave"]'); if (b) b.click(); }
   if (e.key === 'Enter' && e.target.id === 'dep') { const b = document.querySelector('[data-act="deposit"]'); if (b) b.click(); }
 });
 

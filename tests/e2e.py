@@ -64,7 +64,7 @@ with sync_playwright() as p:
     pg.click('[data-act=convonly]'); assert bal().replace('\xa0', ' ') == 'US$ 0,00' and FX['calls'] == 0 and pg.locator('[data-act=convonly]').count() == 0, (bal(), FX['calls'])
     pg.click('[data-act=depcur][data-c=EUR]'); pg.fill('#dep', '80'); pg.click('[data-act=deposit]')
     assert bal().replace('\xa0', ' ') == '€ 80,00' and FX['calls'] == 0, (bal(), FX['calls'])
-    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'the currency must survive a reload: ' + bal()
+    cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == '€ 80,00', 'the currency must survive a reload: ' + bal()
     pg.click('[data-act=tab][data-tab=carteira]')
     # with money in the bankroll, depositing in another currency converts everything at the day's rate
     FX['down'] = True; pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxmsg')
@@ -101,7 +101,7 @@ with sync_playwright() as p:
     only = pg.evaluate('(() => { const S = window.__OL.S; return [S.deposits.map(d => d.v), S.conv.length, S.conv[1].from, S.conv[1].to, S.conv[1].rate]; })()')
     assert bal().replace('\xa0', ' ') == 'US$ 200,00' and only == [[100, 100], 2, 'BRL', 'USD', 0.2], (bal(), only)
     assert pg.inner_text('[data-act=deposit]') == 'Depositar' and pg.locator('[data-act=convonly]').count() == 0
-    pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == 'US$ 200,00', 'a conversion without a deposit is saved: ' + bal()
+    cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S'); assert bal().replace('\xa0', ' ') == 'US$ 200,00', 'a conversion without a deposit is saved: ' + bal()
     pg.click('[data-act=tab][data-tab=carteira]'); pg.click('[data-act=depcur][data-c=BRL]'); pg.wait_for_selector('#fxinfo b')
     pg.evaluate('window.__OL.FX.ts = 0'); FX['body']['rates']['USD'] = 0.25              # the same guard as a deposit: a rate nobody saw is shown first
     pg.click('[data-act=convonly]'); pg.wait_for_selector('#fxmsg'); assert 'A cotação mudou' in txt('#fxmsg') and bal().replace('\xa0', ' ') == 'US$ 200,00', (txt('#fxmsg'), bal())
@@ -114,6 +114,16 @@ with sync_playwright() as p:
     pick = lambda fid, key: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     shot('s2-markets.png', True)
+    # over and under read as + and −, and every option that belongs to a fighter carries that fighter's corner colour
+    opt = lambda key, extra='': pg.locator(f'[data-act=pick][data-fid="f3"][data-key="{key}"]{extra}')
+    assert [opt('tot:o:1.5').locator('.ol').inner_text(), opt('tot:u:1.5').locator('.ol').inner_text()] == ['+1.5', '−1.5']
+    assert all(opt(k, '.sa').count() == 1 for k in ('wr:a:1', 'mov:a:sub', 'tda:a:yes')) and all(opt(k, '.sb').count() == 1 for k in ('wr:b:1', 'mov:b:ko', 'tda:b:no')), 'fighter options must be marked'
+    assert all(opt(k, '.sa').count() + opt(k, '.sb').count() == 0 for k in ('tot:o:1.5', 'fm:ko', 'rnd:1', 'dist:yes', 'ml:a')), 'options about the whole fight (and the winner row) are not'
+    corner = lambda key: pg.evaluate('k => getComputedStyle(document.querySelector(`[data-fid="f3"][data-key="${k}"]`), "::before").backgroundColor', key)
+    assert corner('wr:a:1') != corner('wr:b:1') and corner('wr:a:1') == corner('mov:a:sub'), (corner('wr:a:1'), corner('wr:b:1'))
+    pick('f3', 'wr:b:2'); pick('f3', 'tot:o:1.5'); pg.click('#slipbtn'); pg.wait_for_selector('#panel .sel')
+    assert pg.locator('#panel .sel .sd.b').count() == 1 and pg.locator('#panel .sel .sd').count() == 1 and '+1.5 rounds' in pg.inner_text('#panel'), pg.inner_text('#panel')
+    shot('s18-cores.png'); pg.click('#panel [data-act=unpick]'); pg.click('#panel [data-act=unpick]')
     def bet(sels, stake, mode='single'):
         for s in sels: pick(*s)
         pg.click('#slipbtn')
@@ -157,22 +167,20 @@ with sync_playwright() as p:
         value = txt('#impvalue'); panel = txt('#panel'); assert expect_how in panel, panel
         pg.click('[data-act=impclose]'); return value
     pg.click('.tabbar [data-tab=carteira]'); assert 'vira uma aposta de R$ 1.750,00.' in txt('#tiphow'), txt('#tiphow')
-    pg.click('[data-act=tipmode][data-m=units]'); assert 'Falta dizer quanto vale 1u' in txt('#tiphow'), txt('#tiphow')
+    assert pg.locator('[data-act=tipmode]').all_inner_texts() == ['Mesmo valor', 'Mesma stake']
+    pg.click('[data-act=tipmode][data-m=units]'); assert 'diz quanto quem fez o print aposta por unidade' in txt('#tiphow'), txt('#tiphow')
     assert copied('mesmo valor do print') == 'R$ 250,00 · 2,5u', 'without the unit of the source the amount is kept'
     pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipsave]'); assert pg.evaluate('window.__OL.S.tip.srcUnit') == 0, 'an empty field saves nothing'
     pg.click('#tipsrc'); pg.keyboard.type('1000'); assert pg.input_value('#tipsrc') == '1.000', pg.input_value('#tipsrc')
-    pg.keyboard.press('Enter'); assert 'vira uma aposta de R$ 175,00 (1,75u)' in txt('#tiphow'), txt('#tiphow')
-    assert copied('R$ 250,00 do print ÷ R$ 1.000,00 por unidade = 0,25u') == 'R$ 25,00 · 0,25u'
-    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=fixed]'); assert 'vira uma aposta de R$ 100,00 (1u)' in txt('#tiphow'), txt('#tiphow')
-    pg.fill('#tipfix', ''); pg.click('[data-act=tipsave]'); assert pg.evaluate('window.__OL.S.tip.fixU') == 1
-    pg.fill('#tipfix', '1,5'); pg.click('[data-act=tipsave]'); assert 'vira uma aposta de R$ 150,00 (1,5u)' in txt('#tiphow'), txt('#tiphow')
+    pg.keyboard.press('Enter'); assert 'Um print de R$ 1.000,00 é 1u de quem fez, então vira 1u sua: R$ 100,00.' in txt('#tiphow'), txt('#tiphow')
     shot('s14-print-config.png')
-    assert copied('valor fixo de 1,5u') == 'R$ 150,00 · 1,5u'
+    assert copied('mesma stake do print: R$ 250,00 ÷ R$ 1.000,00 por unidade = 0,25u') == 'R$ 25,00 · 0,25u'
+    pg.click('.tabbar [data-tab=lutas]')
     pg.click('[data-act=imp]'); pg.fill('#imptext', TIP_TEXT); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
     assert txt('#impvalue') == 'R$ 50,00 · 0,5u', 'a tip in units is not touched by the setting: ' + txt('#impvalue')
-    pg.click('[data-act=impclose]'); pg.reload(); pg.wait_for_function('window.__OL && window.__OL.S')
-    assert pg.evaluate('JSON.stringify(window.__OL.S.tip)') == '{"mode":"fixed","srcUnit":1000,"fixU":1.5}', 'the setting survives a reload'
-    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=same]'); assert 'vira uma aposta de R$ 1.750,00.' in txt('#tiphow')
+    pg.click('[data-act=impclose]'); cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
+    assert pg.evaluate('JSON.stringify(window.__OL.S.tip)') == '{"mode":"units","srcUnit":1000}', 'the setting survives a reload'
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=tipmode][data-m=same]'); assert 'Um print de R$ 1.000,00 vira uma aposta de R$ 1.000,00.' in txt('#tiphow'), txt('#tiphow')
     pg.click('.tabbar [data-tab=lutas]'); pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     pg.click('[data-act=imp]')
@@ -193,6 +201,28 @@ with sync_playwright() as p:
     pg.fill('#unitpct', '2,5'); pg.click('[data-act=unit]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 25,00', pg.inner_text('#unitnow')
     pg.fill('#unitpct', '10'); pg.keyboard.press('Enter'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
     pg.click('.tabbar [data-tab=lutas]'); pick('f1', 'ml:a'); pg.click('#slipbtn')
+    # value shortcuts add to what is in the field, up to a million at a time; "Tudo" puts the whole balance
+    assert pg.locator('[data-act=stq]').all_inner_texts() == ['+10', '+50', '+100', 'Tudo', '+10.000', '+100.000', '+1.000.000'], pg.locator('[data-act=stq]').all_inner_texts()
+    for v, want in [('10000', '10.000'), ('100000', '110.000'), ('1000000', '1.110.000'), ('10', '1.110.010')]:
+        pg.click(f'[data-act=stq][data-v="{v}"]'); assert pg.input_value('#stake') == want, (v, pg.input_value('#stake'))
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, 'the slip must not get wider than the phone'
+    shot('s16-atalhos.png')
+    pg.click('[data-act=stq][data-v=max]'); assert pg.input_value('#stake') == '1.000', pg.input_value('#stake')
+    # the stake can also be typed in units of the bankroll: the amount follows, and the choice is remembered
+    pg.click('[data-act=stakein][data-m=units]'); assert pg.input_value('#stakeu') == '10' and pg.locator('#stake').count() == 0, 'R$ 1.000,00 at R$ 100,00 a unit is 10u'
+    pg.fill('#stakeu', ''); pg.click('#stakeu'); pg.keyboard.type('2.5x')
+    assert pg.input_value('#stakeu') == '2,5' and 'R$ 250,00 · 2,5u' in txt('#slipsum') and 'Apostar R$ 250,00' in txt('[data-act=place]'), (pg.input_value('#stakeu'), txt('#slipsum'))
+    pg.click('[data-act=stu][data-u="0.5"]'); assert pg.input_value('#stakeu') == '0,5' and 'R$ 50,00 · 0,5u' in txt('#slipsum'), txt('#slipsum')
+    pg.click('[data-act=stq][data-v=max]'); assert pg.input_value('#stakeu') == '10' and 'R$ 1.000,00 · 10u' in txt('#slipsum'), txt('#slipsum')
+    assert pg.locator('[data-act=stq]').count() == 1, 'in units the money shortcuts give way; only "Tudo" stays'
+    shot('s17-em-unidades.png')
+    pg.fill('#stakeu', '1,25'); cov.reload(pg); pg.wait_for_function('window.__OL && window.__OL.S')
+    assert pg.evaluate('window.__OL.S.stakeIn') == 'units', 'the way of typing the stake survives a reload'
+    pg.wait_for_selector('.fight .opt.ml'); pg.wait_for_function('document.querySelectorAll(".fight .opt.ml").length>=6')
+    for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
+    pick('f1', 'ml:a'); pg.click('#slipbtn'); pg.wait_for_selector('#stakeu')
+    pg.fill('#stakeu', '1,25'); pg.click('[data-act=stakein][data-m=money]'); assert pg.input_value('#stake') == '125', 'switching back keeps the amount: ' + pg.input_value('#stake')
+    assert pg.locator('[data-act=stq]').count() == 7 and pg.evaluate('window.__OL.S.stakeIn') == 'money'
     pg.click('[data-act=stu][data-u="2"]'); assert pg.input_value('#stake') == '200', pg.input_value('#stake')
     pg.click('[data-act=stu][data-u="1"]'); assert pg.input_value('#stake') == '100', pg.input_value('#stake')
     assert '1u' in pg.inner_text('#slipsum'), pg.inner_text('#slipsum')
@@ -241,6 +271,7 @@ with sync_playwright() as p:
     assert pg.locator('[data-act=cash]').count() == 13, 'every other open bet should still offer cashout before the card starts'
     pg.click('.tabbar [data-tab=lutas]')
     print('balance after bets', bal(), '| open', pg.evaluate('window.__OL.S.bets.length'))
+    pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('.leg .sd.a').count() >= 3 and pg.locator('.leg .sd.b').count() >= 2, 'bets name the fighter with the corner colour'; pg.click('.tabbar [data-tab=lutas]')
     PHASE['n'] = 1; sync(); pg.click('.tabbar [data-tab=apostas]'); pg.wait_for_timeout(200); shot('s4-live.png')
     frozen = pg.locator('.hint.co', has_text='Cashout congelado').count(); still = pg.locator('[data-act=cash]').count()
     print('fase 1: cashout congelado em', frozen, 'apostas, disponível em', still)

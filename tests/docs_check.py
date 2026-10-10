@@ -66,8 +66,10 @@ CONSTANTS = [
     (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
     (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
     (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
+    (r'\[10, 50, 100\]\.map\(v => `<button data-act="stq"', '+10, +50, +100,'),
+    (r'\[10000, 100000, 1000000\]\.map\(v => `<button data-act="stq"', '+10.000, +100.000 e +1.000.000'),
     (r'FX_TTL = 12 \* 3600e3;', 'depois de 12 h'),
-    (r"\.slice\(-20\);\n    slip\.stake = ''", 'as 20 últimas'),
+    (r"\.slice\(-20\);\n    setStakeMoney\(0\);", 'as 20 últimas'),
 ]
 for pattern, text in CONSTANTS:
     check('code still has the documented constant', re.search(pattern, html), pattern)
@@ -115,7 +117,12 @@ code_modes = re.search(r"const TIP_MODES = \[([^\]]+)\];", html)
 spec_modes = re.findall(r'^  \| `(\w+)`', spec[spec.index('## Copiar aposta'):spec.index('## Sincronização')], re.M)
 spec_modes = [m for m in spec_modes if m != 'mode']      # the table header
 check('copied-bet modes in the spec match the code', bool(code_modes) and [m.strip(" '") for m in code_modes.group(1).split(',')] == spec_modes, f'{code_modes and code_modes.group(1)} vs {spec_modes}')
-check('fixed mode limits are the documented ones', 'clamp(r2(fix), 0.01, 100) : 1' in html and 'de 0,01 a 100' in spec)
+check('units field limits are the documented ones', ".slice(0, 4);" in html and 'no máximo 9999,99' in spec)
+side_fn = re.search(r"const sideOf = key => .*?\[([^\]]+)\]\.includes", html)
+check('fighter-side families in the code are the ones the spec names', bool(side_fn) and [x.strip(" '") for x in side_fn.group(1).split(',')] == ['ml', 'mov', 'wr', 'tda'] and '(`ml`, `mov`, `wr` e `tda`;' in spec)
+check('production check waits and then holds for the documented time', "os.environ.get('OL_PROD_HOLD', 300)" in read('scripts/check_production.py') and 'continua olhando por 5 min' in spec)
+check('production workflow runs the check on pushes to main', 'scripts/check_production.py' in read('.github/workflows/producao.yml') and 'branches: [main]' in read('.github/workflows/producao.yml'))
+check('verify.sh self-tests the production check', 'check_production.py --selftest' in read('scripts/verify.sh'))
 fxs = sorted(p.name for p in (ROOT / 'tests' / 'fixtures' / 'fx').glob('*.json'))
 check('every recorded exchange-rate sample is listed in its README', bool(fxs) and all(f'`{n}`' in read('tests/fixtures/fx/README.md') for n in fxs), fxs)
 check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
