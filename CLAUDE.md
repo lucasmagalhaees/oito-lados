@@ -256,6 +256,7 @@ O botão "Repetir aposta" aparece em qualquer aposta, aberta ou encerrada, cujas
 
 - **Máscara:** os campos de aposta e de depósito formatam enquanto se digita (`Core.maskMoney`): 1500 vira 1.500 e 12345,6 vira 12.345,6. Ponto é sempre separador de milhar; a primeira vírgula abre os centavos, com no máximo duas casas. `applyMask` mantém o cursor no lugar. Em teclado sem vírgula, um ponto digitado vira vírgula.
 - **Leitura:** `Core.parseMoney` ignora os pontos, então "1.000" é mil.
+- **Atalhos de valor no cupom:** +10, +50, +100, +10.000, +100.000 e +1.000.000 somam ao que está no campo; "Tudo" coloca o saldo inteiro.
 - **Moeda:** `S.cur` guarda a moeda da banca (BRL, USD ou EUR). O formato numérico é sempre o brasileiro (US$ 1.000,00).
 
 ## Moeda e câmbio

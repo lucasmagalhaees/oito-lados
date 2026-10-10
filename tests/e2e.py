@@ -193,6 +193,13 @@ with sync_playwright() as p:
     pg.fill('#unitpct', '2,5'); pg.click('[data-act=unit]'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 25,00', pg.inner_text('#unitnow')
     pg.fill('#unitpct', '10'); pg.keyboard.press('Enter'); assert pg.inner_text('#unitnow').replace('\xa0', ' ') == '1u = R$ 100,00', pg.inner_text('#unitnow')
     pg.click('.tabbar [data-tab=lutas]'); pick('f1', 'ml:a'); pg.click('#slipbtn')
+    # value shortcuts add to what is in the field, up to a million at a time; "Tudo" puts the whole balance
+    assert pg.locator('[data-act=stq]').all_inner_texts() == ['+10', '+50', '+100', 'Tudo', '+10.000', '+100.000', '+1.000.000'], pg.locator('[data-act=stq]').all_inner_texts()
+    for v, want in [('10000', '10.000'), ('100000', '110.000'), ('1000000', '1.110.000'), ('10', '1.110.010')]:
+        pg.click(f'[data-act=stq][data-v="{v}"]'); assert pg.input_value('#stake') == want, (v, pg.input_value('#stake'))
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, 'the slip must not get wider than the phone'
+    shot('s16-atalhos.png')
+    pg.click('[data-act=stq][data-v=max]'); assert pg.input_value('#stake') == '1.000', pg.input_value('#stake')
     pg.click('[data-act=stu][data-u="2"]'); assert pg.input_value('#stake') == '200', pg.input_value('#stake')
     pg.click('[data-act=stu][data-u="1"]'); assert pg.input_value('#stake') == '100', pg.input_value('#stake')
     assert '1u' in pg.inner_text('#slipsum'), pg.inner_text('#slipsum')

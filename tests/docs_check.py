@@ -66,6 +66,8 @@ CONSTANTS = [
     (r"const CUR = \{ BRL: 'Real', USD: 'Dólar', EUR: 'Euro' \};", 'BRL, USD ou EUR'),
     (r'\.slice\(0, 2\);\n  \}\n  function parseMoney', 'no máximo duas casas'),
     (r'const CASHOUT_MARGIN = 0\.05;', 'margem de 5%'),
+    (r'\[10, 50, 100\]\.map\(v => `<button data-act="stq"', '+10, +50, +100,'),
+    (r'\[10000, 100000, 1000000\]\.map\(v => `<button data-act="stq"', '+10.000, +100.000 e +1.000.000'),
     (r'FX_TTL = 12 \* 3600e3;', 'depois de 12 h'),
     (r"\.slice\(-20\);\n    slip\.stake = ''", 'as 20 últimas'),
 ]
