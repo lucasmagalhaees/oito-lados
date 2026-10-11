@@ -150,6 +150,29 @@ with sync_playwright() as p:
     pg.fill('#q', 'almeida teles'); assert nfights() == 0 and txt('#qinfo') == 'Nenhuma luta com "almeida teles" nos eventos carregados.', txt('#qinfo')
     pg.fill('#q', '<b>zz</b>'); assert nfights() == 0 and '"<b>zz</b>"' in txt('#qinfo') and pg.locator('#qinfo b').count() == 0, 'what is typed is shown as text'
     pg.click('[data-act=qclear]'); assert pg.input_value('#q') == '' and nfights() == 3 and pg.locator('#parts').count() == 1 and focused() == 'q' and not pg.is_visible('[data-act=qclear]'), 'the x empties the field and leaves it ready'
+    # the filter by country: Brazil has a shortcut of its own, and every country with a fighter on the cards is in the list, by its name in Portuguese
+    BR, EN, CN = '\U0001F1E7\U0001F1F7', '\U0001F3F4\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F', '\U0001F1E8\U0001F1F3'
+    chip = lambda: pg.get_attribute('[data-act=land]', 'aria-pressed')
+    assert txt('[data-act=land]') == BR + ' Brasileiros (2)' and chip() == 'false' and pg.input_value('#land') == '', txt('#lands')
+    assert pg.locator('#land option').all_inner_texts() == ['Todos os países', 'Atlantis (1)', BR + ' Brasil (2)', CN + ' China (1)', EN + ' Inglaterra (1)'], pg.locator('#land option').all_inner_texts()          # the fighter with no country is not in the list
+    tap('[data-act=land]'); assert focused() != 'q'
+    assert nfights() == 2 and txt('#qinfo') == f'2 lutas · {BR} Brasil.' and pg.locator('#parts').count() == 0 and chip() == 'true' and pg.input_value('#land') == 'Brazil' and secs() == ['main', 'prelims'], (nfights(), txt('#qinfo'), secs())
+    assert 'KESSLER' not in txt('#list').upper() and 'TELES' in txt('#list').upper() and 'ALMEIDA' in txt('#list').upper() and 'on' in pg.get_attribute('[data-act=land]', 'class')
+    assert pg.evaluate('(() => { const c = s => getComputedStyle(document.querySelector(s)).backgroundColor; return c("[data-act=land]") !== c("#land"); })()') and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0
+    shot('s49-filtro-por-pais.png')
+    pg.click('[data-act=pick][data-fid="f3"][data-key="ml:a"]'); assert pg.get_attribute('[data-act=pick][data-fid="f3"][data-key="ml:a"]', 'aria-pressed') == 'true' and nfights() == 2 and chip() == 'true', 'a pick inside the filtered list shows, and the filter stays'
+    pg.click('[data-act=pick][data-fid="f3"][data-key="ml:a"]'); assert pg.evaluate('window.__OL.slip.sels.length') == 0
+    # a name typed as well: a fight has to pass both
+    pg.fill('#q', 'prado'); assert nfights() == 1 and txt('#qinfo') == f'1 luta com "prado" · {BR} Brasil.', txt('#qinfo')
+    pg.fill('#q', 'kessler'); assert nfights() == 0 and txt('#qinfo') == f'Nenhuma luta com "kessler" · {BR} Brasil nos eventos carregados.', txt('#qinfo')
+    pg.fill('#q', ''); assert nfights() == 2
+    # any other country comes from the list, and the shortcut follows what is chosen
+    pg.select_option('#land', 'England'); assert nfights() == 1 and txt('#qinfo') == f'1 luta · {EN} Inglaterra.' and chip() == 'false' and 'PRADO' in txt('#list').upper() and focused() != 'land', (txt('#qinfo'), focused())
+    pg.select_option('#land', 'Atlantis'); assert nfights() == 1 and txt('#qinfo') == '1 luta · Atlantis.' and 'DUNNE' in txt('#list').upper(), txt('#qinfo')          # a country the app has no flag for is still a country
+    pg.select_option('#land', 'Brazil'); assert nfights() == 2 and chip() == 'true'
+    pg.click('[data-act=land]'); assert nfights() == 3 and pg.locator('#parts').count() == 1 and pg.input_value('#land') == '' and chip() == 'false' and pg.locator('#qinfo').count() == 0, 'a second tap on the shortcut lets go of the filter'
+    pg.select_option('#land', 'China'); assert nfights() == 1; pg.select_option('#land', ''); assert nfights() == 3 and pg.locator('#parts').count() == 1
+    pg.click('#q')
     # with another event on the board the search covers it too, and a tap on its name opens that card with the search still there
     ESPN['next'] = True; assert focused() == 'q'; tap('[data-act=refresh]'); assert focused() != 'q', 'a tap outside the list lets go of the field, so the whole screen can follow'
     pg.wait_for_function('window.__OL.D.events.length === 2'); assert pg.locator('.events .ev').count() == 2
@@ -159,6 +182,11 @@ with sync_playwright() as p:
     pg.click('#list button.qev'); pg.wait_for_function('window.__OL.ui.eventId === "600000002"')
     assert pg.input_value('#q') == 'teles' and nfights() == 2 and 'TELES VS. FARIAS' in pg.locator('#list .qev >> nth=0').inner_text().upper() and 'on' in pg.get_attribute('.events .ev >> nth=1', 'class'), 'that card is the one on screen now, and the search is still there'
     pg.fill('#q', ''); assert nfights() == 1 and pg.locator('#parts').count() == 0, 'a card with one hour has no parts to choose'
+    # the filter by country covers every event on the board as the search does, and the other card is a tap away with the filter still on
+    pg.click('[data-act=land]')
+    assert txt('[data-act=land]') == BR + ' Brasileiros (3)' and nfights() == 3 and txt('#qinfo') == f'3 lutas · {BR} Brasil, nos 2 eventos carregados.' and pg.locator('#list .qev').count() == 2 and pg.locator('#list .qev >> nth=0').evaluate('e => e.tagName') == 'DIV', (txt('[data-act=land]'), txt('#qinfo'))
+    pg.click('#list button.qev'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"'); assert pg.evaluate('window.__OL.ui.land') == 'Brazil' and nfights() == 3 and chip() == 'true'
+    pg.click('.events .ev >> nth=1'); pg.wait_for_function('window.__OL.ui.eventId === "600000002"'); assert pg.evaluate('window.__OL.ui.land') is None and chip() == 'false' and nfights() == 1, 'picking an event at the top lets go of the filter, as it does of the search'
     # the keyboard's own "search" puts the keyboard away; picking an event at the top leaves the search
     pg.fill('#q', 'farias'); pg.press('#q', 'Enter'); assert focused() != 'q' and nfights() == 1 and pg.input_value('#q') == 'farias'
     pg.click('.events .ev >> nth=0'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"'); assert pg.input_value('#q') == '' and nfights() == 3

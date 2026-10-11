@@ -51,6 +51,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 20. Os PRs #20, #21 e #22 foram mesclados entre 00:49:18 e 00:49:35 de 11/10/2026; o workflow `Produção` passou no commit `e665175`, sem a troca de versão da D32. Às 00:50 o Lucas escreveu: "app aprovado no primeiro dia de uso". Às 09:24 e 09:25, três pedidos: backup em arquivo (D81), "Tipster" sem o "sem nome" e o cartel do card da semana inteiro adiantado (D80).
 21. PR #23 (D80, D81) aberto às 10:07 de 11/10/2026 e mesclado às 10:11; o workflow `Produção` passou no commit `dd6efa8`. Às 09:34, com ele quase pronto, o pedido do extrato em unidades e de melhorar a comparação com o tipster (D82, D83), feito em seguida, num PR à parte.
 22. PR #24 (D82, D83) aberto às 10:44 e mesclado às 10:49 de 11/10/2026. Às 10:34 e 10:35, com ele na verificação final: a bandeira do país de cada lutador (D84) e "submission" no lugar de "finalização", dizendo qual foi (D85). Os dois campos já eram lidos e estavam nas amostras gravadas; a conferência ao vivo foi disparada no branch para ver os nomes de verdade antes de fechar.
+23. PR #25 (D84, D85) mesclado às 11:21 de 11/10/2026; o workflow `Produção` passou no commit `ad6fab5`. Às 12:32, o filtro por país com atalho para os brasileiros (D86).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -886,6 +887,21 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **O que estava guardado das últimas lutas é buscado de novo uma vez**, porque foi lido sem o nome. São as mesmas chamadas da D80, uma vez.
 - **Conferido na ESPN de verdade em 11/10/2026** (mesma execução): das 160 lutas encerradas varridas, 23 foram submissions e as 23 vieram com nome; oito nomes diferentes.
 
+## D86. Filtro por país, com atalho para os brasileiros
+
+- **Contexto (11/10/2026, 12:32):** "é possível um filtro de país, com uma pré-definição de filtrar por brasileiros? Exemplo: posso filtrar por qualquer país, mas somente para Brasil eu não preciso procurar o país, já tem um atalho na filtragem".
+- **Decisão:** na tela de Lutas, logo abaixo da busca, o botão "Brasileiros (N)" e uma lista com todo país que tem lutador nos eventos carregados.
+- **De onde vem:** o país de cada lutador já é lido do placar (D84). Nenhuma chamada nova: o filtro só escolhe entre as lutas que já estão carregadas.
+- **Interpretações que precisaram ser feitas:**
+  - **Vale para todos os eventos carregados**, o que está na tela primeiro, como a busca por nome (D71). Lida de outro jeito, valeria só para o card na tela.
+  - **A luta entra se um dos dois lutadores é do país.**
+  - **Junto com a busca, a luta tem que passar pelos dois.**
+  - **Escolher um evento no alto solta o filtro**, como já solta a busca.
+  - **A escolha não é guardada** entre uma abertura do app e outra: o app abre sem filtro, como abre sem busca.
+  - **O nome do país aparece em português** na lista, embora a ESPN mande em inglês: é o aparelho que dá o nome, pelo código do país.
+  - **A lista só tem os países que estão nos cards carregados**, não todos os do mundo: um país sem lutador não teria luta para mostrar.
+- **Não verificado:** a lista de países no iPhone (o seletor do iOS e o nome que o aparelho dá a cada país).
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -898,6 +914,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
+| Confirmar: o filtro por país valendo para todos os eventos carregados (e não só o card na tela), e sem ficar guardado entre uma abertura e outra (D86) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
 | Confirmar: o nome da submission em inglês, como a ESPN escreve, e só a submission com nome, não o nocaute (D85) | Lucas |
 | Confirmar o extrato em unidades: "a todo momento" como um cartão fixo na Carteira (e não em todas as telas), o cartel sem anulada e cashout, as três colunas, e a tabela por evento antiga ter saído (D82) | Lucas |

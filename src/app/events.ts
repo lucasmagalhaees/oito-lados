@@ -87,7 +87,8 @@ document.addEventListener('click', e => {
   const q = $<HTMLInputElement>('#q');
   if (q && document.activeElement === q && a !== 'qclear' && !b.closest('#list')) q.blur();
   if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
-  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
+  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) { ui.q = ''; ui.land = null; } blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
+  else if (a === 'land') { ui.land = ui.land === d.c ? null : d.c || null; render(); }          // the shortcut of a country: a second tap lets go of it
   else if (a === 'part') { ui.part = d.p === 'main' || d.p === 'prelims' || d.p === 'early' ? d.p : null; render(); }
   else if (a === 'qclear') { ui.q = ''; if (q) { q.value = ''; q.focus(); } paintList(); }
   else if (a === 'refresh') { sync(true); render(); }
@@ -188,6 +189,7 @@ document.addEventListener('change', e => {
   const t = e.target as HTMLInputElement;
   if (t.id === 'impfile') importImages([...(t.files || [])]);
   else if (t.id === 'bkfile') pickBackupFile((t.files || [])[0]);
+  else if (t.id === 'land') { ui.land = t.value || null; blurField(); render(); }
   else if (t.classList.contains('imppick')) pickFor(Number(t.dataset.op), t.dataset.fid as string, t.value);
   else if (t.classList.contains('impedit')) editFor(Number(t.dataset.op), Number(t.dataset.i), t.value);
   else if (t.classList.contains('opstake')) stakeFor(Number(t.dataset.op), t.value);

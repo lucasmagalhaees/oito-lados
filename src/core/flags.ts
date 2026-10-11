@@ -35,6 +35,12 @@ for (const item of NAMES.split(/[\n|]/)) {
   for (const name of text.slice(at + 1).split(',')) CODES.set(plain(name), text.slice(0, at));
 }
 const letters = (code: string): string => [...code].map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
+/** What the table knows a country by: its two-letter code, or the tag of a home nation of the United Kingdom
+ *  ("gbeng"); an empty text for a name it does not have. The page uses it to say the name in Portuguese. */
+export function countryCode(country: unknown): string {
+  const k = plain(String(country == null ? '' : country)).trim();
+  return PARTS.get(k) || CODES.get(k) || '';
+}
 /** The flag of a country by its name, as an emoji; an empty text for a name the table does not have. */
 export function flagOf(country: unknown): string {
   const k = plain(String(country == null ? '' : country)).trim(); if (!k) return '';
