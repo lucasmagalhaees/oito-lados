@@ -73,5 +73,5 @@ export function preloadForm(): void {
   formAt = now;
   loadForm(ids).then(() => { saveCache(); render(); });
 }
-/** The events on screen: the cards that just ended and the next three (`Core.cardsToShow`), and any card with a bet still open on it. */
+/** The events on screen: the next three cards that are not over (`Core.cardsToShow`), and any card further ahead with a bet still open on it. */
 export const shownEvents = (): FightEvent[] => Core.cardsToShow(D.events, Date.now(), new Set(openLegs().map(l => l.eid)));

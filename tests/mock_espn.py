@@ -90,7 +90,7 @@ def scoreboard(url=''):
     # a fight that ends in a draw is over with no winner marked on either side
     state = lambda fid: (lambda st: st[:5] + (None,) if fid == ESPN['draw'] else st)(ST[fid][PHASE['n']] if fid in ST else PRE)
     comps = [comp(fid, f, state(fid), NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)) for fid, f in (ALL if ESPN['extra'] else F).items()]
-    evs = [dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)]
+    evs = [dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3 and not ESPN['notover'])), competitions=comps)]
     if ESPN['next']: evs.append(dict(id=EV2, name='UFC 999: Teles vs. Farias', date=iso(NOW+7*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, f, PRE, NOW+7*86400e3) for fid, f in NEXT.items()]))
     if ESPN['later']: evs += [dict(id=eid, name=name, date=iso(NOW+days*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, dict(a=a, b=b, rounds=3, w='Lightweight'), PRE, NOW+days*86400e3)]) for eid, name, days, fid, a, b in LATER]
     # like the source, only the events inside the dates asked for come back
@@ -100,7 +100,7 @@ def scoreboard(url=''):
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
 # knobs for the tests: the latest fights of the athletes unreachable (formdown), a second event on the board (next), a fight that ends in a draw (draw: its id), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
 # is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False, 'later': False}
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False, 'later': False, 'notover': False}
 def odds(fid):
     if fid not in ALL: return dict(count=0, items=[])          # a fight with no line published, as the source answers it
     f = ALL[fid]

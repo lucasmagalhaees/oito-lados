@@ -979,10 +979,15 @@ with sync_playwright() as p:
     assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; pg.click('[data-act=stmtall]'); assert pg.locator('#stmtevents tbody tr').count() == 5
     pg.evaluate('(() => { const L = JSON.parse(window.__legs); window.__OL.S.bets.forEach((b, i) => { b.legs = L[i]; }); })()'); repaint(); assert pg.locator('#stmtevents tbody tr').count() == 1 and srow('stmtspans', 'all')[1] == side(stj[3][2])
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
-    pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
+    # a card the source marks as over leaves the fights screen at once: with no other event on the board, there is none to show
+    pg.click('.tabbar [data-tab=lutas]')
+    assert pg.locator('.events .ev').count() == 0 and pg.locator('.fight').count() == 0 and 'Nenhum evento do UFC nos próximos dias.' in txt('#view'), ('the card that is over is not on screen any more', txt('#view')[:300])
+    # between the last fight and the source marking the event as over, the card is still there, with the result of every fight
+    ESPN['notover'] = True; sync(); pg.wait_for_selector('.fight'); shot('s7-final.png', True)
     # the fight that ended in a submission says which one, on the card and on the bets that rode on it
     assert 'Almeida venceu por Submission (Rear Naked Choke) · R4 2:00' in txt('#list') and 'Teles venceu por KO/TKO · R2 3:12' in txt('#list') and pg.evaluate('window.__OL.S.bets.flatMap(b => b.legs).filter(l => l.fid === "f3" && l.res).every(l => l.res.includes("venceu por Submission (Rear Naked Choke) · R4 2:00"))'), txt('#list')[:900]
     pg.click('[data-act=event]'); pg.wait_for_selector('.fight')                                       # picking the event again keeps the card on screen
+    ESPN['notover'] = False; sync(); assert pg.locator('.fight').count() == 0, 'and it leaves when the source marks it as over'
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     # the person's data: backup, restore and reset
     pg.click('.tabbar [data-tab=carteira]'); pg.click('[data-act=corners][data-g=women][data-m=green-pink]'); pg.click('[data-act=copydrop][data-m="3"]')
@@ -1035,34 +1040,36 @@ with sync_playwright() as p:
     assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 4] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
-    # the cards on screen: the ones that just ended and the next three still to come. The board is read a month ahead, so that when a
-    # card ends the third one after it is already there. Five cards and a Contender Series night are on the board for this
+    # the cards on screen: the next three that are not over. A card the source marks as over leaves, and the three after it are what
+    # is there; the board is read a month ahead, so that the third one is. Five cards and a Contender Series night are on the board
     import datetime
     was_phase = PHASE['n']; ESPN['next'] = True; ESPN['later'] = True
-    def cards_on(phase, state=None):
-        PHASE['n'] = phase; first = len(calls)
-        c4 = b.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo')
+    def cards_on(phase, state=None, notover=False):
+        PHASE['n'] = phase; ESPN['notover'] = notover; first = len(calls)
+        c4 = b.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo', has_touch=True, is_mobile=True)
         c4.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c4.route('https://cdn.jsdelivr.net/**', local_cdn)
         p4 = c4.new_page()
         if state: p4.add_init_script('localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(state)))
         p4.goto((ROOT / 'dist' / 'index.html').as_uri()); p4.wait_for_selector('.events .ev'); p4.wait_for_timeout(700)
         names = [t.upper() for t in p4.locator('.events .ev b').all_inner_texts()]
-        on = p4.locator('.events .ev.on b').inner_text().upper(); ended = ['ENCERRADO' in t.upper() for t in p4.locator('.events .ev').all_inner_texts()]
-        if state is None and phase == 3: p4.screenshot(path=str(SHOTS / 's52-tres-proximos-cards.png'))
+        on = p4.locator('.events .ev.on b').inner_text().upper(); row = p4.locator('.events').inner_text().upper()
+        if state is None and phase == 3 and not notover: p4.screenshot(path=str(SHOTS / 's52-tres-proximos-cards.png'))
         asked = re.search(r'dates=\d{8}-(\d{8})', [u for u in calls[first:] if '/scoreboard' in u][0]).group(1)
         ahead = (datetime.datetime.strptime(asked, '%Y%m%d').date() - datetime.datetime.now(datetime.timezone.utc).date()).days
-        c4.close(); return names, on, ended, ahead
+        c4.close(); ESPN['notover'] = False; return names, on, row, ahead
     CARD, NEXT3 = 'ALMEIDA VS. DUNNE <B>X</B>', ['TELES VS. FARIAS', 'LOBO VS. ARANTES', 'FURTADO VS. MAIA']
-    names, on, ended, ahead = cards_on(0)
-    assert names == [CARD] + NEXT3[:2] and on == CARD and ended == [False] * 3 and ahead in (30, 31), ('before it ends, the card of the week is one of the three to come', names, on, ahead)
-    names, on, ended, ahead = cards_on(3)
-    assert names == [CARD] + NEXT3 and ended == [True, False, False, False] and on == NEXT3[0], ('once it has ended, it stays and the three after it are there, the next one on screen', names, on, ended)
+    names, on, row, ahead = cards_on(0)
+    assert names == [CARD] + NEXT3[:2] and on == CARD and ahead in (30, 31), ('before it ends, the card of the week is one of the three to come', names, on, ahead)
+    names, on, row, ahead = cards_on(3, notover=True)
+    assert names == [CARD] + NEXT3[:2] and on == CARD, ('with every fight over and the event not yet marked as over, it is still one of the three', names, on)
+    names, on, row, ahead = cards_on(3)
+    assert names == NEXT3 and on == NEXT3[0] and 'ENCERRADO' not in row and 'ALMEIDA' not in row, ('marked as over, the card is gone and the next three are what is there, the first of them on screen', names, on, row)
     assert not any('CONTENDER' in n or 'NOGUEIRA' in n for n in names), 'a Contender Series night is never offered, nor a fourth card to come'
     now_ms = int(datetime.datetime.now().timestamp() * 1000)
     far = dict(v=1, cur='BRL', deposits=[dict(t=now_ms, v=100)], seen=now_ms, bets=[dict(id='far1', t=now_ms, type='single', stake=10, unit=10, odd=2, sgp={}, status='open', payout=0,
         legs=[dict(fid='j1', eid='600000005', key='ml:a', market='Vencedor', sel='Nogueira vence', cat='Vencedor', weight='Lightweight', fight='Nogueira x Pires', event='UFC Fight Night: Nogueira vs. Pires', date=now_ms + 28 * 86400000, odd=2, src='real')])])
-    names, on, ended, ahead = cards_on(3, far)
-    assert names == [CARD] + NEXT3 + ['NOGUEIRA VS. PIRES'], ('a card further ahead with a bet still open on it is shown too', names)
+    names, on, row, ahead = cards_on(3, far)
+    assert names == NEXT3 + ['NOGUEIRA VS. PIRES'], ('a card further ahead with a bet still open on it is shown too', names)
     ESPN['next'] = False; ESPN['later'] = False; PHASE['n'] = was_phase
     # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
     # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone
@@ -1111,6 +1118,7 @@ with sync_playwright() as p:
             return asked, p2.evaluate(COLOUR)
         finally:
             CDN_DOWN['on'] = False; b2.close()
+    PHASE['n'] = 0                                                                              # the card before any fight: once it is over it is not on screen
     bare = {'FONTCONFIG_FILE': str(conf)}
     asked, colour = flags_on(bare, False, 's50-bandeiras-sem-emoji-no-sistema.png')
     assert asked == ['country-flag-emoji-polyfill@0.1.10/dist/TwemojiCountryFlags.woff2'] and colour > 300, ('with no flag emoji in the system, the font of the flags is fetched and the flag is drawn in colour', asked, colour)

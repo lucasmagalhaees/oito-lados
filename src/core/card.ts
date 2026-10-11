@@ -17,15 +17,15 @@ export function cardSections(fights: Fight[]): CardSection[] {
   }));
 }
 
-/** For how long a card that is over stays among the events on screen, and how many cards still to come are shown. */
-export const RECENT_CARD = 5 * 24 * 3600e3, NEXT_CARDS = 3;
-/** The events the fights screen offers, of the ones the source lists (given in the order of their dates): the cards
- *  that ended in the last days, and the next three still to come, a card under way being one of the three. So when a
- *  card ends, the three after it are there. An event with a bet still open on it is shown whatever its place in the
- *  line (`keep` has the ids). Contender Series is left out: it has no odds. */
+/** How many cards still to come are shown, and how old an event the source never marks as over can be and still be shown. */
+export const NEXT_CARDS = 3, RECENT_CARD = 5 * 24 * 3600e3;
+/** The events the fights screen offers, of the ones the source lists (given in the order of their dates): the next
+ *  three that are not over, a card under way being one of the three. A card the source marks as over is never
+ *  shown: it leaves the screen, and the three after it are what is there. A card further ahead with a bet still
+ *  open on it is shown too (`keep` has the ids). Contender Series is left out: it has no odds. */
 export function cardsToShow<E extends { id: string; name: string; date: number; completed: boolean }>(events: E[], now: number, keep?: Set<string>): E[] {
   let ahead = 0;
-  return events.filter(e => e.date > now - RECENT_CARD && !/Contender Series/i.test(e.name)).filter(e => e.completed || ++ahead <= NEXT_CARDS || !!(keep && keep.has(e.id)));
+  return events.filter(e => !e.completed && e.date > now - RECENT_CARD && !/Contender Series/i.test(e.name)).filter(e => ++ahead <= NEXT_CARDS || !!(keep && keep.has(e.id)));
 }
 
 /** What the source writes for a fighter with no country: not a country to filter by. */

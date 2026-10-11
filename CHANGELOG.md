@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.22.1] - 2026-10-11
+
+### Corrigido
+- O card encerrado não aparece mais no alto da tela de Lutas: sai assim que a ESPN o marca como encerrado, e ficam os três próximos.
+
 ## [0.22.0] - 2026-10-11
 
 ### Alterado
