@@ -52,10 +52,13 @@ export const ymd = (t: number): string => { const d = new Date(t); return d.getU
 export const openBets = (): Bet[] => S.bets.filter(b => b.status === 'open');
 export const openLegs = (): Leg[] => openBets().flatMap(b => b.legs);
 
+/** How far ahead the board is read: far enough to have the three cards after the one that just ended, a week
+ *  without a card included. */
+export const BOARD_AHEAD = 30 * DAY;
 export async function loadBoard(): Promise<void> {
   const now = Date.now();
   const from = Math.min(now - 4 * DAY, ...openLegs().map(l => l.date - DAY));
-  const j = await getJSON(`${SITE}/scoreboard?dates=${ymd(from)}-${ymd(now + 16 * DAY)}&limit=100`);
+  const j = await getJSON(`${SITE}/scoreboard?dates=${ymd(from)}-${ymd(now + BOARD_AHEAD)}&limit=100`);
   D.events = ((j.events || []) as Json[]).map(Core.normEvent).filter(e => e.fights.length).sort((a, b) => a.date - b.date);
   D.from = from; index();
 }
