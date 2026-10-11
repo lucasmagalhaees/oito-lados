@@ -1066,10 +1066,17 @@ with sync_playwright() as p:
     assert counted(pg) == asked(since) and asked(since).get('board') == 1, ('what is counted from then on is what was asked of the source, kind by kind', counted(pg), asked(since))
     ESPN['down'] = True; sync(); ESPN['down'] = False; pg.wait_for_timeout(300); rows, full = usage_rows(pg)
     assert counted(pg) == asked(since) and counted(pg)['board'] == 2 and '1 falhou' in full['board'] and '1 falhou' in full['all'] and '· 1 falhou ·' in txt('#usagenow'), ('a call that fails is counted, and counted as failed', full['board'], txt('#usagenow'))
+    # hour by hour, behind a button: the last 24 hours that have calls, with the kinds of each
+    assert pg.locator('#usagehours').count() == 0; pg.click('[data-act=usagehours]')
+    hrs = [[c.split('\n') for c in tr.locator('td').all_inner_texts()] for tr in pg.locator('#usagehours tbody tr').all()]
+    assert 1 <= len(hrs) <= 2 and sum(int(h[1][0]) for h in hrs) == sum(asked(since).values()) and re.fullmatch(r'(ontem )?\d{1,2}h', hrs[0][0][0]) and any('placar ' in h[0][1] for h in hrs) and sum(int(n) for h in hrs for n in re.findall(r'placar (\d+)', h[0][1])) == 2 and any('1 falhou' in h[1] for h in hrs) and re.fullmatch(r'\d+/min', hrs[0][2][0]) and re.fullmatch(r'[\d.,]+ (B|kB|MB)', hrs[0][3][0]), ('the hours with calls, the latest first: how many, of what, how many failed, the peak and the size', hrs)
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; pg.locator('#usagehours').scroll_into_view_if_needed(); shot('s54-uso-hora-a-hora.png')
+    pg.click('[data-act=usagehours]'); assert pg.locator('#usagehours').count() == 0 and txt('[data-act=usagehours]') == 'Ver hora a hora'
     with pg.expect_download() as du: pg.click('[data-act=usagesave]')
     assert re.fullmatch(r'oito-lados-uso-espn-\d{4}-\d\d-\d\d-\d{4}\.json', du.value.suggested_filename), du.value.suggested_filename
     ufile = tmp / du.value.suggested_filename; du.value.save_as(str(ufile)); took = json.loads(ufile.read_text()); day = took['days'][took['today']]
     assert took['app'] == 'oito-lados' and took['what'] == 'espn-usage' and took['savedAt'] > 0 and {k: c['n'] for k, c in day['k'].items()} == asked(since) and day['k']['board']['err'] == 1 and day['peak'] >= 1 and took['session']['total']['n'] == sum(asked(since).values()) and 'Uso da ESPN baixado' in pg.inner_text('#toast'), took
+    assert dict(sum((Counter(h['k']) for h in day['h'].values()), Counter())) == asked(since) and sum(h['n'] for h in day['h'].values()) == sum(asked(since).values()) and sum(h['err'] for h in day['h'].values()) == 1, ('the file has the same hours, kind by kind', day['h'], asked(since))
     assert sorted(took) == ['app', 'days', 'fields', 'savedAt', 'session', 'today', 'version', 'what'] and 'stake' not in ufile.read_text() and 'deposits' not in ufile.read_text(), ('the file holds counts of calls and nothing about the bets', sorted(took))
     # on a phone the counts go to the share sheet, like the backup
     pg.evaluate("() => { window.__shared = []; navigator.canShare = d => !!(d && d.files && d.files.length); navigator.share = async d => { window.__shared.push([d.files[0].name, await d.files[0].text()]); }; }")
@@ -1135,6 +1142,42 @@ with sync_playwright() as p:
     said = re.search(r'Hoje: ([\d.]+) chamadas .* Desde que o app abriu \(\d+ min\): ([\d.]+) chamadas', p5.locator('#usagenow').inner_text())
     assert again == asked(since) and sum(again.values()) > sum(first.values()) and int(said.group(1)) == sum(again.values()) and int(said.group(2)) == sum(asked(mid).values()) < sum(again.values()), ('loaded again, the page keeps what was counted, the calls made just before leaving too, and counts the session from nothing', first, again, asked(mid), said.groups())
     c5.close(); ESPN['next'] = False; PHASE['n'] = was_phase
+    # a result is asked for only where it is used. A card that is over is not on screen, so the result of its fights is asked for only
+    # to close a bet; while the card is on screen, every fight that is over has its result asked for
+    was_phase = PHASE['n']; PHASE['n'] = 3; ESPN['next'] = True
+    def results_on(state=None, notover=False):
+        ESPN['notover'] = notover; since = len(calls)
+        c6 = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
+        c6.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c6.route('https://cdn.jsdelivr.net/**', local_cdn)
+        p6 = c6.new_page()
+        if state: p6.add_init_script('if (!localStorage.getItem("oitolados.v1")) localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(state)))
+        p6.goto((ROOT / 'dist' / 'index.html').as_uri()); p6.wait_for_selector('.fight'); p6.wait_for_timeout(1500); p6.evaluate('window.__OL.sync(true)'); p6.wait_for_timeout(600)
+        got = sorted(re.search(r'/competitions/(\w+)/status', u).group(1) for u in calls[since:] if kind_of(u) == 'result'); open_left = p6.evaluate('window.__OL.S.bets.filter(b => b.status === "open").length')
+        c6.close(); ESPN['notover'] = False; return got, open_left
+    got, _ = results_on()
+    assert got == [], ('with the card over and no bet on it, no result is asked for', got)
+    onf3 = dict(v=1, cur='BRL', deposits=[dict(t=now_ms, v=100)], seen=now_ms, bets=[dict(id='r1', t=now_ms, type='single', stake=10, unit=10, odd=2, sgp={}, status='open', payout=0,
+        legs=[dict(fid='f3', eid='600000001', key='fm:sub', market='Como a luta termina', sel='Luta termina por Submission', cat='Método', weight='Featherweight', fight='Almeida x Dunne', event='UFC Fight Night: Almeida vs. Dunne', date=now_ms - 4 * 3600000, odd=2, src='real')])])
+    got, open_left = results_on(onf3)
+    assert got == ['f3'] and open_left == 0, ('with a bet on one fight of that card, the result of that fight alone is asked for, once, and the bet closes', got, open_left)
+    got, _ = results_on(notover=True)
+    assert got == ['f1', 'f2', 'f3'], ('while the card is still on screen, the result of every fight that is over is asked for, once each', got)
+    # when the source cannot be reached the app asks less often: the wait doubles with each round that fails, up to five minutes, the
+    # screen says when the next try is, and the pace is the usual one again as soon as a round goes through
+    PHASE['n'] = 0; ESPN['next'] = False
+    c7 = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
+    c7.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c7.route('https://cdn.jsdelivr.net/**', local_cdn)
+    p7 = c7.new_page(); p7.add_init_script('window.__waits = []; const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => { if (ms >= 8000) window.__waits.push(ms); return st(f, ms, ...a); };')
+    p7.goto((ROOT / 'dist' / 'index.html').as_uri()); p7.wait_for_selector('.fight'); p7.wait_for_timeout(1500)
+    def round_(down):
+        ESPN['down'] = down; p7.evaluate('window.__OL.sync(true)'); p7.wait_for_timeout(500); ESPN['down'] = False
+        return p7.evaluate('window.__waits[window.__waits.length - 1]'), p7.locator('.sync span').inner_text()
+    usual, said = round_(False); assert usual == 30000 and 'nova tentativa' not in said, ('on the night of a card the board is asked for every 30 s', usual, said)
+    waits = [round_(True) for _ in range(5)]
+    assert [w for w, _ in waits] == [60000, 120000, 240000, 300000, 300000], ('each round that fails doubles the wait, up to five minutes', [w for w, _ in waits])
+    assert all('Sem conexão com a ESPN' in t for _, t in waits) and [re.search(r'nova tentativa em (\d+ \w+)', t).group(1) for _, t in waits] == ['1 min', '2 min', '4 min', '5 min', '5 min'], ('and the screen says when the next try is', [t for _, t in waits])
+    back, said = round_(False); assert back == 30000 and 'Sem conexão' not in said and 'nova tentativa' not in said, ('one round that goes through and the pace is the usual one again', back, said)
+    c7.close(); PHASE['n'] = was_phase
     # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
     # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone
     was_phase = PHASE['n']; PHASE['n'] = 0; ESPN['extra'] = True; ESPN['next'] = True          # the card of the walk-through, before any fight, is the one on screen
