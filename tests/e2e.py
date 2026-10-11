@@ -152,26 +152,27 @@ with sync_playwright() as p:
     pg.click('[data-act=qclear]'); assert pg.input_value('#q') == '' and nfights() == 3 and pg.locator('#parts').count() == 1 and focused() == 'q' and not pg.is_visible('[data-act=qclear]'), 'the x empties the field and leaves it ready'
     # the filter by country: Brazil has a shortcut of its own, and every country with a fighter on the cards is in the list, by its name in Portuguese
     BR, EN, CN = '\U0001F1E7\U0001F1F7', '\U0001F3F4\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F', '\U0001F1E8\U0001F1F3'
-    chip = lambda: pg.get_attribute('[data-act=land]', 'aria-pressed')
-    assert txt('[data-act=land]') == BR + ' Brasileiros (2)' and chip() == 'false' and pg.input_value('#land') == '', txt('#lands')
-    assert pg.locator('#land option').all_inner_texts() == ['Todos os países', 'Atlantis (1)', BR + ' Brasil (2)', CN + ' China (1)', EN + ' Inglaterra (1)'], pg.locator('#land option').all_inner_texts()          # the fighter with no country is not in the list
+    chip = lambda c='Brazil': pg.get_attribute(f'[data-act=land][data-c="{c}"]', 'aria-pressed')
+    lands = lambda: pg.locator('#lands button').all_inner_texts()
+    assert lands() == [BR + ' Brasileiros (2)', 'Atlantis (1)', CN + ' China (1)', EN + ' Inglaterra (1)'] and chip() == 'false', lands()          # the fighter with no country is not there
+    assert pg.locator('#view select').count() == 0, 'the countries are buttons of the app: the list of the device takes its colours from the phone, not from the theme chosen here'
+    assert pg.locator('#lands button .flag').count() == 3 and pg.locator('#lands button .flag').first.get_attribute('aria-label') == 'Brazil', 'each flag is in an element of its own, which has the font that draws it where the system has none'
     tap('[data-act=land]'); assert focused() != 'q'
-    assert nfights() == 2 and txt('#qinfo') == f'2 lutas · {BR} Brasil.' and pg.locator('#parts').count() == 0 and chip() == 'true' and pg.input_value('#land') == 'Brazil' and secs() == ['main', 'prelims'], (nfights(), txt('#qinfo'), secs())
+    assert nfights() == 2 and txt('#qinfo') == f'2 lutas · {BR} Brasil, neste card.' and pg.locator('#parts').count() == 0 and chip() == 'true' and secs() == ['main', 'prelims'] and pg.locator('#qinfo .flag').count() == 1, (nfights(), txt('#qinfo'), secs())
     assert 'KESSLER' not in txt('#list').upper() and 'TELES' in txt('#list').upper() and 'ALMEIDA' in txt('#list').upper() and 'on' in pg.get_attribute('[data-act=land]', 'class')
-    assert pg.evaluate('(() => { const c = s => getComputedStyle(document.querySelector(s)).backgroundColor; return c("[data-act=land]") !== c("#land"); })()') and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0
-    shot('s49-filtro-por-pais.png')
+    assert pg.evaluate('(() => { const c = s => getComputedStyle(document.querySelector(s)).backgroundColor; return c("#lands button.on") !== c("#lands button:not(.on)") && c("#lands button:not(.on)") === c(".fight"); })()'), 'the one chosen stands out, and the others have the colour of a card'
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; shot('s49-filtro-por-pais.png')
     pg.click('[data-act=pick][data-fid="f3"][data-key="ml:a"]'); assert pg.get_attribute('[data-act=pick][data-fid="f3"][data-key="ml:a"]', 'aria-pressed') == 'true' and nfights() == 2 and chip() == 'true', 'a pick inside the filtered list shows, and the filter stays'
     pg.click('[data-act=pick][data-fid="f3"][data-key="ml:a"]'); assert pg.evaluate('window.__OL.slip.sels.length') == 0
     # a name typed as well: a fight has to pass both
-    pg.fill('#q', 'prado'); assert nfights() == 1 and txt('#qinfo') == f'1 luta com "prado" · {BR} Brasil.', txt('#qinfo')
-    pg.fill('#q', 'kessler'); assert nfights() == 0 and txt('#qinfo') == f'Nenhuma luta com "kessler" · {BR} Brasil nos eventos carregados.', txt('#qinfo')
+    pg.fill('#q', 'prado'); assert nfights() == 1 and txt('#qinfo') == f'1 luta com "prado" · {BR} Brasil, neste card.', txt('#qinfo')
+    pg.fill('#q', 'kessler'); assert nfights() == 0 and txt('#qinfo') == f'Nenhuma luta com "kessler" · {BR} Brasil neste card.', txt('#qinfo')
     pg.fill('#q', ''); assert nfights() == 2
-    # any other country comes from the list, and the shortcut follows what is chosen
-    pg.select_option('#land', 'England'); assert nfights() == 1 and txt('#qinfo') == f'1 luta · {EN} Inglaterra.' and chip() == 'false' and 'PRADO' in txt('#list').upper() and focused() != 'land', (txt('#qinfo'), focused())
-    pg.select_option('#land', 'Atlantis'); assert nfights() == 1 and txt('#qinfo') == '1 luta · Atlantis.' and 'DUNNE' in txt('#list').upper(), txt('#qinfo')          # a country the app has no flag for is still a country
-    pg.select_option('#land', 'Brazil'); assert nfights() == 2 and chip() == 'true'
-    pg.click('[data-act=land]'); assert nfights() == 3 and pg.locator('#parts').count() == 1 and pg.input_value('#land') == '' and chip() == 'false' and pg.locator('#qinfo').count() == 0, 'a second tap on the shortcut lets go of the filter'
-    pg.select_option('#land', 'China'); assert nfights() == 1; pg.select_option('#land', ''); assert nfights() == 3 and pg.locator('#parts').count() == 1
+    # any other country of the card has its button; one country at a time
+    pg.click('[data-act=land][data-c="England"]'); assert nfights() == 1 and txt('#qinfo') == f'1 luta · {EN} Inglaterra, neste card.' and chip() == 'false' and chip('England') == 'true' and 'PRADO' in txt('#list').upper(), txt('#qinfo')
+    pg.click('[data-act=land][data-c="Atlantis"]'); assert nfights() == 1 and txt('#qinfo') == '1 luta · Atlantis, neste card.' and 'DUNNE' in txt('#list').upper() and chip('England') == 'false', txt('#qinfo')          # a country the app has no flag for is still a country
+    pg.click('[data-act=land]'); assert nfights() == 2 and chip() == 'true' and chip('Atlantis') == 'false'
+    pg.click('[data-act=land]'); assert nfights() == 3 and pg.locator('#parts').count() == 1 and chip() == 'false' and pg.locator('#qinfo').count() == 0 and pg.evaluate('window.__OL.ui.land') is None, 'a second tap lets go of the filter'
     pg.click('#q')
     # with another event on the board the search covers it too, and a tap on its name opens that card with the search still there
     ESPN['next'] = True; assert focused() == 'q'; tap('[data-act=refresh]'); assert focused() != 'q', 'a tap outside the list lets go of the field, so the whole screen can follow'
@@ -182,11 +183,18 @@ with sync_playwright() as p:
     pg.click('#list button.qev'); pg.wait_for_function('window.__OL.ui.eventId === "600000002"')
     assert pg.input_value('#q') == 'teles' and nfights() == 2 and 'TELES VS. FARIAS' in pg.locator('#list .qev >> nth=0').inner_text().upper() and 'on' in pg.get_attribute('.events .ev >> nth=1', 'class'), 'that card is the one on screen now, and the search is still there'
     pg.fill('#q', ''); assert nfights() == 1 and pg.locator('#parts').count() == 0, 'a card with one hour has no parts to choose'
-    # the filter by country covers every event on the board as the search does, and the other card is a tap away with the filter still on
-    pg.click('[data-act=land]')
-    assert txt('[data-act=land]') == BR + ' Brasileiros (3)' and nfights() == 3 and txt('#qinfo') == f'3 lutas · {BR} Brasil, nos 2 eventos carregados.' and pg.locator('#list .qev').count() == 2 and pg.locator('#list .qev >> nth=0').evaluate('e => e.tagName') == 'DIV', (txt('[data-act=land]'), txt('#qinfo'))
-    pg.click('#list button.qev'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"'); assert pg.evaluate('window.__OL.ui.land') == 'Brazil' and nfights() == 3 and chip() == 'true'
-    pg.click('.events .ev >> nth=1'); pg.wait_for_function('window.__OL.ui.eventId === "600000002"'); assert pg.evaluate('window.__OL.ui.land') is None and chip() == 'false' and nfights() == 1, 'picking an event at the top lets go of the filter, as it does of the search'
+    # the filter by country looks at the card on screen only, and stays on from one card to the other
+    assert lands() == [BR + ' Brasileiros (1)'], lands()          # this card has two Brazilians in one fight, and nobody else
+    pg.click('[data-act=land]'); assert nfights() == 1 and txt('#qinfo') == f'1 luta · {BR} Brasil, neste card.' and pg.locator('#list .qev').count() == 1 and pg.locator('#list button.qev').count() == 0, (nfights(), txt('#qinfo'))
+    pg.click('.events .ev >> nth=0'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"')
+    assert pg.evaluate('window.__OL.ui.land') == 'Brazil' and chip() == 'true' and nfights() == 2 and lands()[0] == BR + ' Brasileiros (2)' and txt('#qinfo') == f'2 lutas · {BR} Brasil, neste card.', (lands(), txt('#qinfo'))
+    pg.fill('#q', 'teles'); assert nfights() == 1 and txt('#qinfo') == f'1 luta com "teles" · {BR} Brasil, neste card.' and pg.locator('#list button.qev').count() == 0, 'with a country chosen the name is looked for on this card only: the other card has a Teles too'
+    pg.fill('#q', '')
+    # a country chosen on one card stays in the row on a card that has nobody from it, so that it can be let go of
+    pg.click('[data-act=land][data-c="England"]'); assert nfights() == 1
+    pg.click('.events .ev >> nth=1'); pg.wait_for_function('window.__OL.ui.eventId === "600000002"')
+    assert lands() == [BR + ' Brasileiros (1)', EN + ' Inglaterra (0)'] and chip('England') == 'true' and nfights() == 0 and txt('#qinfo') == f'Nenhuma luta · {EN} Inglaterra neste card.', (lands(), txt('#qinfo'))
+    pg.click('[data-act=land][data-c="England"]'); assert lands() == [BR + ' Brasileiros (1)'] and nfights() == 1 and pg.evaluate('window.__OL.ui.land') is None
     # the keyboard's own "search" puts the keyboard away; picking an event at the top leaves the search
     pg.fill('#q', 'farias'); pg.press('#q', 'Enter'); assert focused() != 'q' and nfights() == 1 and pg.input_value('#q') == 'farias'
     pg.click('.events .ev >> nth=0'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"'); assert pg.input_value('#q') == '' and nfights() == 3
@@ -384,6 +392,7 @@ with sync_playwright() as p:
     pg.evaluate('Object.defineProperty(navigator, "clipboard", { configurable: true, value: window.__clip })'); pg.click('[data-act=impclear]')
     # with a card of five fights, a multiple of five read from a text is a long shot: a fraction of a unit is suggested, a tap away
     ESPN['extra'] = True; sync()
+    assert lands() == [BR + ' Brasileiros (4)', EN + ' Inglaterra (2)', 'Atlantis (1)', CN + ' China (1)'], ('after Brazil, the country with the most fights on the card comes first', lands())
     pg.fill('#imptext', 'QUÍNTUPLA\nTeles + Brandt + Almeida + Sampaio + Kovac - para vencer a luta\nR$ 100,00'); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
     assert txt('.impkind') == 'Múltipla de 5 seleções' and pg.locator('.impsug button').all_inner_texts() == ['0,2u', '0,3u', '0,4u'] and 'Múltipla de 5 seleções: stake sugerida de 0,2u a 0,4u' in txt('#panel'), txt('#panel')
     pg.click('.impsug [data-u="0.3"]'); assert txt('#impvalue') == 'R$ 30,00 · 0,3u' and 'valor que você escreveu' in txt('#panel'), txt('#impvalue')
@@ -671,7 +680,11 @@ with sync_playwright() as p:
     device = DARK if (sys.argv[1] if len(sys.argv) > 1 else 'dark') == 'dark' else LIGHT
     assert paper() == device and bars() == ['#0e1218', '#f2f3f5'], (paper(), bars())
     pg.click('[data-act=theme][data-m=dark]'); assert paper() == DARK and bars() == ['#0e1218', '#0e1218'], (paper(), bars())
+    # the buttons of the filter by country take the colours of the theme chosen here, whatever the device asks for
+    landcol = lambda: pg.evaluate('(() => { const x = getComputedStyle(document.querySelector("#lands button:not(.on)")); return [x.backgroundColor, x.color]; })()')
+    pg.click('.tabbar [data-tab=lutas]'); assert landcol() == ['rgb(23, 28, 37)', 'rgb(238, 241, 246)'] and pg.locator('#view select').count() == 0, landcol(); pg.click('.tabbar [data-tab=carteira]')
     pg.click('[data-act=theme][data-m=light]'); assert paper() == LIGHT and bars() == ['#f2f3f5', '#f2f3f5'], (paper(), bars())
+    pg.click('.tabbar [data-tab=lutas]'); assert landcol() == ['rgb(255, 255, 255)', 'rgb(20, 25, 34)'], landcol(); pg.click('.tabbar [data-tab=carteira]')
     other = 'light' if device == DARK else 'dark'                    # leave the one the device is NOT asking for, and reload
     pg.click(f'[data-act=theme][data-m={other}]'); shot('s22-tema.png')
     pg.click('[data-act=corners][data-g=women][data-m=purple-orange]')
@@ -1019,6 +1032,40 @@ with sync_playwright() as p:
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
     b.close()
+    # a computer with no flag emoji of its own (Windows) draws the two letters of the country where the flag should be. There the
+    # flags come from a font fetched for them, and a system that has flags never asks for it. Chromium is started again, with the
+    # emoji font of this machine left out, to stand in for such a computer.
+    import os, subprocess
+    conf = pathlib.Path(tempfile.mkdtemp()) / 'no-emoji.conf'
+    conf.write_text('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><include ignore_missing="yes">/etc/fonts/fonts.conf</include>'
+                    '<selectfont><rejectfont><pattern><patelt name="family"><string>Noto Color Emoji</string></patelt></pattern></rejectfont></selectfont></fontconfig>')
+    # how much of a flag is drawn in colour, with the fonts the page gives it: letters and empty boxes have none
+    COLOUR = '''async () => { const el = document.querySelector('.fight .flag'), fam = getComputedStyle(el).fontFamily, t = el.textContent;
+        try { await document.fonts.load('40px ' + fam, t); } catch (e) {}
+        const c = document.createElement('canvas'); c.width = 80; c.height = 60; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 80, 60); x.fillStyle = '#000'; x.font = '40px ' + fam; x.textBaseline = 'top'; x.fillText(t, 4, 8);
+        const d = x.getImageData(0, 0, 80, 60).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) > 60) n++;
+        return n; }'''
+    def flags_on(env, cdn_down, shot_as=None):
+        b2 = p.chromium.launch(env={**os.environ, **env}); CDN_DOWN['on'] = cdn_down; del cdn_calls[:]
+        try:
+            c2 = b2.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo')
+            c2.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c2.route('https://cdn.jsdelivr.net/**', local_cdn)
+            p2 = c2.new_page(); p2.goto((ROOT / 'dist' / 'index.html').as_uri()); p2.wait_for_selector('.fight .flag'); p2.wait_for_timeout(1200)
+            asked = [u.split('/npm/')[1] for u in cdn_calls if 'country-flag' in u]          # what the page asked for by itself, before the measuring asks too
+            if shot_as: p2.locator('#lands').scroll_into_view_if_needed(); p2.screenshot(path=str(SHOTS / shot_as))
+            return asked, p2.evaluate(COLOUR)
+        finally:
+            CDN_DOWN['on'] = False; b2.close()
+    bare = {'FONTCONFIG_FILE': str(conf)}
+    asked, colour = flags_on(bare, False, 's50-bandeiras-sem-emoji-no-sistema.png')
+    assert asked == ['country-flag-emoji-polyfill@0.1.10/dist/TwemojiCountryFlags.woff2'] and colour > 300, ('with no flag emoji in the system, the font of the flags is fetched and the flag is drawn in colour', asked, colour)
+    asked, colour = flags_on(bare, True)
+    assert colour == 0, ('and without that font there is no flag, only letters: it is the font that draws them', asked, colour)
+    if 'Noto Color Emoji' in subprocess.run(['fc-list'], capture_output=True, text=True).stdout:
+        asked, colour = flags_on({}, False)
+        assert asked == [] and colour > 300, ('a system that has flags draws its own and never asks for the font', asked, colour)
+        print('bandeiras: desenhadas pelo sistema quando ele tem, e pela fonte das bandeiras quando não tem')
+    else: print('bandeiras: esta máquina não tem emoji de bandeira; só o caminho da fonte das bandeiras foi conferido')
 assert ow == 0, f'page is {ow}px wider than the phone screen'
 assert not [e for e in errs if 'PAGEERROR' in e], errs
 print('e2e ok: 15 apostas encerradas (3 por cashout: 1 repetida e 1 a valor de mercado), saldo final R$ 1.609,59, banca convertida quatro vezes (duas sem depositar), sem estouro de largura e sem erro de script')

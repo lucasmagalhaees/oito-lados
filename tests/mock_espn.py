@@ -46,7 +46,7 @@ UD = dict(id=263, name='decision---unanimous', displayName='Decision - Unanimous
 RNC = dict(SUBM, description='Rear Naked Choke', displayDescription='Rear Naked Choke'); TRI = dict(SUBM, description='Triangle Choke', displayDescription='Triangle Choke'); KOP = dict(KO, description='Punches', displayDescription='Punches')    # a knockout comes with a description too, which the app does not show
 # where each athlete is from, as the board says it: the three names of the recorded boards, "default" (what ESPN writes for an athlete with no country, seen on
 # 11/10/2026) and a name the app has no flag for
-LAND = {'101': 'Brazil', '102': 'England', '201': 'China', '202': 'default', '302': 'Atlantis'}
+LAND = {'101': 'Brazil', '102': 'England', '201': 'China', '202': 'default', '302': 'Atlantis', '401': 'England'}
 PAST = {
  '101': [('p1011', 120, True, KO, 1, '2:10'), ('p1012', 300, True, UD, 3, '5:00'), ('p1013', 500, False, SUBM, 2, '3:45'), ('p1014', 700, True, KO, 3, '1:00')],   # four: only the latest three are read
  '102': [('p1021', 90, False, UD, 3, '5:00')],
@@ -152,8 +152,9 @@ import pathlib as _pathlib
 _NPM = _pathlib.Path(__file__).resolve().parent / 'node_modules'
 _CDN = [(r'/npm/tesseract\.js@[\d.]+/dist/([\w.-]+)$', 'tesseract.js/dist/{0}'),
         (r'/npm/tesseract\.js-core@[\d.]+/([\w.-]+)$', 'tesseract.js-core/{0}'),
-        (r'/npm/@tesseract\.js-data/(\w+)@[\d.]+/([\w.]+)/([\w.]+)$', '@tesseract.js-data/{0}/{1}/{2}')]
-_TYPES = {'.js': 'application/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream'}
+        (r'/npm/@tesseract\.js-data/(\w+)@[\d.]+/([\w.]+)/([\w.]+)$', '@tesseract.js-data/{0}/{1}/{2}'),
+        (r'/npm/country-flag-emoji-polyfill@[\d.]+/dist/([\w.-]+)$', 'country-flag-emoji-polyfill/dist/{0}')]          # the font of the flags, for systems with no flag emoji
+_TYPES = {'.js': 'application/javascript', '.wasm': 'application/wasm', '.gz': 'application/octet-stream', '.woff2': 'font/woff2'}
 cdn_calls = []
 CDN_DOWN = {'on': False}          # set to True to simulate the CDN being unreachable
 

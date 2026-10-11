@@ -75,19 +75,23 @@ function vLutas(): string {
   if (!S.deposits.length) h += `<div class="cta"><p><b>Saldo fictício zerado.</b> Coloca quanto quiser pra começar a simular.</p><button class="btn" data-act="tab" data-tab="carteira">Depositar</button></div>`;
   // finding a fight by a fighter's name, across the events on screen; the list under the field is repainted by itself
   h += `<div class="field search"><span aria-hidden="true">Buscar</span><input id="q" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40" placeholder="nome do lutador" value="${esc(ui.q)}" aria-label="Buscar luta pelo nome do lutador"><button class="x" data-act="qclear" aria-label="Limpar a busca"${ui.q ? '' : ' hidden'}>×</button></div>`;
-  return h + landsHtml(evs) + `<div id="list">${listHtml(ev, evs)}</div>`;
+  return h + landsHtml(ev) + `<div id="list">${listHtml(ev, evs)}</div>`;
 }
 /** The country whose fighters have a shortcut of their own in the filter, as the source writes it. */
 export const HOME_LAND = 'Brazil';
-const landLabel = (c: string): string => { const f = Core.flagOf(c); return (f ? f + ' ' : '') + landName(c, Core.countryCode(c)); };
-/** The filter by country, under the search: the shortcut of the country of the house, and every country that has a
- *  fighter in the events on screen, by its name in Portuguese, with how many fights each one is in. */
-function landsHtml(evs: FightEvent[]): string {
-  const all = Core.countries(evs.flatMap(e => e.fights)).map(c => ({ ...c, text: landName(c.name, Core.countryCode(c.name)) })).sort((a, b) => a.text.localeCompare(b.text, 'pt-BR'));
-  if (!all.length) return '';
-  const home = all.find(c => sameLand(c.name, HOME_LAND)), on = !!ui.land && sameLand(ui.land, HOME_LAND);
-  return `<div class="lands" id="lands"><button class="${on ? 'on' : ''}" data-act="land" data-c="${HOME_LAND}" aria-pressed="${on}">${esc(Core.flagOf(HOME_LAND))} Brasileiros (${home ? home.fights : 0})</button>
-    <div class="field"><select id="land" aria-label="Filtrar as lutas por país"><option value="">Todos os países</option>${all.map(c => `<option value="${esc(c.name)}"${ui.land && sameLand(ui.land, c.name) ? ' selected' : ''}>${esc((Core.flagOf(c.name) ? Core.flagOf(c.name) + ' ' : '') + c.text)} (${c.fights})</option>`).join('')}</select></div></div>`;
+// a country in words, with its flag in front: the flag goes in an element of its own, which has the font that draws it where the system has none
+const landLabel = (c: string): string => { const f = flagHtml(c); return (f ? f + ' ' : '') + esc(landName(c, Core.countryCode(c))); };
+/** The filter by country, under the search: a button for the country of the house, always there, and one for each
+ *  other country that has a fighter on the card on screen, the one with the most fights first, by its name in
+ *  Portuguese. They are buttons of the app, not the list of the device, which takes its colours from the phone and
+ *  not from the theme chosen here. A country chosen on another card stays in the row, so that it can be let go of. */
+function landsHtml(ev: FightEvent): string {
+  const there = Core.countries(ev.fights).map(c => ({ ...c, text: landName(c.name, Core.countryCode(c.name)) }));
+  const count = (c: string): number => { const x = there.find(y => sameLand(y.name, c)); return x ? x.fights : 0; };
+  const others = there.filter(c => !sameLand(c.name, HOME_LAND)).sort((a, b) => b.fights - a.fights || a.text.localeCompare(b.text, 'pt-BR'));
+  if (ui.land && !sameLand(ui.land, HOME_LAND) && !count(ui.land)) others.unshift({ name: ui.land, fights: 0, text: landName(ui.land, Core.countryCode(ui.land)) });
+  const btn = (c: string, text: string): string => { const on = !!ui.land && sameLand(ui.land, c), f = flagHtml(c); return `<button class="${on ? 'on' : ''}" data-act="land" data-c="${esc(c)}" aria-pressed="${on}">${f ? f + ' ' : ''}${esc(text)} (${count(c)})</button>`; };
+  return `<div class="lands" id="lands" role="group" aria-label="Filtrar as lutas deste card por país">${btn(HOME_LAND, 'Brasileiros')}${others.map(c => btn(c.name, c.text)).join('')}</div>`;
 }
 const sameLand = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
 const PART: Record<CardPart, string> = { main: 'Card principal', prelims: 'Preliminares', early: 'Primeiras preliminares' };
@@ -107,16 +111,17 @@ function sectionsHtml(e: FightEvent, part: CardPart | null, only?: Set<string>):
 function listHtml(ev: FightEvent, evs: FightEvent[]): string {
   const q = ui.q.trim(), land = ui.land || '';
   if (q || land) {
-    // what was typed and the country chosen narrow the same list: a fight has to pass both
+    // what was typed is looked for in every event; a country is looked for on the card on screen only. With both, a
+    // fight has to pass both, on that card
     let n = 0, h = '';
-    const what = `${q ? ` com "${esc(q)}"` : ''}${land ? ` · ${esc(landLabel(land))}` : ''}`;
-    for (const e of [ev, ...evs.filter(x => x.id !== ev.id)]) {
+    const what = `${q ? ` com "${esc(q)}"` : ''}${land ? ` · ${landLabel(land)}` : ''}`;
+    for (const e of land ? [ev] : [ev, ...evs.filter(x => x.id !== ev.id)]) {
       const named = q ? Core.findFights(e.fights, q) : e.fights, hits = land ? Core.fromCountry(named, land) : named; if (!hits.length) continue;
       n += hits.length;
       const name = `${esc(evLabel(e).main)} · ${esc(dDay.format(e.date))}`;
       h += (e.id === ev.id ? `<div class="seg label qev">${name}</div>` : `<button class="seg label qev" data-act="event" data-id="${esc(e.id)}" data-keep="1">${name} · abrir este card ›</button>`) + sectionsHtml(e, null, new Set(hits.map(f => f.id)));
     }
-    return `<p class="hint" id="qinfo">${n ? `${n} ${n > 1 ? 'lutas' : 'luta'}${what}${evs.length > 1 ? `, nos ${evs.length} eventos carregados` : ''}.` : `Nenhuma luta${what} nos eventos carregados.`}</p>` + h;
+    return `<p class="hint" id="qinfo">${n ? `${n} ${n > 1 ? 'lutas' : 'luta'}${what}${land ? ', neste card' : evs.length > 1 ? `, nos ${evs.length} eventos carregados` : ''}.` : `Nenhuma luta${what} ${land ? 'neste card' : 'nos eventos carregados'}.`}</p>` + h;
   }
   const secs = Core.cardSections(ev.fights), parts = [...new Set(secs.map(s => s.part))];
   if (ui.part && !parts.includes(ui.part)) ui.part = null;
