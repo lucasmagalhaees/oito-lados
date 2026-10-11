@@ -456,7 +456,11 @@ with sync_playwright() as p:
     assert pg.evaluate('document.getElementById("sheet").hidden') and pg.evaluate('window.__OL.ui.tab') == 'apostas', 'everything was bet and the reference list went with it: the list is empty and closes'
     # the wallet says the same about everything that is open
     pg.click('.tabbar [data-tab=carteira]')
-    assert txt('#atrisk') == 'R$ 480,00 (4,8u) em jogo em 3 apostas abertas' and txt('#heropot') == 'Se todas baterem: retorno de R$ 1.161,10, ganho de +R$ 681,10 · +6,81u.', (txt('#atrisk'), txt('#heropot'))
+    # the bankroll at a glance: what it is, what is at stake and what a unit is worth, and where it goes if the open bets all win or all lose
+    assert [txt('#bankv'), txt('#atrisk b'), txt('#atrisk .un'), txt('#unitv')] == ['R$ 1.000,00', 'R$ 480,00', '4,8u · 3 apostas', 'R$ 100,00'] and '10% da banca' in txt('#bank .kp3'), txt('#bank')
+    assert [txt('#ifwin small').lower(), txt('#ifwin b'), txt('#ifwin span')] == ['se todas baterem', '+R$ 681,10 · +6,81u', 'retorno de R$ 1.161,10 · banca vai a R$ 1.681,10'], txt('#ifwin')          # R$ 520,00 of balance plus the R$ 1.161,10 back
+    assert [txt('#iflose small').lower(), txt('#iflose b'), txt('#iflose span')] == ['se todas perderem', '−R$ 480,00 · −4,8u', 'banca vai a R$ 520,00'] and txt('#deptotal') == 'R$ 1.000,00 depositados no total', txt('#iflose')
+    assert pg.evaluate('getComputedStyle(document.querySelector("#ifwin b")).color !== getComputedStyle(document.querySelector("#iflose b")).color') and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, 'gain and loss are told apart by colour, and it fits the phone'
     shot('s37-carteira-em-jogo.png')
     # with bets on more than one event there is also the total of everything open; a bet from before units existed counts in money only
     pg.evaluate('(() => { const b = window.__OL.S.bets.filter(x => x.status === "open")[0]; window.__keep = [b.unit, b.legs.map(l => [l.eid, l.event, l.date])]; delete b.unit; b.legs.forEach(l => { l.eid = "e9"; l.event = "UFC 999: Brandt vs. Kessler"; l.date += 7 * 864e5; }); })()')
@@ -467,6 +471,17 @@ with sync_playwright() as p:
     assert pg.locator('.bet .gain b').last.inner_text().replace('\xa0', ' ') == '+R$ 262,50', 'and its gain is in money only'
     pg.evaluate('(() => { const b = window.__OL.S.bets.filter(x => x.status === "open")[0], k = window.__keep; b.unit = k[0]; b.legs.forEach((l, i) => { [l.eid, l.event, l.date] = k[1][i]; }); })()')
     pg.click('.tabbar [data-tab=carteira]'); pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('.grp').count() == 1 and pg.locator('.opentot').count() == 0 and tot('.grpsum')[1] == '4,8u'
+    # figures of hundreds of thousands still fit a phone: three to a row become two, and no number is broken in the middle
+    oneline = lambda sel: pg.evaluate('s => [...document.querySelectorAll(s)].every(e => e.getClientRects().length === 1 && e.getBoundingClientRect().height < 30)', sel)
+    assert 'wide' not in pg.get_attribute('.grpsum', 'class') and oneline('.tot b') and oneline('.bf b')
+    pg.evaluate('(() => { const S = window.__OL.S, b = S.bets.filter(x => x.status === "open")[0]; window.__keep = [b.stake, S.deposits[0].v]; b.stake = 250000; S.deposits[0].v += 5e6; })()')
+    pg.click('.tabbar [data-tab=carteira]')
+    assert 'wide' in pg.get_attribute('#bank .kp3', 'class') and oneline('#bank .kp3 b') and oneline('#bank .scn b') and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, txt('#bank')
+    pg.click('.tabbar [data-tab=apostas]')
+    assert 'wide' in pg.get_attribute('.grpsum', 'class') and txt('.grpsum .rt') == 'R$ 513.148,60' and oneline('.tot b') and oneline('.bf b') and oneline('.gain b') and pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, txt('.grpsum')          # 250.000 x 2.05 + 375,00 + 273,60
+    shot('s43-valores-altos.png')
+    pg.evaluate('(() => { const S = window.__OL.S, b = S.bets.filter(x => x.status === "open")[0]; [b.stake, S.deposits[0].v] = window.__keep; })()')
+    pg.click('.tabbar [data-tab=carteira]'); pg.click('.tabbar [data-tab=apostas]'); assert tot('.grpsum')[0] == 'R$ 480,00' and 'wide' not in pg.get_attribute('.grpsum', 'class')
     # the bets say where they came from and how the odd taken compares with the printed one
     notes = [t.replace('\xa0', ' ') for t in pg.locator('.bet .src').all_inner_texts()]
     assert 'De Canal do Zé · odd do print 2.70, você pegou 2.50 (−7,4%)' in notes and 'De Canal do Zé · odd do print 3.42, você pegou 3.42 (−0,1%)' in notes and 'De Canal do Zé · odd do print 2.05, você pegou 2.05 (0,0%)' in notes, notes
@@ -692,6 +707,13 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('.leg .sd.a').count() >= 3 and pg.locator('.leg .sd.b').count() >= 2, 'bets name the fighter with the corner colour'; pg.click('.tabbar [data-tab=lutas]')
     assert pg.locator('#since').count() == 0, 'nothing has closed by itself yet'
     PHASE['n'] = 1; sync(); pg.click('.tabbar [data-tab=apostas]'); pg.wait_for_timeout(200); shot('s4-live.png')
+    # with the first fight on, every selection says in words where it stands, and each multiple counts its own
+    tags = [t.lower() for t in pg.locator('.leg .ls').all_inner_texts()]
+    assert pg.locator('.leg').count() == len(tags) and set(tags) == {'ao vivo', 'não começou'} and pg.locator('.leg.s-live').count() == tags.count('ao vivo') > 0, tags
+    m3 = pg.locator('.bet', has=pg.locator('.tally')).first
+    assert m3.locator('.tally').inner_text() == '1 ao vivo · 2 não começaram' and [t.lower() for t in m3.locator('.ls').all_inner_texts()] == ['ao vivo', 'não começou', 'não começou'], m3.inner_text()
+    assert pg.locator('.bet:not(:has(.tally))').count() == pg.evaluate('window.__OL.S.bets.filter(b => b.status === "open" && b.legs.length === 1).length'), 'a single has nothing to count'
+    assert pg.evaluate('[...document.querySelectorAll(".leg .t b .ou")].every(e => e.getBoundingClientRect().width < 30 && e.getBoundingClientRect().height < 30)'), 'the arrow of an over stays in front of its name'
     frozen = pg.locator('.hint.co', has_text='Cashout congelado').count(); still = pg.locator('[data-act=cash]').count()
     print('fase 1: cashout congelado em', frozen, 'apostas, disponível em', still)
     assert frozen == 7 and still == 6, (frozen, still)       # 7 bets touch the live fight; the other 6 are on fights still to start
@@ -728,6 +750,11 @@ with sync_playwright() as p:
     assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Canal do Zé', 'Sem origem']
     pg.click('#byorigin button >> nth=1'); assert pg.locator('.bet').count() == 3; pg.click('#byorigin button >> nth=2'); assert pg.locator('.bet').count() == 12; pg.click('#byorigin button >> nth=0'); assert pg.locator('.bet').count() == 15
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
+    # closed, every selection still says what became of it; the ones a bet did not need are told apart
+    tags = [t.lower() for t in pg.locator('.leg .ls').all_inner_texts()]; outs = pg.evaluate('window.__OL.S.bets.filter(b => b.status !== "open").sort((a, b) => b.settledAt - a.settledAt).flatMap(b => b.legs.map(l => l.out || "unused"))')
+    assert tags == [{'won': 'bateu', 'lost': 'perdeu', 'void': 'anulada', 'unused': 'não contou'}[o] for o in outs] and 'bateu' in tags and 'perdeu' in tags and 'não contou' in tags, (tags, outs)
+    assert pg.locator('.leg.s-won .g').first.inner_text() == '✓' and pg.locator('.leg.s-lost .g').first.inner_text() == '✕' and pg.locator('.leg.s-unused').count() == tags.count('não contou')
+    assert pg.evaluate('[...document.querySelectorAll(".leg .t b .ou")].every(e => e.getBoundingClientRect().width < 30 && e.getBoundingClientRect().height < 30)') and pg.locator('.leg .t b .ou').count() > 0, 'the arrow of an over stays in front of its name'
     # a closed bet says its result in units too, by the unit it was placed with, and nothing about a gain still to come
     resu = [unum(t) for t in pg.locator('.bet .un.res').all_inner_texts()]
     assert len(resu) == 15 and abs(sum(resu) - 6.1) < 0.08 and resu == [round(x * 100) / 100 for x in pg.evaluate('window.__OL.S.bets.filter(b => b.status !== "open").sort((a, b) => b.settledAt - a.settledAt).map(b => Math.round((b.payout - b.stake) / b.unit * 100) / 100)')], resu
@@ -742,7 +769,7 @@ with sync_playwright() as p:
     # the tables by market and by event say the result in units as well: each adds up to the whole
     bym = [unum(t) for t in pg.locator('.tbl[data-by=mercado] .inu').all_inner_texts()]
     assert len(bym) == pg.locator('.tbl[data-by=mercado] tbody tr').count() > 2 and abs(sum(bym) - 6.1) < 0.05 and pg.locator('.tbl[data-by=evento] .inu').all_inner_texts() == ['+6,1u'], (bym, pg.locator('.tbl[data-by=evento] .inu').all_inner_texts())
-    assert pg.locator('#atrisk').count() == 0 and pg.locator('#heropot').count() == 0, 'nothing is open any more'
+    assert pg.locator('#ifwin').count() == 0 and pg.locator('#iflose').count() == 0 and txt('#atrisk .un') == 'nenhuma aposta' and txt('#atrisk b') == 'R$ 0,00' and txt('#bankv') == txt('.hero .n'), 'nothing is open any more: the bankroll is the balance'
     # the figures can cover a period; every bet here closed today, on one event, so the numbers are the same in all three
     whole = txt('.pnl'); assert pg.locator('#periodev').count() == 0 and [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()] == ['Sem origem', 'Canal do Zé']
     # each origin also has its result in units, every bet by the unit it was placed with: the two add up to the whole

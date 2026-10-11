@@ -2,8 +2,9 @@
    Pure functions over the list of bets: whether a bet is already there, what is at stake on a fight, how results split
    by origin, which closed bets a period covers and what closed since a given moment. */
 import { r2 } from './odds';
+import { oddLeft } from './settlement';
 import { edgeSummary } from './tip';
-import type { Bet } from './types';
+import type { Bet, Leg, Outcome } from './types';
 
 type Sel = { fid: string; key: string };
 /** The selections of a bet as one string, whatever their order. */
@@ -28,13 +29,20 @@ export function exposure(bets: Bet[], fid: string): { n: number; stake: number; 
 /** What a set of open bets has at stake and what it can pay: `ret` is what comes back if every one of them wins, and
  *  `gain` is that less the stakes. `units` and `gainUnits` are the stake and the gain with each bet measured by the
  *  unit it was placed with; a bet with no unit (`unitBets` counts the ones that have it) is left out of those two.
- *  Bets that are not open are ignored. */
+ *  Bets that are not open are ignored. With `outOf` (what each selection has come to so far) a bet with a void
+ *  selection counts for what it pays now, without that fight. */
+export type OutOf = (leg: Leg) => Outcome | null | undefined;
 export interface OpenTotals { n: number; stake: number; ret: number; gain: number; units: number; gainUnits: number; unitBets: number }
-export function openTotals(bets: Bet[]): OpenTotals {
+/** The odd an open bet pays as it stands: the one it was placed at, or less when a selection of it was voided. */
+export function oddNow(b: Bet, outOf?: OutOf): number {
+  const outs = outOf ? b.legs.map(outOf) : [];
+  return outs.includes('void') ? oddLeft(b, outs).odd : b.odd;
+}
+export function openTotals(bets: Bet[], outOf?: OutOf): OpenTotals {
   const t: OpenTotals = { n: 0, stake: 0, ret: 0, gain: 0, units: 0, gainUnits: 0, unitBets: 0 };
   for (const b of bets) {
     if (b.status !== 'open') continue;
-    const ret = r2(b.stake * b.odd);
+    const ret = r2(b.stake * oddNow(b, outOf));
     t.n++; t.stake += b.stake; t.ret += ret;
     if (b.unit && b.unit > 0) { t.unitBets++; t.units += b.stake / b.unit; t.gainUnits += (ret - b.stake) / b.unit; }
   }
@@ -48,7 +56,7 @@ export function openTotals(bets: Bet[]): OpenTotals {
  *  card). A multiple across events goes in a group of its own, with no event. Each group carries its totals: `ret` is
  *  what it pays if every bet in it wins, which bets against each other cannot all do. */
 export interface OpenGroup extends OpenTotals { eid: string; event: string; date: number; bets: Bet[] }
-export function openByEvent(bets: Bet[], order?: (fid: string) => number): OpenGroup[] {
+export function openByEvent(bets: Bet[], order?: (fid: string) => number, outOf?: OutOf): OpenGroup[] {
   const first = (b: Bet): [number, number] => b.legs.map(l => [l.date, order ? order(l.fid) : 0] as [number, number]).sort((x, y) => x[0] - y[0] || x[1] - y[1])[0] || [0, 0];
   const m = new Map<string, { eid: string; event: string; date: number; bets: Bet[] }>();
   for (const b of bets.filter(x => x.status === 'open')) {
@@ -59,7 +67,7 @@ export function openByEvent(bets: Bet[], order?: (fid: string) => number): OpenG
   }
   return [...m.values()].sort((x, y) => x.date - y.date || x.eid.localeCompare(y.eid)).map(g => {
     g.bets.sort((x, y) => { const fx = first(x), fy = first(y); return fx[0] - fy[0] || fx[1] - fy[1] || x.t - y.t; });
-    return { ...g, ...openTotals(g.bets) };
+    return { ...g, ...openTotals(g.bets, outOf) };
   });
 }
 

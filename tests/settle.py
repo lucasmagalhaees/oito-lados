@@ -52,6 +52,8 @@ with sync_playwright() as p:
     check('the bets on the method and on the takedowns wait for the result', bet_of(how)[0] == 'open' and bet_of(tds)[0] == 'open' and pg.evaluate('window.__OL.D.results.f1 === undefined'))
     check('the multiple stays open for its other fight, with this one already won', bet_of(multi)[0] == 'open' and pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{multi}").legs.length') == 2)
     pg.click('.tabbar [data-tab=apostas]')
+    check('each selection of the multiple says in words where it stands, and the multiple counts them', [t.lower() for t in pg.locator('.bet', has=pg.locator('.tally')).first.locator('.ls').all_inner_texts()] == ['bateu', 'não começou'] and txt('.tally') == '1 bateu · 1 não começou' and pg.locator('.leg.s-won').count() == 1 and pg.locator('.leg.s-pending').count() == 1, (txt('.tally'), pg.locator('.ls').all_inner_texts()))
+    check('a selection whose fight is over and still has no result says it is waiting', [t.lower() for t in pg.locator('.leg.s-waiting .ls').all_inner_texts()] == ['aguardando', 'aguardando'], pg.locator('.ls').all_inner_texts())
     check('an open bet says what it is waiting for', txt('#view').count('Teles venceu · método ainda não publicado') >= 2 and 'esperando as quedas' not in txt('#view'), txt('#view')[-900:])
     # the mock's fights are hours old, so their takedown count is taken as final at once; a count still moving says so
     pg.evaluate('window.__OL.D.td.f1.final = false'); pg.click('.tabbar [data-tab=apostas]')
@@ -88,8 +90,49 @@ with sync_playwright() as p:
     check('the multiple is lost on the main event', bet_of(multi)[:3] == ['lost', 0, ['won', 'lost']], bet_of(multi))
     paid = pg.evaluate('window.__OL.S.bets.reduce((a, b) => a + b.payout, 0)')
     check('the balance is what was deposited, less the stakes, plus what was paid', txt('#bal') == pg.evaluate('new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(1000 - 210 + ' + str(paid) + ')').replace('\xa0', ' ') and paid > 167, (txt('#bal'), paid))
+    pg.click('.tabbar [data-tab=apostas]'); pg.click('[data-act=filter][data-f=done]')
+    lost = pg.locator('.bet', has=pg.locator('.tally')).first
+    check('the lost multiple shows which selection hit and which one lost it', [t.lower() for t in lost.locator('.ls').all_inner_texts()] == ['bateu', 'perdeu'] and lost.locator('.tally').inner_text() == '1 bateu · 1 perdeu' and lost.locator('.leg.s-lost .g').inner_text() == '✕', lost.inner_text())
     check('no script error', not errs, errs)
     PHASE['n'] = 0
     cov.stop(pg, 'settle')
+    ctx.close()
+
+    # 6. a draw: the pick on the winner is voided. A single is given back; a multiple goes on without that fight and pays less
+    ctx = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
+    ctx.route('**/*', lambda r: r.continue_() if r.request.url.startswith('file:') else handle(r))
+    pg = ctx.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
+    cov.start(pg)
+    pg.goto((ROOT / 'dist' / 'index.html').as_uri()); pg.wait_for_function('window.__OL && window.__OL.S'); pg.wait_for_selector('.fight .opt.ml')
+    pg.click('.tabbar [data-tab=carteira]'); pg.fill('#dep', '1000'); pg.click('[data-act=deposit]'); pg.click('.tabbar [data-tab=lutas]')
+    multi = bet([('f1', 'ml:b'), ('f3', 'ml:a')], '100', True); single = bet([('f1', 'ml:a')], '50')          # 2.25 x 1.80 = 4.05
+    check('the multiple is placed at the odd of its two fights', pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{multi}").odd') == 4.05)
+    ESPN['draw'] = 'f1'; PHASE['n'] = 2; sync()
+    check('a draw gives the single on the winner back', bet_of(single)[:3] == ['void', 50, ['void']] and 'Empate' in bet_of(single)[3][0], bet_of(single))
+    check('and leaves the multiple open', bet_of(multi)[0] == 'open', bet_of(multi))
+    pg.click('.tabbar [data-tab=apostas]')
+    leg = pg.locator('.leg.s-void')
+    check('the voided selection says so, and what that does to the multiple', leg.count() == 1 and leg.locator('.ls').inner_text().lower() == 'anulada' and 'Empate' in leg.inner_text() and 'Sai da múltipla: esta luta passa a valer odd 1.00.' in leg.inner_text() and leg.locator('.lo').inner_text() == '2.25 1.00' and leg.locator('.lo s').inner_text() == '2.25', leg.inner_text())
+    check('the multiple counts it', txt('.tally') == '1 anulada · 1 não começou', txt('.tally'))
+    check('the odd, the return and the gain are the ones the bet pays now', txt('.bf .odd') == '1.80' and txt('.bf .was') == 'era 4.05' and txt('.bf .ret') == 'R$ 180,00' and txt('.bet .gain b') == '+R$ 80,00 · +0,8u', (txt('.bf'), txt('.bet .gain b')))
+    check('and so are the totals of the event', [txt(f'.grpsum .{c}') for c in ('st', 'rt', 'gn', 'gnu')] == ['R$ 100,00', 'R$ 180,00', '+R$ 80,00', '+0,8u'], txt('.grpsum'))
+    check('nothing gets wider than the phone', pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0)
+    (ROOT / 'tests' / 'shots').mkdir(exist_ok=True); pg.screenshot(path=str(ROOT / 'tests' / 'shots' / 's42-anulada-na-multipla.png'))
+    pg.click('.tabbar [data-tab=carteira]')
+    check('and of the wallet, where a single bet is said in the singular', [txt('#ifwin small').lower(), txt('#ifwin b'), txt('#ifwin span'), txt('#iflose small').lower(), txt('#iflose b'), txt('#iflose span')] == ['se bater', '+R$ 80,00 · +0,8u', 'retorno de R$ 180,00 · banca vai a R$ 1.080,00', 'se perder', '−R$ 100,00 · −1u', 'banca vai a R$ 900,00'] and txt('#atrisk .un') == '1u · 1 aposta', txt('#bank'))
+    # a fight the source has in the cage with no round yet is about to start, not in its round zero
+    pg.evaluate('(() => { const f = window.__OL.D.fights.get("f3"); f.state = "in"; f.period = 0; f.clock = "-"; })()')
+    pg.click('.tabbar [data-tab=lutas]'); pg.click('.tabbar [data-tab=apostas]')
+    check('about to start is said as such on the bet', pg.locator('.leg.s-starting .ls').inner_text().lower() == 'vai começar' and 'VAI COMEÇAR' in pg.locator('.leg.s-starting .lv').inner_text() and 'R0' not in txt('#view') and '1 anulada · 1 vai começar' == txt('.tally'), txt('#view')[:600])
+    pg.click('.tabbar [data-tab=lutas]')
+    check('and on the card of the fight', any('VAI COMEÇAR' in t for t in pg.locator('.fight .chip.live').all_inner_texts()), pg.locator('.fight .chip.live').all_inner_texts())
+    PHASE['n'] = 3; sync(); sync()
+    check('the multiple wins on the fight that was left, paid at the odd of that fight', bet_of(multi)[:3] == ['won', 180, ['void', 'won']], bet_of(multi))
+    pg.click('.tabbar [data-tab=apostas]'); pg.click('[data-act=filter][data-f=done]')
+    won = pg.locator('.bet', has=pg.locator('.tally')).first
+    check('closed, it still says what happened to each selection and what it paid', [t.lower() for t in won.locator('.ls').all_inner_texts()] == ['anulada', 'bateu'] and won.locator('.tally').inner_text() == '1 bateu · 1 anulada' and won.locator('.bf .odd').inner_text() == '1.80' and won.locator('.bf .was').inner_text() == 'era 4.05' and '+R$ 80,00' in won.locator('.bf').inner_text().replace('\xa0', ' '), won.inner_text())
+    check('no script error in the draw', not errs, errs)
+    PHASE['n'] = 0; ESPN['draw'] = None
+    cov.stop(pg, 'settle-draw')
     b.close()
 print(f'{n}/{n} settlement checks passed')

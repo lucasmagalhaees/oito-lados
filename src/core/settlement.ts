@@ -52,17 +52,37 @@ export function legOutcome(key: string, f: FightNow, res: Result | null | undefi
   }
   return null;
 }
+/** The odd a bet pays with the fights that are still in it: a fight with a void selection is out of the bet, at odd
+ *  1.00 (in a same-fight combo the whole fight goes), and the others keep the odds fixed when the bet was placed.
+ *  `fights` is how many are left; with none left the odd is 1. */
+export function oddLeft(bet: Pick<Bet, 'legs' | 'sgp'>, outs: (Outcome | null | undefined)[]): { odd: number; fights: number } {
+  const by = new Map<string, { legs: Pick<Leg, 'fid' | 'odd'>[]; outs: (Outcome | null | undefined)[] }>();
+  bet.legs.forEach((l, i) => { const g = by.get(l.fid) || { legs: [], outs: [] }; g.legs.push(l); g.outs.push(outs[i]); by.set(l.fid, g); });
+  let odd = 1, fights = 0;
+  for (const [fid, g] of by) {
+    if (g.outs.some(o => o === 'void')) continue;        // a void leg takes that fight out of the bet at odd 1.00
+    fights++;
+    odd *= (g.legs.length > 1 && bet.sgp && bet.sgp[fid]) ? bet.sgp[fid] : g.legs.reduce((p, l) => p * l.odd, 1);
+  }
+  return { odd: r2(odd), fights };
+}
 export function betResult(bet: Pick<Bet, 'legs' | 'stake' | 'sgp'>, outs: (Outcome | null | undefined)[]): { status: BetStatus; payout: number } | null {
   if (outs.some(o => o === 'lost')) return { status: 'lost', payout: 0 };
   if (outs.some(o => o == null)) return null;
-  const by = new Map<string, { legs: Pick<Leg, 'fid' | 'odd'>[]; outs: (Outcome | null | undefined)[] }>();
-  bet.legs.forEach((l, i) => { const g = by.get(l.fid) || { legs: [], outs: [] }; g.legs.push(l); g.outs.push(outs[i]); by.set(l.fid, g); });
-  let odd = 1, won = 0;
-  for (const [fid, g] of by) {
-    if (g.outs.some(o => o === 'void')) continue;        // a void leg takes that fight out of the bet at odd 1.00
-    won++;
-    odd *= (g.legs.length > 1 && bet.sgp && bet.sgp[fid]) ? bet.sgp[fid] : g.legs.reduce((p, l) => p * l.odd, 1);
-  }
-  if (!won) return { status: 'void', payout: bet.stake };
-  return { status: 'won', payout: r2(bet.stake * r2(odd)) };
+  const left = oddLeft(bet, outs);
+  if (!left.fights) return { status: 'void', payout: bet.stake };
+  return { status: 'won', payout: r2(bet.stake * left.odd) };
+}
+
+/** Where a selection of a bet stands, in the words the bets list uses. Its outcome when it has one; otherwise, in an
+ *  open bet, where its fight is: still to start (`pending`), in the cage with the first round still to begin
+ *  (`starting`), going on (`live`) or over with the result still to come (`waiting`). In a bet that closed without
+ *  needing it (a multiple lost on another fight, a cashout) the selection is `unused`. */
+export type LegState = Outcome | 'live' | 'starting' | 'waiting' | 'pending' | 'unused';
+export function legState(out: Outcome | null | undefined, open: boolean, fight: Pick<Fight, 'state' | 'period'> | null | undefined): LegState {
+  if (out) return out;
+  if (!open) return 'unused';
+  if (!fight || fight.state === 'pre') return 'pending';
+  if (fight.state === 'in') return fight.period > 0 ? 'live' : 'starting';
+  return 'waiting';
 }
