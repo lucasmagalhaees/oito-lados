@@ -251,6 +251,25 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 /* whose the bet is: the person's own pick, or a copy of a tipster's */
 .owner{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:3px 7px;margin-bottom:8px;border:1px solid var(--line);color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .owner.tipster{border-color:var(--gold);color:var(--gold)}
+/* the statement in units: a row for each stretch of time and for each event, the sides next to each other */
+.stmt table{table-layout:fixed}
+.stmt th:first-child{width:34%}.stmt table.solo th:first-child{width:55%}
+.stmt td{vertical-align:top;padding-left:8px;white-space:normal;overflow-wrap:anywhere}
+.stmt td b{display:block;font-size:15px;font-weight:700}
+.stmt td.none{color:var(--muted)}
+.stmt tr[data-k=all] td:first-child{font-weight:700}
+.stmt tr[data-k=all] td:first-child small{font-weight:400}
+.ldot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold);margin-right:4px;vertical-align:middle}
+/* the person and the tipster face to face */
+.duel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.duel > div{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.duel > div.lead{border-color:var(--gold)}
+.duel small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.duel small em{font-style:normal;font-weight:700;color:var(--gold)}
+.duel b{display:block;font-size:22px;font-weight:800;line-height:1.2;overflow-wrap:anywhere}
+.duel span{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.segm.per{grid-template-columns:repeat(6,1fr)}
+.segm.per button{grid-column:span 2}.segm.per button:nth-child(n+4){grid-column:span 3}
 .bench{font-size:13px;color:var(--fg)}
 .bench.own{color:var(--win)}.bench.tipster{color:var(--loss)}
 #origins tr.own td:first-child,#origins tr.tipall td:first-child{font-weight:700}
@@ -312,6 +331,7 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .kpis small{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .kpis b{font-size:16px;font-weight:700;overflow-wrap:anywhere}
 .pnl{font:800 40px/1 var(--font-display);overflow-wrap:anywhere}
+#pnlu b{font-size:18px;font-weight:800}
 .chart{position:relative}
 .chart{min-height:200px}
 .chart svg{display:block;max-width:100%;touch-action:pan-y}

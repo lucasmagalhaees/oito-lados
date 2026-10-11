@@ -845,9 +845,23 @@ with sync_playwright() as p:
     tipText = pg.inner_text('#tip'); assert 'aposta' in tipText and 'acumulado' in tipText, tipText        # hovering the chart explains the point
     pg.mouse.move(box['x'] + box['width'] * 0.5, box['y'] + box['height'] + 60); pg.wait_for_function('document.getElementById("tip").hidden')
     assert units.startswith('+6,1u'), units                   # R$ 609,59 of profit with every bet placed at a R$ 100,00 unit
-    # the tables by market and by event say the result in units as well: each adds up to the whole
+    # the table by market says the result in units as well, and adds up to the whole; the events are in the statement, further up
     bym = [unum(t) for t in pg.locator('.tbl[data-by=mercado] .inu').all_inner_texts()]
-    assert len(bym) == pg.locator('.tbl[data-by=mercado] tbody tr').count() > 2 and abs(sum(bym) - 6.1) < 0.05 and pg.locator('.tbl[data-by=evento] .inu').all_inner_texts() == ['+6,1u'], (bym, pg.locator('.tbl[data-by=evento] .inu').all_inner_texts())
+    assert len(bym) == pg.locator('.tbl[data-by=mercado] tbody tr').count() > 2 and abs(sum(bym) - 6.1) < 0.05 and pg.locator('.tbl[data-by=evento]').count() == 0, bym
+    # the statement in units is there whatever the period: the last 7, 15 and 30 days and everything, all the bets, the person's own and the tipster's
+    srow = lambda tbl, k: [re.sub(r'\s*\n\s*', ' | ', td.inner_text().replace('\xa0', ' ').strip()) for td in pg.locator(f'#{tbl} tr[data-k="{k}"] td').all()]
+    fmtu = lambda v: ('+' if v > 0.004 else '−' if v < -0.004 else '') + (f'{abs(round(v * 100) / 100):.2f}'.rstrip('0').rstrip('.')).replace('.', ',') + 'u'
+    stj = pg.evaluate('(() => { const { Core, S } = window.__OL, st = Core.statement(S.bets.filter(b => b.status !== "open"), Date.now()); return st.spans.concat(st.events).map(r => [r.k, r.ahead].concat(["all", "mine", "tip"].map(x => [r[x].n, r[x].units, r[x].won, r[x].dec, r[x].roi, r[x].pnl]))); })()')
+    side = lambda x: f'{fmtu(x[1])} | {x[2]}V {x[3] - x[2]}D | {spct(x[4])}'
+    spct = lambda d: (lambda v: ('+' if v > 0 else '−' if v < 0 else '') + f'{abs(v):.1f}'.replace('.', ',') + '%')(round(d * 1000) / 10)
+    assert [t.lower() for t in pg.locator('#stmtspans thead th').all_inner_texts()] == ['período', 'tudo', 'minhas', 'tipster'] and [tr.get_attribute('data-k') for tr in pg.locator('#stmtspans tbody tr').all()] == ['7d', '15d', '30d', 'all']
+    for r, name in zip(stj[:4], ['7 dias', '15 dias', '30 dias', 'Geral']):
+        assert r[1] == 'mine' and [r[2][0], r[3][0], r[4][0]] == [15, 12, 3] and srow('stmtspans', r[0]) == [f'{name} | 15 apostas | +R$ 609,59', side(r[2]), side(r[3]), side(r[4])], (r, srow('stmtspans', r[0]))          # every bet here closed today
+    assert srow('stmtspans', 'all')[1].startswith('+6,1u | ') and abs(stj[3][3][1] + stj[3][4][1] - stj[3][2][1]) < 1e-3, 'the two sides add up to the whole'
+    assert pg.locator('#stmtspans td.lead').count() == 4 and all('lead' in (pg.locator(f'#stmtspans tr[data-k="{k}"] td').nth(2).get_attribute('class') or '') for k in ('7d', '15d', '30d', 'all')) and pg.locator('#stmtspans td.lead .ldot').first.is_visible(), 'the dot marks who is ahead, the person here'
+    assert pg.evaluate('(() => { const c = s => getComputedStyle(document.querySelector(s)).color; return c("#stmtspans td.pos b") !== c("#stmtspans td small"); })()') and 'ponto dourado' in txt('#stmthow') and 'Unidades de' not in txt('#stmthow')
+    evk = stj[4][0]; assert len(stj) == 5 and pg.locator('#stmtevents tbody tr').count() == 1 and re.fullmatch(r'.+ \| \d\d/\d\d · 15 apostas \| \+R\$ 609,59', srow('stmtevents', evk)[0]) and srow('stmtevents', evk)[1:] == srow('stmtspans', 'all')[1:] and pg.locator('[data-act=stmtall]').count() == 0, srow('stmtevents', evk)
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; pg.locator('#stmt').scroll_into_view_if_needed(); shot('s46-extrato-em-unidades.png')
     assert pg.locator('#ifwin').count() == 0 and pg.locator('#iflose').count() == 0 and txt('#atrisk .un') == 'nenhuma aposta' and txt('#atrisk b') == 'R$ 0,00' and txt('#bankv') == txt('.hero .n'), 'nothing is open any more: the bankroll is the balance'
     # the figures can cover a period; every bet here closed today, on one event, so the numbers are the same in all three
     whole = txt('.pnl'); assert pg.locator('#periodev').count() == 0 and [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()] == ['Minhas', 'Canal do Zé']
@@ -856,6 +870,12 @@ with sync_playwright() as p:
     spct = lambda d: (lambda v: ('+' if v > 0 else '−' if v < 0 else '') + f'{abs(v):.1f}'.replace('.', ',') + '%')(round(d * 1000) / 10)
     assert bm[0] == 'mine' and bm[3:] == [12, 3] and txt('#bench') == f'Você está na frente: retorno de {spct(bm[1])} nas suas apostas e de {spct(bm[2])} nas do tipster.' and 'own' in pg.get_attribute('#bench', 'class'), (bm, txt('#bench'))
     assert [cells(tr)[2] for tr in pg.locator('#origins tbody tr').all()] == [spct(bm[1]), spct(bm[2])], 'the same returns are in the table'
+    # the two face to face, in units first: the record, the return and the money of each, and who is ahead
+    duel = lambda cls: [t.replace('\xa0', ' ') for t in pg.locator(f'#duel > div.{cls}').inner_text().split('\n') if t.strip()]
+    assert [d.lower() for d in duel('own')[:1]] == ['você na frente'] and duel('own')[1:] == [fmtu(stj[3][3][1]), f'{stj[3][3][2]}V {stj[3][3][3] - stj[3][3][2]}D · ROI {spct(bm[1])}', pg.locator('#origins tr.own td').nth(1).inner_text().split('\n')[0].replace('\xa0', ' ')], duel('own')
+    assert duel('tipster')[0].lower() == 'tipster' and duel('tipster')[1] == fmtu(stj[3][4][1]) and 'lead' in pg.get_attribute('#duel > div.own', 'class') and 'lead' not in pg.get_attribute('#duel > div.tipster', 'class'), duel('tipster')
+    assert pg.evaluate('(() => { const b = s => getComputedStyle(document.querySelector(s)).borderTopColor; return b("#duel > div.own") !== b("#duel > div.tipster"); })()') and all(e.is_visible() for e in pg.locator('#duel > div').all())
+    pg.locator('#duel').scroll_into_view_if_needed(); shot('s47-voce-x-tipster.png')
     # with more than one tipster there is a line for all of them together, between the person's and each one's
     other = pg.evaluate('(() => { const b = window.__OL.S.bets.find(x => x.from === "Canal do Zé"); b.from = "Outro Canal"; return b.id; })()'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]')
     names = [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()]
@@ -866,9 +886,38 @@ with sync_playwright() as p:
     inu = [float(t.replace('u', '').replace('−', '-').replace('+', '').replace(',', '.')) for t in pg.locator('#origins .inu').all_inner_texts()]
     byjs = pg.evaluate('["", "Canal do Zé"].map(k => window.__OL.S.bets.filter(b => (b.from || "") === k).reduce((a, b) => a + (b.payout - b.stake) / b.unit, 0))')
     assert len(inu) == 2 and all(abs(a - b) < 0.006 for a, b in zip(inu, byjs)) and abs(sum(inu) - 6.1) < 0.02 and inu[1] != 0, (inu, byjs)
+    assert [x.get_attribute('data-m') for x in pg.locator('#period button').all()] == ['all', '7d', '15d', '30d', 'event'] and len({round(x.bounding_box()['y']) for x in pg.locator('#period button').all()}) == 2, 'five periods, in two rows'
+    for d in (7, 15):
+        pg.click(f'[data-act=period][data-m="{d}d"]'); assert f'últimos {d} dias' in txt('#periodev') and txt('.pnl') == whole and pg.get_attribute(f'[data-act=period][data-m="{d}d"]', 'aria-pressed') == 'true'
     pg.click('[data-act=period][data-m="30d"]'); assert 'últimos 30 dias' in txt('#periodev') and txt('.pnl') == whole and pg.locator('#chart svg').count() == 1
     pg.click('[data-act=period][data-m=event]'); assert 'o evento da aposta que fechou por último' in txt('#periodev') and txt('.pnl') == whole, txt('#periodev')
     pg.click('[data-act=period][data-m=all]'); assert pg.locator('#periodev').count() == 0
+    # the tipster's bets closed ten days ago: the week is the person's alone, the fortnight has both, and the period of the figures follows
+    repaint = lambda: (pg.click('.tabbar [data-tab=apostas]'), pg.click('.tabbar [data-tab=carteira]'))
+    pg.evaluate('(() => { const S = window.__OL.S; window.__was = S.bets.map(b => b.settledAt); S.bets.filter(b => b.from === "Canal do Zé").forEach(b => { b.settledAt = Date.now() - 10 * 864e5; }); })()'); repaint()
+    wk, fn = srow('stmtspans', '7d'), srow('stmtspans', '15d')
+    assert wk[0].startswith('7 dias | 12 apostas | ') and wk[3] == '—' and wk[1] == wk[2] == side(stj[3][3]) and pg.locator('#stmtspans tr[data-k="7d"] td.lead').count() == 0 and pg.locator('#stmtspans tr[data-k="7d"] td.none').count() == 1, wk
+    assert fn[0].startswith('15 dias | 15 apostas | ') and fn[1:] == srow('stmtspans', 'all')[1:] == [side(stj[3][2]), side(stj[3][3]), side(stj[3][4])], fn
+    pg.click('[data-act=period][data-m="7d"]'); assert txt('.pnl') != whole and txt('.pnl') == wk[0].split(' | ')[2] and 'Ainda não dá pra comparar: falta aposta encerrada de tipster' in txt('#bench') and 'nenhuma aposta encerrada' in pg.locator('#duel > div.tipster').inner_text() and pg.locator('#duel > div.lead').count() == 0, (txt('.pnl'), txt('#bench'))
+    assert srow('stmtspans', '15d')[3] != '—', 'the statement does not follow the period of the figures'
+    pg.click('[data-act=period][data-m="15d"]'); assert txt('.pnl') == whole and pg.locator('#duel > div.own.lead').count() == 1; pg.click('[data-act=period][data-m=all]')
+    pg.evaluate('window.__OL.S.bets.forEach((b, i) => { b.settledAt = window.__was[i]; })')
+    # bets placed before bets kept their unit are in the record and in the money; the statement says how many the units are of, and a side with none shows no units
+    pg.evaluate('(() => { const t = window.__OL.S.bets.filter(x => x.from === "Canal do Zé"); window.__unit = t.map(b => [b.id, b.unit]); t.forEach(b => { delete b.unit; }); })()'); repaint()
+    nou = srow('stmtspans', 'all')
+    assert 'Unidades de 12 de 15 apostas' in txt('#stmthow') and nou[0] == 'Geral | 15 apostas | +R$ 609,59' and nou[3] == '— | ' + side(stj[3][4]).split(' | ', 1)[1] and nou[1].split(' | ')[0] == nou[2].split(' | ')[0] == fmtu(stj[3][3][1]) and nou[1].split(' | ')[1:] == side(stj[3][2]).split(' | ')[1:], (txt('#stmthow'), nou)
+    assert duel('tipster')[1] == duel('tipster')[3] == pg.locator('#origins tr.tipster td').nth(1).inner_text().split('\n')[0].replace('\xa0', ' ') and duel('own')[1] == fmtu(stj[3][3][1]), duel('tipster')          # with no units to show, the money comes first
+    pg.evaluate('window.__unit.forEach(([id, u]) => { window.__OL.S.bets.find(x => x.id === id).unit = u; })')
+    # each event has its row, the latest first, and a multiple across events a row of its own; past the first five the rest waits for a touch
+    pg.evaluate('''(() => { const S = window.__OL.S; window.__legs = JSON.stringify(S.bets.map(b => b.legs));
+        S.bets.filter(b => b.legs.length === 1).slice(0, 5).forEach((b, i) => { const l = b.legs[0]; l.eid = "old" + i; l.event = "UFC " + (300 + i) + ": Antigo vs. Outro " + i; l.date -= (i + 1) * 7 * 864e5; });
+        const m = S.bets.find(b => b.legs.length > 1 && b.legs.every(l => l.eid === b.legs[0].eid)).legs[0]; m.eid = "old0"; m.event = "UFC 300: Antigo vs. Outro 0"; m.date -= 7 * 864e5; })()'''); repaint()
+    evrows = [tr.get_attribute('data-k') for tr in pg.locator('#stmtevents tbody tr').all()]
+    assert sorted(evrows[:2]) == sorted([evk, '*']) and evrows[2:] == ['old0', 'old1', 'old2'] and txt('[data-act=stmtall]') == 'Ver os 7 eventos', evrows
+    assert srow('stmtevents', 'old0')[0].startswith('Antigo vs. Outro 0 | ') and ' · 1 aposta | ' in srow('stmtevents', 'old0')[0] and re.match(r'Vários eventos \| \d\d/\d\d · 1 aposta \| ', srow('stmtevents', '*')[0]) and srow('stmtevents', evk)[0].split(' | ')[1].endswith('· 9 apostas'), (srow('stmtevents', 'old0'), srow('stmtevents', '*'), srow('stmtevents', evk))
+    pg.click('[data-act=stmtall]'); assert [tr.get_attribute('data-k') for tr in pg.locator('#stmtevents tbody tr').all()] == evrows + ['old3', 'old4'] and txt('[data-act=stmtall]') == 'Mostrar só os 5 últimos'
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; pg.click('[data-act=stmtall]'); assert pg.locator('#stmtevents tbody tr').count() == 5
+    pg.evaluate('(() => { const L = JSON.parse(window.__legs); window.__OL.S.bets.forEach((b, i) => { b.legs = L[i]; }); })()'); repaint(); assert pg.locator('#stmtevents tbody tr').count() == 1 and srow('stmtspans', 'all')[1] == side(stj[3][2])
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
     pg.click('[data-act=event]'); pg.wait_for_selector('.fight')                                       # picking the event again keeps the card on screen

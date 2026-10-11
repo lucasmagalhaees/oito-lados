@@ -49,6 +49,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 18. PR #20 aberto às 19:53, com o CI verde em seguida. Os dois pedidos das 19:40 saem num PR em cima dele: colar imagem (D76) e tipster ou minha (D77). Às 20:00 ele perguntou de novo pelo cartel com as três últimas lutas de cada lutador; a pergunta foi tomada como o "pode fazer" que a D57 esperava, e fica para o PR seguinte, começando pela amostra real da ESPN. Às 20:15: o indicador de luta ao vivo, em vermelho, parece aposta perdida (D78); vai no mesmo PR.
 19. PR #21 aberto às 20:25, em cima do #20, com o CI verde em seguida; mesclar o #21 leva os dois. Em seguida o retrospecto (D79): workflow de captura disparado às 20:27, amostras gravadas no branch, e o quadro das últimas lutas feito em cima delas.
 20. Os PRs #20, #21 e #22 foram mesclados entre 00:49:18 e 00:49:35 de 11/10/2026; o workflow `Produção` passou no commit `e665175`, sem a troca de versão da D32. Às 00:50 o Lucas escreveu: "app aprovado no primeiro dia de uso". Às 09:24 e 09:25, três pedidos: backup em arquivo (D81), "Tipster" sem o "sem nome" e o cartel do card da semana inteiro adiantado (D80).
+21. PR #23 (D80, D81) aberto às 10:07 de 11/10/2026 e mesclado às 10:11; o workflow `Produção` passou no commit `dd6efa8`. Às 09:34, com ele quase pronto, o pedido do extrato em unidades e de melhorar a comparação com o tipster (D82, D83), feito em seguida, num PR à parte.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -839,6 +840,28 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Fato de terceiro, não conferido em 11/10/2026:** compartilhar arquivo a partir de uma página (`navigator.share` com `files`) existe no Safari do iPhone desde o iOS 15. Vem da memória.
 - **Não verificado:** nada disso no iPhone. O teste baixa o arquivo no Chromium e simula a folha de compartilhamento.
 
+## D82. Extrato em unidades, sempre à vista
+
+- **Contexto (11/10/2026, 09:34):** "o benchmarking tipster × eu ainda pode melhorar, e a todo momento quero saber meu extrato em unidades, tanto no benchmarking quanto no cartel por evento e no cartel geral, e nos últimos 7, 15 e 30 dias".
+- **Decisão:** um cartão "Extrato em unidades" na Carteira, logo abaixo da gestão da banca, que não depende do período escolhido. Uma linha para 7, 15 e 30 dias e para o geral, e uma linha por evento. Em cada uma: unidades, cartel (ganhas e perdidas) e ROI, de tudo, das apostas próprias e das de tipster.
+- **Interpretações que precisaram ser feitas** (mandadas ao Lucas às 09:40, antes de implementar; ele não respondeu antes de o trabalho ficar pronto):
+  - **"A todo momento"** foi lido como "sem ter de trocar o período": o cartão mostra todas as janelas de uma vez. Não foi lido como "em todas as telas"; o extrato fica na Carteira.
+  - **"Cartel"** é o das apostas, escrito como o de um lutador: "5V 3D". Anulada e cashout não são vitória nem derrota: ficam fora do cartel e entram nas unidades e no dinheiro.
+  - **"Cartel geral"** é a linha "Geral"; **"cartel por evento"**, a tabela por evento.
+  - **Três colunas**, "Tudo", "Minhas" e "Tipster": o dinheiro apostado é dele nos dois casos, então "Tudo" é o extrato dele e as outras duas são a comparação.
+  - **Quem está na frente em cada linha** segue a D77: pelo ROI. Por isso o ROI aparece em cada célula, embaixo do cartel. Em unidades absolutas ganha quem apostou mais vezes; o ROI não depende do volume.
+  - **A múltipla entre eventos** fica numa linha "Vários eventos", para a soma das linhas dar o geral.
+  - **Os 5 eventos mais recentes**, com um botão para ver todos.
+  - **A tabela por evento que seguia o período saiu.** Os eventos passaram a estar no extrato, com mais informação (cartel, ROI, os dois lados); manter as duas seria repetir. O que se perdeu: o valor apostado por evento.
+- **Descartado:** uma faixa com as unidades em todas as telas (ocupa a tela de quem está apostando; fica para ele pedir).
+
+## D83. Períodos de 7 e 15 dias, e a comparação frente a frente
+
+- **Contexto:** o mesmo pedido da D82.
+- **Decisão:** o período dos números da Carteira ganha "7 dias" e "15 dias", ao lado de "Tudo", "30 dias" e "Último evento". A comparação "Você × tipster" abre com dois quadros lado a lado, um de cada, com o resultado em unidades em destaque, o cartel, o ROI e o dinheiro, e o da frente marcado. A frase e a tabela por tipster continuam embaixo.
+- **Interpretação:** "ainda pode melhorar" não disse o quê. O que mudou: unidades em primeiro lugar, o cartel de cada lado, e a comparação visível em cada janela de tempo e em cada evento (D82). **Quem está na frente continua decidido pelo ROI** (D77): mudar o critério para unidades é decisão dele.
+- **Também:** o resultado em unidades, na linha embaixo do resultado em dinheiro do período, ficou maior e com cor.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -851,6 +874,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
+| Confirmar o extrato em unidades: "a todo momento" como um cartão fixo na Carteira (e não em todas as telas), o cartel sem anulada e cashout, as três colunas, e a tabela por evento antiga ter saído (D82) | Lucas |
+| Dizer se quem está na frente deve ser decidido pelo ROI, como hoje, ou pelas unidades (D77, D83) | Lucas |
 | Salvar o backup em arquivo no iPhone, mandar pelo Telegram e restaurar dele (D81) | Lucas |
 | Ver, no card da semana, se o cartel de todo mundo aparece ao abrir os mercados sem esperar, e se alguma coluna diz "Não deu pra buscar agora" (D80) | Lucas |
 | Abrir os mercados de uma luta de verdade e ver se as últimas lutas aparecem e batem com o cartel do lutador (D79) | Lucas |

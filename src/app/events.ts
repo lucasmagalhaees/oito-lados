@@ -10,7 +10,7 @@ import { doCashout, repeatBet } from './repeat';
 import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
-import type { Currency } from '../core';
+import type { Currency, Period } from '../core';
 import type { Slip, Ui } from './state';
 
 /* ================= events ================= */
@@ -140,7 +140,8 @@ document.addEventListener('click', e => {
   else if (a === 'place') place();
   else if (a === 'filter') { ui.filter = d.f as Ui['filter']; ui.cash = null; render(); }
   else if (a === 'origin') { ui.origin = d.v == null ? null : d.v; ui.cash = null; render(); }
-  else if (a === 'period') { ui.period = d.m === '30d' || d.m === 'event' ? d.m : 'all'; render(); }
+  else if (a === 'period') { const m = d.m || ''; ui.period = m === 'event' || Object.prototype.hasOwnProperty.call(Core.PERIOD_DAYS, m) ? m as Period : 'all'; render(); }
+  else if (a === 'stmtall') { ui.stmtAll = !ui.stmtAll; render(); }
   else if (a === 'sinceok' || a === 'sinceview') { S.seen = Date.now(); saveS(); if (a === 'sinceview') { ui.tab = 'apostas'; ui.filter = 'done'; ui.origin = null; ui.sheet = false; renderSheet(); window.scrollTo(0, 0); } render(); }
   else if (a === 'copydrop') { const v = Number(d.m); if (isDrop(v)) S.copyDrop = v; else delete S.copyDrop; saveS(); render(); }
   else if (a === 'orgrename') {

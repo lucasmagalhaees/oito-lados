@@ -113,14 +113,14 @@ export function byOrigin(done: Bet[], all?: Bet[]): OriginRow[] {
 /** The person against the tipsters: the closed bets of each side summed up, and who is ahead by return on what was
  *  staked (`roi`, null with nothing staked). `ahead` is null while one of the two has nothing to compare. */
 export interface BenchSide { n: number; st: number; ret: number; pnl: number; roi: number | null; won: number; dec: number; units: number; unitBets: number }
+function sumSide(bets: Bet[]): BenchSide {
+  const r = { n: 0, st: 0, ret: 0, won: 0, dec: 0, units: 0, unitBets: 0 };
+  for (const b of bets) tally(r, b);
+  const pnl = r2(r.ret - r.st);
+  return { ...r, st: r2(r.st), ret: r2(r.ret), pnl, roi: r.st > 0 ? Math.round(pnl / r.st * 1e4) / 1e4 : null, units: Math.round(r.units * 1e4) / 1e4 };
+}
 export function benchmark(done: Bet[]): { mine: BenchSide; tip: BenchSide; ahead: 'mine' | 'tip' | 'tie' | null } {
-  const side = (bets: Bet[]): BenchSide => {
-    const r = { n: 0, st: 0, ret: 0, won: 0, dec: 0, units: 0, unitBets: 0 };
-    for (const b of bets) tally(r, b);
-    const pnl = r2(r.ret - r.st);
-    return { ...r, st: r2(r.st), ret: r2(r.ret), pnl, roi: r.st > 0 ? Math.round(pnl / r.st * 1e4) / 1e4 : null, units: Math.round(r.units * 1e4) / 1e4 };
-  };
-  const mine = side(done.filter(b => !isTip(b))), tip = side(done.filter(isTip));
+  const mine = sumSide(done.filter(b => !isTip(b))), tip = sumSide(done.filter(isTip));
   return { mine, tip, ahead: mine.roi == null || tip.roi == null ? null : mine.roi > tip.roi ? 'mine' : mine.roi < tip.roi ? 'tip' : 'tie' };
 }
 
@@ -134,11 +134,14 @@ export function renameOrigin(bets: Bet[], from: string, to: unknown): { bets: Be
   return { bets: bets.map(b => hit(b) ? { ...b, from: name } : b), n: bets.filter(hit).length };
 }
 
-/** The closed bets a period of the wallet covers. `30d` goes by when the bet closed. `event` is the event of the bet
+/** The closed bets a period of the wallet covers. `7d`, `15d` and `30d` go by when the bet closed. `event` is the event of the bet
  *  that closed last (its latest fight, for a multiple across events); a bet counts when it has a selection in it. */
-export type Period = 'all' | '30d' | 'event';
+export type Period = 'all' | '7d' | '15d' | '30d' | 'event';
+/** The periods that are a number of days back from now, and how many days each one is. */
+export const PERIOD_DAYS: Readonly<Record<string, number>> = { '7d': 7, '15d': 15, '30d': 30 };
 export function periodBets(done: Bet[], period: unknown, now: number): { bets: Bet[]; event: string | null } {
-  if (period === '30d') return { bets: done.filter(b => (b.settledAt || 0) > now - 30 * 24 * 3600e3), event: null };
+  const days = typeof period === 'string' && Object.prototype.hasOwnProperty.call(PERIOD_DAYS, period) ? PERIOD_DAYS[period] : 0;
+  if (days) return { bets: done.filter(b => (b.settledAt || 0) > now - days * 24 * 3600e3), event: null };
   if (period === 'event') {
     const last = done.slice().sort((a, b) => (b.settledAt || 0) - (a.settledAt || 0))[0];
     const leg = last && last.legs.slice().sort((a, b) => b.date - a.date)[0];
@@ -146,6 +149,28 @@ export function periodBets(done: Bet[], period: unknown, now: number): { bets: B
     return { bets: done.filter(b => b.legs.some(l => l.eid === leg.eid)), event: leg.event };
   }
   return { bets: done, event: null };
+}
+
+/** The statement of the closed bets: the same sums for each stretch of time (the last 7, 15 and 30 days, by when the
+ *  bet closed, and everything there is) and for each event, the latest first. Each row has all the bets, the person's
+ *  own and the tipsters', and who of the two is ahead, as in `benchmark`. A bet goes in the row of its event; a multiple
+ *  across events goes in a row of its own, with no event (`k` is '*'). `tips` says whether any bet is a tipster's. */
+export interface StatementRow { k: string; event: string; date: number; all: BenchSide; mine: BenchSide; tip: BenchSide; ahead: 'mine' | 'tip' | 'tie' | null }
+export const STATEMENT_SPANS: readonly Period[] = ['7d', '15d', '30d', 'all'];
+export function statement(done: Bet[], now: number): { spans: StatementRow[]; events: StatementRow[]; tips: boolean } {
+  const row = (k: string, event: string, date: number, bets: Bet[]): StatementRow => { const bm = benchmark(bets); return { k, event, date, all: sumSide(bets), mine: bm.mine, tip: bm.tip, ahead: bm.ahead }; };
+  const m = new Map<string, { event: string; date: number; bets: Bet[] }>();
+  for (const b of done) {
+    if (!b.legs.length) continue;
+    const one = b.legs.every(l => l.eid === b.legs[0].eid), k = one ? b.legs[0].eid : '*', date = Math.max(...b.legs.map(l => l.date || 0));
+    const g = m.get(k) || { event: one ? b.legs[0].event : '', date: 0, bets: [] };
+    g.date = Math.max(g.date, date); g.bets.push(b); m.set(k, g);
+  }
+  return {
+    spans: STATEMENT_SPANS.map(k => row(k, '', 0, periodBets(done, k, now).bets)),
+    events: [...m.entries()].map(([k, g]) => row(k, g.event, g.date, g.bets)).sort((a, b) => b.date - a.date),
+    tips: done.some(isTip),
+  };
 }
 
 /** What closed by itself after a moment: how many bets, the result (in money, and in units for the `unitBets` of them

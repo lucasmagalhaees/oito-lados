@@ -2,6 +2,19 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.19.0] - 2026-10-11
+
+### Adicionado
+- Extrato em unidades na Carteira, sempre à vista: unidades, cartel (ganhas e perdidas) e ROI dos últimos 7, 15 e 30 dias, do geral e de cada evento, com tudo, as apostas próprias e as de tipster lado a lado.
+- Períodos de 7 e de 15 dias nos números da Carteira.
+- "Você × tipster" frente a frente: dois quadros com unidades, cartel, ROI e dinheiro, e o da frente marcado.
+
+### Alterado
+- O resultado em unidades do período ficou maior e com cor.
+
+### Removido
+- A tabela por evento que ficava entre os números do período. Os eventos estão no extrato em unidades.
+
 ## [0.18.0] - 2026-10-11
 
 ### Adicionado
