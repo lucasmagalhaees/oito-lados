@@ -10,10 +10,10 @@ import { balanceOf, convertState, fxRate, normFx } from './fx';
 import { LONG_MULTI, maskMoney, maskUnits, moneyText, parseMoney, parseUnits, stepUnits, suggestedUnits, unitPct, unitsText, unitValue } from './money';
 import { completeTip, edgeSummary, parseTip, printedEdge, tipStake } from './tip';
 import { cardSections, findFights } from './card';
-import { byOrigin, copyDrop, dupBets, exposure, oddNow, openByEvent, openTotals, periodBets, renameOrigin, selSig, sinceSummary } from './history';
+import { benchmark, byOrigin, copyDrop, dupBets, exposure, isTip, oddNow, openByEvent, openTotals, periodBets, renameOrigin, selSig, sinceSummary } from './history';
 
-export const Core = { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, oddLeft, legState, sideOf, overUnder, isWomens, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipStake, completeTip, printedEdge, edgeSummary, selSig, dupBets, exposure, openByEvent, openTotals, oddNow, cardSections, findFights, copyDrop, byOrigin, renameOrigin, periodBets, sinceSummary, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, suggestedUnits, stepUnits, LONG_MULTI, parseTip, ML };
+export const Core = { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, probs, price, jointModel, combo, legOutcome, betResult, oddLeft, legState, sideOf, overUnder, isWomens, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipStake, completeTip, printedEdge, edgeSummary, selSig, dupBets, exposure, openByEvent, openTotals, oddNow, cardSections, findFights, copyDrop, byOrigin, benchmark, isTip, renameOrigin, periodBets, sinceSummary, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, suggestedUnits, stepUnits, LONG_MULTI, parseTip, ML };
 export type * from './types';
-export type { OpenGroup, OpenTotals, OriginRow, OutOf, Period } from './history';
+export type { BenchSide, OpenGroup, OpenTotals, OriginRow, OutOf, Period } from './history';
 export type { LegState } from './settlement';
 export type { CardPart, CardSection } from './card';

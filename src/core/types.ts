@@ -58,6 +58,8 @@ export interface Bet {
   legs: Leg[]; status: BetStatus; payout: number; settledAt: number | null; cash?: CashInfo;
   /** For a copied bet: who it was copied from, as the person typed it, and the odd the original gave for the whole bet. */
   from?: string; printed?: number;
+  /** The bet came from copying someone else's (a print or a text), not from the person's own picks. */
+  copied?: boolean;
 }
 export interface Deposit { t: number; v: number }
 export interface Conversion { t: number; from: Currency; to: Currency; rate: number; date: string }

@@ -484,28 +484,43 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=carteira]'); pg.click('.tabbar [data-tab=apostas]'); assert tot('.grpsum')[0] == 'R$ 480,00' and 'wide' not in pg.get_attribute('.grpsum', 'class')
     # the bets say where they came from and how the odd taken compares with the printed one
     notes = [t.replace('\xa0', ' ') for t in pg.locator('.bet .src').all_inner_texts()]
-    assert 'De Canal do Zé · odd do print 2.70, você pegou 2.50 (−7,4%)' in notes and 'De Canal do Zé · odd do print 3.42, você pegou 3.42 (−0,1%)' in notes and 'De Canal do Zé · odd do print 2.05, você pegou 2.05 (0,0%)' in notes, notes
+    assert sorted(notes) == sorted(['Odd do print 2.70, você pegou 2.50 (−7,4%)', 'Odd do print 3.42, você pegou 3.42 (−0,1%)', 'Odd do print 2.05, você pegou 2.05 (0,0%)']), notes
+    # what came in through the copy screen is the tipster's, and says so on the bet; the mark is kept with the bet
+    assert [t.lower() for t in pg.locator('.bet .owner').all_inner_texts()] == ['tipster · canal do zé'] * 3 and pg.locator('.bet .owner.tipster').count() == 3 and all(e.is_visible() for e in pg.locator('.bet .owner').all()) and pg.evaluate('window.__OL.S.bets.slice(-3).every(b => b.copied === true)'), pg.locator('.bet .owner').all_inner_texts()
     shot('s27-origem.png')
+    # repeating a tipster's bet is still the tipster's pick: the mark and the name go along, the printed odds do not
+    pg.locator('[data-act=again]').first.click(); pg.wait_for_selector('#stake')
+    assert pg.evaluate('window.__OL.slip.copy') == {'from': 'Canal do Zé', 'bet': None, 'sig': '', 'legs': {}} and 'entra como do tipster' in txt('#slipcopy'), pg.evaluate('window.__OL.slip.copy')
+    while pg.evaluate('window.__OL.slip.sels.length'): pg.click('#panel [data-act=unpick] >> nth=0')
+    assert pg.evaluate('window.__OL.slip.copy') is None and pg.evaluate('document.getElementById("sheet").hidden')
     cid = pg.evaluate('window.__OL.S.bets.slice(-3)[0].id')                                              # one of them is closed (cashed out), so that the wallet has a result by origin
     pg.click(f'[data-act=cash][data-id="{cid}"]'); pg.click(f'[data-act=docash][data-id="{cid}"]'); pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{cid}").status === "cashed"')
     pg.click('.tabbar [data-tab=carteira]')
     assert 'em 3 apostas copiadas com odd no original, você pegou em média −2,5% em relação ao print (0 acima)' in txt('#edge'), txt('#edge')
     cells = lambda tr: [' | '.join(x.strip() for x in c.replace('\xa0', ' ').split('\n') if x.strip()) for c in tr.locator('td').all_inner_texts()]
-    assert cells(pg.locator('#origins tbody tr').first) == ['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00 | 0u', '0,0%', '—'], pg.locator('#origins').inner_text()
+    assert cells(pg.locator('#origins tbody tr.tipster').first) == ['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00 | 0u', '0,0%', '—'], pg.locator('#origins').inner_text()
+    assert cells(pg.locator('#origins tbody tr.own').first) == ['Minhas | 0 apostas · R$ 0,00', 'R$ 0,00', '—', '—'] and txt('#bench') == 'Ainda não dá pra comparar: falta aposta encerrada sua nesse período.', (pg.locator('#origins').inner_text(), txt('#bench'))
     assert pg.evaluate('(e => e.scrollWidth - e.clientWidth)(document.getElementById("origins"))') == 0, 'the table by origin fits the phone, with no column hidden to the side'
     # an origin can be given another name; without a new name nothing changes
     froms = lambda: pg.evaluate('[...new Set(window.__OL.S.bets.map(b => b.from).filter(Boolean))]')
     assert pg.locator('#orgfrom option').all_inner_texts() == ['Canal do Zé']
     pg.click('[data-act=orgrename]'); assert 'Escolhe a origem' in pg.inner_text('#toast') and froms() == ['Canal do Zé'], 'an empty name must not strip the origin'
     pg.fill('#orgto', 'Zé'); pg.click('[data-act=orgrename]'); assert '3 apostas mudaram de origem' in pg.inner_text('#toast') and froms() == ['Zé'], (pg.inner_text('#toast'), froms())
-    assert cells(pg.locator('#origins tbody tr').first)[0].startswith('Zé | 1 aposta')
+    assert cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Zé | 1 aposta')
     pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]'); assert froms() == ['Canal do Zé']
+    # a copy that came with no name is still the tipster's, and can be given a name later
+    pg.evaluate(f'delete window.__OL.S.bets.find(b => b.id === "{cid}").from'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]')
+    assert pg.locator('#orgfrom option').all_inner_texts() == ['Tipster sem nome (1)', 'Canal do Zé'] and cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Tipster sem nome | 1 aposta'), pg.locator('#origins').inner_text()
+    pg.select_option('#orgfrom', ''); pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]')
+    assert '1 aposta mudou de origem' in pg.inner_text('#toast') and pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{cid}").from') == 'Canal do Zé' and pg.locator('#orgfrom option').all_inner_texts() == ['Canal do Zé'], pg.inner_text('#toast')
     # the list of bets can show one origin at a time
     pg.click('.tabbar [data-tab=apostas]'); plain = pg.evaluate('window.__OL.S.bets.some(b => !b.from)')
-    assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Canal do Zé'] + (['Sem origem'] if plain else []), pg.locator('#byorigin button').all_inner_texts()
-    pg.click('#byorigin button >> nth=1'); pg.click('[data-act=filter][data-f=open]')
+    assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Minhas', 'Tipster', 'Canal do Zé'] and plain is False, pg.locator('#byorigin button').all_inner_texts()
+    pg.click('[data-act=filter][data-f=open]'); pg.click('#byorigin button >> nth=1'); assert pg.locator('.bet').count() == 0 and txt('.empty') == 'Nenhuma aposta aberta sua.', txt('#view')
+    pg.click('#byorigin button >> nth=2'); assert pg.locator('.bet').count() == 2 and pg.locator('.bet .owner.tipster').count() == 2, 'every bet of a tipster, whatever the name'
+    pg.click('#byorigin button >> nth=3'); pg.click('[data-act=filter][data-f=open]')
     assert pg.locator('.bet').count() == 2 and 'Abertas (2)' in txt('.filter') and 'Encerradas (1)' in txt('.filter'), txt('.filter')
-    pg.click('[data-act=filter][data-f=done]'); assert pg.locator('.bet').count() == 1 and 'De Canal do Zé' in txt('.bet .src')
+    pg.click('[data-act=filter][data-f=done]'); assert pg.locator('.bet').count() == 1 and txt('.bet .owner').lower() == 'tipster · canal do zé'
     pg.click('#byorigin button >> nth=0'); pg.click('[data-act=filter][data-f=open]'); assert pg.evaluate('window.__OL.ui.origin') is None
     pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]')
     assert pg.locator('#impfroms button').all_inner_texts() == ['Canal do Zé'] and pg.input_value('#impfrom') == 'Canal do Zé' and pg.get_attribute('#impfroms button', 'aria-pressed') == 'true', 'the origin of the last bets is still there, and offered as a button'
@@ -522,13 +537,15 @@ with sync_playwright() as p:
     assert txt('.slipexpo') == 'Você já tem R$ 80,00 (0,8u) em jogo em Teles x Prado Jr., em 1 aposta aberta. Esta vai contra ela: Marina Teles vence.', txt('.slipexpo')
     pg.click('#panel [data-act=sheet]')
     pick('f1', 'ml:a'); pg.click('#slipbtn'); pg.wait_for_selector('#stake'); assert pg.locator('#slipcopy').count() == 0 and 'vai contra' not in txt('.slipexpo')
-    # that bet, made by hand, has no origin: closed, it is the "Sem origem" row, below the origin with more money on it
+    # that bet, made by hand, is the person's own: closed, it is the "Minhas" row, against the tipster's
     pg.fill('#stake', '40'); pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length === {had + 4}')
-    hid, plain = pg.evaluate('(b => [b.id, "from" in b || "printed" in b || b.legs.some(l => "printed" in l)])(window.__OL.S.bets.slice(-1)[0])'); assert plain is False, 'a bet made by hand keeps nothing of a print'
+    hid, plain = pg.evaluate('(b => [b.id, "copied" in b || "from" in b || "printed" in b || b.legs.some(l => "printed" in l)])(window.__OL.S.bets.slice(-1)[0])'); assert plain is False, 'a bet made by hand keeps nothing of a print'
+    pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('.bet .owner.own').count() == 1 and pg.locator('.bet .owner.own').inner_text().lower() == 'minha' and pg.locator('.bet .owner.tipster').count() == 2, pg.locator('.bet .owner').all_inner_texts()
     pg.click(f'[data-act=cash][data-id="{hid}"]'); pg.click(f'[data-act=docash][data-id="{hid}"]'); pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{hid}").status === "cashed"')
     pg.click('.tabbar [data-tab=carteira]')
     rows = [cells(tr) for tr in pg.locator('#origins tbody tr').all()]
-    assert rows == [['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00 | 0u', '0,0%', '—'], ['Sem origem | 1 aposta · R$ 40,00', 'R$ 0,00 | 0u', '0,0%', '—']], rows
+    assert rows == [['Minhas | 1 aposta · R$ 40,00', 'R$ 0,00 | 0u', '0,0%', '—'], ['Canal do Zé | 1 aposta · R$ 250,00 · odd −2,5% contra o print', 'R$ 0,00 | 0u', '0,0%', '—']], rows
+    assert txt('#bench') == 'Empate: retorno de 0,0% nas suas apostas e de 0,0% nas do tipster.' and all(tr.is_visible() for tr in pg.locator('#origins tbody tr').all()), txt('#bench')          # both were cashed out for what was staked
     assert pg.evaluate('(e => e.scrollWidth - e.clientWidth)(document.getElementById("origins"))') == 0
     pg.locator('#origins').scroll_into_view_if_needed(); shot('s28-por-origem.png'); pg.click('.tabbar [data-tab=lutas]')
     # the slip can change between the copy and the bet: the odd of the whole bet is kept only while the selections are still the ones of the print
@@ -598,6 +615,19 @@ with sync_playwright() as p:
     pg.evaluate('''b64 => { const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const dt = new DataTransfer(); dt.items.add(new File([bytes], 'print.png', { type: 'image/png' }));
         document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }''', png)
     pg.wait_for_selector('#impres', timeout=120000); assert 'Connor Lee Dunne vence' in pg.inner_text('#impres')
+    # and so does a print that was copied and never saved, through the "Colar" button (the clipboard of the test is a stand-in)
+    pg.click('[data-act=impclear]'); assert pg.locator('#impres').count() == 0 and 'Toca em "Colar"' in txt('#panel .hint >> nth=0')
+    pg.evaluate('''b64 => { const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); window.__clip = navigator.clipboard; window.__read = [{ types: ['text/html', 'image/png'], getType: async t => new Blob([bytes], { type: t }) }];
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { read: async () => { if (window.__read === 'deny') throw new Error('denied'); return window.__read; }, readText: async () => window.__text } }); }''', png)
+    pg.click('[data-act=imppaste]'); pg.wait_for_selector('#impres', timeout=120000); assert 'Connor Lee Dunne vence' in pg.inner_text('#impres'), 'the image on the clipboard was read as a print'
+    pg.click('[data-act=impclear]')
+    pg.evaluate('window.__read = [{ types: ["text/plain"], getType: async () => new Blob(["Almeida x Dunne\\nDunne para vencer a luta\\n2u"]) }]')
+    pg.click('[data-act=imppaste]'); pg.wait_for_selector('#impres'); assert 'Connor Lee Dunne vence' in txt('#impres') and '2u do print' in txt('#panel'), 'copied text comes in the same way'
+    pg.click('[data-act=impclear]'); pg.evaluate('window.__read = [{ types: ["text/html"], getType: async () => new Blob(["<p></p>"]) }]')
+    pg.click('[data-act=imppaste]'); pg.wait_for_selector('#imperr'); assert 'não tem texto nem imagem' in txt('#imperr'), txt('#imperr')
+    pg.evaluate('window.__read = "deny"; window.__text = "Almeida x Dunne\\nAlmeida para vencer a luta"')          # a browser that refuses the full read still gives the text
+    pg.click('[data-act=imppaste]'); pg.wait_for_selector('#impres'); assert 'Rafael Almeida vence' in txt('#impres'), txt('#panel')
+    pg.evaluate('Object.defineProperty(navigator, "clipboard", { configurable: true, value: window.__clip })'); pg.click('[data-act=impclear]')
     pg.keyboard.press('Escape'); assert pg.evaluate('document.getElementById("sheet").hidden'), 'Escape closes the import sheet'
     pg.click('[data-act=imp]')
     pg.click('[data-act=impclose]'); assert pg.evaluate('document.getElementById("sheet").hidden')
@@ -712,6 +742,10 @@ with sync_playwright() as p:
     assert pg.locator('.leg').count() == len(tags) and set(tags) == {'ao vivo', 'não começou'} and pg.locator('.leg.s-live').count() == tags.count('ao vivo') > 0, tags
     m3 = pg.locator('.bet', has=pg.locator('.tally')).first
     assert m3.locator('.tally').inner_text() == '1 ao vivo · 2 não começaram' and [t.lower() for t in m3.locator('.ls').all_inner_texts()] == ['ao vivo', 'não começou', 'não começou'], m3.inner_text()
+    # a fight in progress is not a lost bet: its colour is a blue, never the red of a loss
+    rgb = lambda sel, prop='color': [int(v) for v in re.findall(r'\d+', pg.evaluate('([s, p]) => getComputedStyle(document.querySelector(s))[p]', [sel, prop]))[:3]]
+    for sel in ('.ls.live', '.pill.live', '.leg .lv', '.tally .live'): assert rgb(sel)[2] > rgb(sel)[0] + 60, (sel, rgb(sel))
+    assert rgb('.leg.s-live', 'borderLeftColor')[2] > rgb('.leg.s-live', 'borderLeftColor')[0] + 60, rgb('.leg.s-live', 'borderLeftColor')
     assert pg.locator('.bet:not(:has(.tally))').count() == pg.evaluate('window.__OL.S.bets.filter(b => b.status === "open" && b.legs.length === 1).length'), 'a single has nothing to count'
     assert pg.evaluate('[...document.querySelectorAll(".leg .t b .ou")].every(e => e.getBoundingClientRect().width < 30 && e.getBoundingClientRect().height < 30)'), 'the arrow of an over stays in front of its name'
     frozen = pg.locator('.hint.co', has_text='Cashout congelado').count(); still = pg.locator('[data-act=cash]').count()
@@ -744,15 +778,18 @@ with sync_playwright() as p:
     for s in st: print('  ', s)
     print('final balance', bal())
     assert bal().replace('\xa0', ' ') == 'R$ 1.609,59', bal()
-    n3 = newly(); assert n3[0] >= 3 and n3[1] == 3 and said(n3[0]) in txt('#since') and 'Canal do Zé: 3, ' in txt('#since') and f'Sem origem: {n3[0] - 3}, ' in txt('#since'), (n3, txt('#since'))
+    n3 = newly(); assert n3[0] >= 3 and n3[1] == 3 and said(n3[0]) in txt('#since') and 'Canal do Zé: 3, ' in txt('#since') and f'Minhas: {n3[0] - 3}, ' in txt('#since'), (n3, txt('#since'))
     pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=sinceview]')
     assert pg.locator('#since').count() == 0 and pg.evaluate('[window.__OL.ui.tab, window.__OL.ui.filter]') == ['apostas', 'done'], '"Ver" goes to what closed, and that counts as seen'
-    assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Canal do Zé', 'Sem origem']
-    pg.click('#byorigin button >> nth=1'); assert pg.locator('.bet').count() == 3; pg.click('#byorigin button >> nth=2'); assert pg.locator('.bet').count() == 12; pg.click('#byorigin button >> nth=0'); assert pg.locator('.bet').count() == 15
+    assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Minhas', 'Tipster', 'Canal do Zé']
+    pg.click('#byorigin button >> nth=1'); assert pg.locator('.bet').count() == 12 and pg.locator('.bet .owner.tipster').count() == 0 and pg.locator('.bet .owner.own').count() == 12
+    pg.click('#byorigin button >> nth=2'); assert pg.locator('.bet').count() == 3 and pg.locator('.bet .owner.own').count() == 0; pg.click('#byorigin button >> nth=3'); assert pg.locator('.bet').count() == 3
+    pg.click('#byorigin button >> nth=0'); assert pg.locator('.bet').count() == 15
     pg.click('[data-act=filter][data-f=done]'); shot('s5-done.png', True)
     # closed, every selection still says what became of it; the ones a bet did not need are told apart
     tags = [t.lower() for t in pg.locator('.leg .ls').all_inner_texts()]; outs = pg.evaluate('window.__OL.S.bets.filter(b => b.status !== "open").sort((a, b) => b.settledAt - a.settledAt).flatMap(b => b.legs.map(l => l.out || "unused"))')
     assert tags == [{'won': 'bateu', 'lost': 'perdeu', 'void': 'anulada', 'unused': 'não contou'}[o] for o in outs] and 'bateu' in tags and 'perdeu' in tags and 'não contou' in tags, (tags, outs)
+    assert rgb('.ls.lost', 'backgroundColor')[0] > rgb('.ls.lost', 'backgroundColor')[2] + 60 and rgb('.pill.lost')[0] > rgb('.pill.lost')[2] + 60, 'and the red stays for what was lost'
     assert pg.locator('.leg.s-won .g').first.inner_text() == '✓' and pg.locator('.leg.s-lost .g').first.inner_text() == '✕' and pg.locator('.leg.s-unused').count() == tags.count('não contou')
     assert pg.evaluate('[...document.querySelectorAll(".leg .t b .ou")].every(e => e.getBoundingClientRect().width < 30 && e.getBoundingClientRect().height < 30)') and pg.locator('.leg .t b .ou').count() > 0, 'the arrow of an over stays in front of its name'
     # a closed bet says its result in units too, by the unit it was placed with, and nothing about a gain still to come
@@ -771,7 +808,18 @@ with sync_playwright() as p:
     assert len(bym) == pg.locator('.tbl[data-by=mercado] tbody tr').count() > 2 and abs(sum(bym) - 6.1) < 0.05 and pg.locator('.tbl[data-by=evento] .inu').all_inner_texts() == ['+6,1u'], (bym, pg.locator('.tbl[data-by=evento] .inu').all_inner_texts())
     assert pg.locator('#ifwin').count() == 0 and pg.locator('#iflose').count() == 0 and txt('#atrisk .un') == 'nenhuma aposta' and txt('#atrisk b') == 'R$ 0,00' and txt('#bankv') == txt('.hero .n'), 'nothing is open any more: the bankroll is the balance'
     # the figures can cover a period; every bet here closed today, on one event, so the numbers are the same in all three
-    whole = txt('.pnl'); assert pg.locator('#periodev').count() == 0 and [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()] == ['Sem origem', 'Canal do Zé']
+    whole = txt('.pnl'); assert pg.locator('#periodev').count() == 0 and [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()] == ['Minhas', 'Canal do Zé']
+    # the person against the tipster: who is ahead by return on what was staked, said in words above the table
+    bm = pg.evaluate('(() => { const { Core, S } = window.__OL, r = Core.benchmark(S.bets.filter(b => b.status !== "open")); return [r.ahead, r.mine.roi, r.tip.roi, r.mine.n, r.tip.n]; })()')
+    spct = lambda d: (lambda v: ('+' if v > 0 else '−' if v < 0 else '') + f'{abs(v):.1f}'.replace('.', ',') + '%')(round(d * 1000) / 10)
+    assert bm[0] == 'mine' and bm[3:] == [12, 3] and txt('#bench') == f'Você está na frente: retorno de {spct(bm[1])} nas suas apostas e de {spct(bm[2])} nas do tipster.' and 'own' in pg.get_attribute('#bench', 'class'), (bm, txt('#bench'))
+    assert [cells(tr)[2] for tr in pg.locator('#origins tbody tr').all()] == [spct(bm[1]), spct(bm[2])], 'the same returns are in the table'
+    # with more than one tipster there is a line for all of them together, between the person's and each one's
+    other = pg.evaluate('(() => { const b = window.__OL.S.bets.find(x => x.from === "Canal do Zé"); b.from = "Outro Canal"; return b.id; })()'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]')
+    names = [cells(tr)[0].split(' | ')[0] for tr in pg.locator('#origins tbody tr').all()]
+    assert names[:2] == ['Minhas', 'Tipster · todos'] and sorted(names[2:]) == ['Canal do Zé', 'Outro Canal'] and cells(pg.locator('#origins tr.tipall'))[0].startswith('Tipster · todos | 3 apostas') and cells(pg.locator('#origins tr.tipall'))[2] == spct(bm[2]), names
+    each = [unum(t) for t in pg.locator('#origins tr.tipster .inu').all_inner_texts()]; assert abs(sum(each) - unum(pg.locator('#origins tr.tipall .inu').inner_text())) < 0.011, each
+    pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{other}").from = "Canal do Zé"'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]'); assert pg.locator('#origins tr.tipall').count() == 0
     # each origin also has its result in units, every bet by the unit it was placed with: the two add up to the whole
     inu = [float(t.replace('u', '').replace('−', '-').replace('+', '').replace(',', '.')) for t in pg.locator('#origins .inu').all_inner_texts()]
     byjs = pg.evaluate('["", "Canal do Zé"].map(k => window.__OL.S.bets.filter(b => (b.from || "") === k).reduce((a, b) => a + (b.payout - b.stake) / b.unit, 0))')

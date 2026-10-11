@@ -255,11 +255,11 @@ export function renderImport(): void {
   const something = !!(imp.text || imp.ops.length || imp.err || imp.from);
   const known = [...new Set(S.bets.map(b => b.from).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   let h = `<div class="ph"><h3>Copiar aposta</h3><button class="x" data-act="impclose" aria-label="Fechar">×</button></div>
-    <p class="hint">Cola o texto de uma aposta ou escolhe os prints: cada foto é uma aposta. Vale pra luta que ainda não começou. A odd é a de agora; ${TIP_HINT[S.stakeIn === 'units' ? 'units' : 'money']}</p>
+    <p class="hint">Copiou o print ou o texto da aposta? Toca em "Colar": não precisa salvar a imagem. Ou escolhe os prints da galeria: cada foto é uma aposta. Vale pra luta que ainda não começou. A odd é a de agora; ${TIP_HINT[S.stakeIn === 'units' ? 'units' : 'money']} O que entra por aqui fica marcado como aposta do tipster.</p>
     <textarea id="imptext" placeholder="Ex.: Fulano vs. Beltrano · Fulano para vencer a luta · Stake 1 unidade" aria-label="Texto da aposta">${esc(imp.text)}</textarea>
     <div class="field"><span>De quem é</span><input id="impfrom" maxlength="40" autocomplete="off" placeholder="canal ou tipster (opcional)" value="${esc(imp.from)}" aria-label="De quem é a aposta: canal ou tipster"></div>
     ${known.length ? `<div class="quick froms" id="impfroms" role="group" aria-label="Origens já usadas">${known.map(k => `<button class="${imp.from.trim() === k ? 'on' : ''}" data-act="impfromq" data-v="${esc(k)}" aria-pressed="${imp.from.trim() === k}">${esc(k)}</button>`).join('')}</div>` : ''}
-    <div class="rowbtns four"><button class="btn ghost" data-act="imppaste" ${imp.busy ? 'disabled' : ''}>Colar</button><label class="btn ghost" for="impfile">Escolher fotos</label><input type="file" id="impfile" accept="image/*" multiple hidden ${imp.busy ? 'disabled' : ''}><button class="btn" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><button class="btn ghost" data-act="impclear" ${imp.busy || !something ? 'disabled' : ''}>Limpar</button></div>
+    <div class="rowbtns four"><button class="btn" data-act="imppaste" ${imp.busy ? 'disabled' : ''}>Colar</button><label class="btn ghost" for="impfile">Escolher fotos</label><input type="file" id="impfile" accept="image/*" multiple hidden ${imp.busy ? 'disabled' : ''}><button class="btn ghost" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><button class="btn ghost" data-act="impclear" ${imp.busy || !something ? 'disabled' : ''}>Limpar</button></div>
     <p class="hint" id="impstatus">${esc(impStatus())}</p>`;
   if (imp.err) h += `<p class="msg" id="imperr">${esc(imp.err)}</p>`;
   if (!imp.busy) {
@@ -385,10 +385,21 @@ export function unitsFor(id: number, units: number): void { const o = opOf(id); 
  *  for; a picture goes through "Escolher fotos" or through the paste gesture on the page. */
 export async function pasteClip(): Promise<void> {
   if (imp.busy) return;
+  const cb = navigator.clipboard;
+  // a print that was copied and never saved to the gallery comes in here; so does copied text
+  if (cb && typeof cb.read === 'function') {
+    try {
+      const items = await cb.read(), pics: File[] = [];
+      for (const it of items) { const type = it.types.find(x => /^image\//.test(x)); if (type) pics.push(new File([await it.getType(type)], 'colada', { type })); }
+      if (pics.length) { await importImages(pics); return; }
+      for (const it of items) if (it.types.includes('text/plain')) { const text = await (await it.getType('text/plain')).text(); if (text.trim()) { await runImport(text); return; } }
+      imp.err = 'A área de transferência não tem texto nem imagem de aposta.'; renderImport(); return;
+    } catch (e) { /* the browser refused, or cannot hand this content over this way: the text alone is tried below */ }
+  }
   let text = '';
   try { text = await navigator.clipboard.readText(); }
-  catch (e) { imp.err = 'Não consegui ler a área de transferência. Toca no campo de texto e cola por lá.'; renderImport(); return; }
-  if (!text.trim()) { imp.err = 'A área de transferência não tem texto. Se for uma imagem, usa "Escolher fotos".'; renderImport(); return; }
+  catch (e) { imp.err = 'Não consegui ler a área de transferência. Toca no campo de texto, segura e escolhe "Colar".'; renderImport(); return; }
+  if (!text.trim()) { imp.err = 'A área de transferência não tem texto. Se for uma imagem e o "Colar" não pegou, salva a imagem e usa "Escolher fotos".'; renderImport(); return; }
   await runImport(text);
 }
 /** Unfolds or folds one item of the list. */

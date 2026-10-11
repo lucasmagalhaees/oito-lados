@@ -7,7 +7,7 @@
   --ca:var(--rb-a); --cb:var(--rb-b);
   /* over and under: neutral on purpose, so they never read as a corner whatever pair is in use */
   --over:#2a3340; --under:#6b7587;
-  --win:#0b7a4c; --loss:#c22a2a; --live:#d92d20;
+  --win:#0b7a4c; --loss:#c22a2a; --live:#0b6fb8;
   --shade:rgba(10,14,20,.5);
   --font-display:"Big Shoulders Display","Arial Narrow","Helvetica Neue",Arial,sans-serif;
   --font-body:"Barlow","Helvetica Neue",Helvetica,Arial,sans-serif;
@@ -21,7 +21,7 @@
     --gold:#f0c24f; --gold-bg:#f0c24f; --on-gold:#1b1400;
     --rb-a:#f0555b; --rb-b:#5b9bff; --gp-a:#ff6bb0; --gp-b:#8fd648; --po-a:#ff9442; --po-b:#ab8cff;
     --over:#e3e8f0; --under:#8a96aa;
-    --win:#3fd08f; --loss:#ff7a7a; --live:#ff5a4d;
+    --win:#3fd08f; --loss:#ff7a7a; --live:#49c2ff;
     --shade:rgba(3,5,8,.66);
     color-scheme:dark;
   }
@@ -31,7 +31,7 @@
   --gold:#f0c24f; --gold-bg:#f0c24f; --on-gold:#1b1400;
   --rb-a:#f0555b; --rb-b:#5b9bff; --gp-a:#ff6bb0; --gp-b:#8fd648; --po-a:#ff9442; --po-b:#ab8cff;
   --over:#e3e8f0; --under:#8a96aa;
-  --win:#3fd08f; --loss:#ff7a7a; --live:#ff5a4d;
+  --win:#3fd08f; --loss:#ff7a7a; --live:#49c2ff;
   --shade:rgba(3,5,8,.66);
   color-scheme:dark;
 }
@@ -77,7 +77,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .sync{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin-block:12px 2px}
 .sync span{min-width:0}
 .sync button{margin-left:auto;flex:none;color:var(--fg);font-weight:600;border:1px solid var(--line);border-radius:6px;padding:7px 10px}
-.warn{border:1px solid var(--line);border-left:3px solid var(--live);border-radius:6px;background:var(--surface);padding:10px 12px;font-size:13px;margin-top:10px}
+.warn{border:1px solid var(--line);border-left:3px solid var(--loss);border-radius:6px;background:var(--surface);padding:10px 12px;font-size:13px;margin-top:10px}
 .cta{border:1px solid var(--gold);border-radius:8px;background:var(--surface);padding:12px;margin-top:12px;display:flex;gap:12px;align-items:center;justify-content:space-between}
 .cta p{font-size:13px;min-width:0}
 .since{border:1px solid var(--gold);border-radius:8px;background:var(--surface);padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
@@ -101,7 +101,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .chip + .chip{margin-left:0}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--live);animation:pulse 1.2s infinite;flex:none}
 @keyframes pulse{50%{opacity:.25}}
-@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+@media (prefers-reduced-motion:reduce){.dot,.leg .g.live{animation:none}}
 .row{display:flex;align-items:center;gap:10px;padding:7px 12px}
 .corner{width:4px;align-self:stretch;border-radius:2px;background:var(--ca);flex:none}
 .row.b .corner{background:var(--cb)}
@@ -231,6 +231,12 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .field select{flex:1;min-width:0;border:0;background:none;color:var(--fg);height:48px;font:inherit;font-size:16px;font-weight:600;outline:none}
 .pill.cashed{color:var(--gold)}
 .pill.open{color:var(--muted)}.pill.won{color:var(--win)}.pill.lost{color:var(--loss)}.pill.void{color:var(--muted)}.pill.live{color:var(--live)}
+/* whose the bet is: the person's own pick, or a copy of a tipster's */
+.owner{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:3px 7px;margin-bottom:8px;border:1px solid var(--line);color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.owner.tipster{border-color:var(--gold);color:var(--gold)}
+.bench{font-size:13px;color:var(--fg)}
+.bench.own{color:var(--win)}.bench.tipster{color:var(--loss)}
+#origins tr.own td:first-child,#origins tr.tipall td:first-child{font-weight:700}
 .tally{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 2px}
 .tally .won{color:var(--win)}.tally .lost{color:var(--loss)}.tally .live,.tally .starting{color:var(--live)}
 /* each selection is a tile that says where it stands: by the colour of its edge, by its mark and, in words, by its tag */
@@ -244,6 +250,7 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .leg .g.won{background:var(--win);border-color:var(--win);color:var(--surface)}
 .leg .g.lost{background:var(--loss);border-color:var(--loss);color:var(--surface)}
 .leg .g.live,.leg .g.starting{border-color:var(--live);color:var(--live)}
+.leg .g.live{animation:pulse 1.2s infinite}
 .leg .g.void{border-color:var(--muted)}
 .leg .t{flex:1;min-width:0}
 .leg .t b{display:block;font-weight:600}
