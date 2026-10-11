@@ -1038,6 +1038,51 @@ with sync_playwright() as p:
     usd = pg.evaluate('(() => { const S = window.__OL.S; return [S.bets.length, S.bets[0].stake, S.bets[0].payout, S.bets[0].unit, S.conv.length]; })()')
     print('banca convertida para dólar: saldo', bal(), '|', pg.inner_text('#pnlu'))
     assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 4] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
+    # the calls to ESPN are counted on the device: the card on the wallet screen, starting the count over, and handing the counts over
+    from collections import Counter
+    def kind_of(u):          # what a call is for, told from its address alone, without asking the app
+        if 'espn.com' not in u: return None
+        if '/scoreboard' in u: return 'board'
+        if '/eventlog' in u or re.search(r'/competitions/p\w+', u): return 'form'
+        if re.search(r'/competitions/\w+/odds', u): return 'odds'
+        if '/competitors/' in u: return 'td'
+        if re.search(r'/competitions/\w+/status', u): return 'result'
+        return 'astats' if re.search(r'/athletes/\w+/statistics', u) else 'other'
+    asked = lambda since: dict(Counter(k for k in map(kind_of, calls[since:]) if k))
+    def usage_rows(page):
+        rows = {tr.get_attribute('data-k'): tr.locator('td').all_inner_texts() for tr in page.locator('#usagetbl tbody tr').all()}
+        return {k: [c.split('\n')[0].replace('.', '') for c in v] for k, v in rows.items()}, {k: ' | '.join(v) for k, v in rows.items()}
+    counted = lambda page, col=1: {k: int(v[col]) for k, v in usage_rows(page)[0].items() if k != 'all' and v[col] != '—'}
+    KINDS = ['board', 'odds', 'result', 'td', 'astats', 'form']
+    pg.click('.tabbar [data-tab=carteira]'); pg.locator('#usage').scroll_into_view_if_needed(); shot('s53-uso-da-espn.png')
+    rows, full = usage_rows(pg)
+    assert list(rows) == KINDS + ['all'] and [r[0] for r in rows.values()] == ['Placar', 'Odds', 'Resultado', 'Quedas da luta', 'Média de quedas', 'Últimas lutas', 'Tudo'], rows
+    seen = counted(pg); assert sorted(seen) == sorted(KINDS) and all(n > 0 for n in seen.values()) and int(rows['all'][1]) == sum(seen.values()) == int(rows['all'][2]), ('over this walk-through every kind of call was made and counted, and the total is their sum', seen, rows['all'])
+    assert 'falh' in full['board'] and ' cada' in full['board'] and 'máx. ' in full['board'] and re.search(r'Hoje: \d[\d.]* chamadas · [\d.,]+ (kB|MB) · \d+ falh\w+ · no máximo \d+ num minuto\. Desde que o app abriu \(\d+ min\): \d[\d.]* chamadas\.', txt('#usagenow')), (full['board'], txt('#usagenow'))
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0, 'the card fits the width of a phone'
+    pg.click('[data-act=usagereset]'); rows, full = usage_rows(pg)
+    assert 'Contagem zerada' in pg.inner_text('#toast') and all(r[1:] == ['—', '—', '—'] for r in rows.values()) and 'nenhuma chamada contada ainda' in txt('#usagenow') and pg.evaluate('JSON.parse(localStorage.getItem("oitolados.usage.v1")).days') == {}, ('starting over leaves nothing counted, on screen or saved', rows)
+    since = len(calls); sync(); pg.wait_for_timeout(500)
+    assert counted(pg) == asked(since) and asked(since).get('board') == 1, ('what is counted from then on is what was asked of the source, kind by kind', counted(pg), asked(since))
+    ESPN['down'] = True; sync(); ESPN['down'] = False; pg.wait_for_timeout(300); rows, full = usage_rows(pg)
+    assert counted(pg) == asked(since) and counted(pg)['board'] == 2 and '1 falhou' in full['board'] and '1 falhou' in full['all'] and '· 1 falhou ·' in txt('#usagenow'), ('a call that fails is counted, and counted as failed', full['board'], txt('#usagenow'))
+    with pg.expect_download() as du: pg.click('[data-act=usagesave]')
+    assert re.fullmatch(r'oito-lados-uso-espn-\d{4}-\d\d-\d\d-\d{4}\.json', du.value.suggested_filename), du.value.suggested_filename
+    ufile = tmp / du.value.suggested_filename; du.value.save_as(str(ufile)); took = json.loads(ufile.read_text()); day = took['days'][took['today']]
+    assert took['app'] == 'oito-lados' and took['what'] == 'espn-usage' and took['savedAt'] > 0 and {k: c['n'] for k, c in day['k'].items()} == asked(since) and day['k']['board']['err'] == 1 and day['peak'] >= 1 and took['session']['total']['n'] == sum(asked(since).values()) and 'Uso da ESPN baixado' in pg.inner_text('#toast'), took
+    assert sorted(took) == ['app', 'days', 'fields', 'savedAt', 'session', 'today', 'version', 'what'] and 'stake' not in ufile.read_text() and 'deposits' not in ufile.read_text(), ('the file holds counts of calls and nothing about the bets', sorted(took))
+    # on a phone the counts go to the share sheet, like the backup
+    pg.evaluate("() => { window.__shared = []; navigator.canShare = d => !!(d && d.files && d.files.length); navigator.share = async d => { window.__shared.push([d.files[0].name, await d.files[0].text()]); }; }")
+    pg.click('[data-act=usagesave]'); pg.wait_for_function('window.__shared.length === 1')
+    sent = pg.evaluate('window.__shared[0]'); assert sent[0].startswith('oito-lados-uso-espn-') and json.loads(sent[1])['what'] == 'espn-usage' and 'Uso da ESPN salvo em arquivo' in pg.inner_text('#toast'), sent[0]
+    pg.evaluate('delete navigator.canShare; delete navigator.share')
+    # as a text too: copied where the page can copy, shown to be copied by hand where it cannot
+    pg.evaluate("() => { window.__clip = 'fail'; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => window.__clip === 'fail' ? Promise.reject(new Error('no')) : (window.__copied = t, Promise.resolve()) } }); }")
+    pg.click('[data-act=usagecopy]'); pg.wait_for_selector('#usagetext'); assert json.loads(pg.input_value('#usagetext'))['what'] == 'espn-usage'
+    pg.evaluate("window.__clip = 'ok'"); pg.click('[data-act=usagecopy]'); pg.wait_for_function('document.getElementById("toast").textContent.includes("Uso da ESPN copiado")')
+    assert pg.locator('#usagetext').count() == 0 and json.loads(pg.evaluate('window.__copied'))['days'][took['today']]['k']['board']['n'] == 2
+    # the counts are written down a moment after the last call, and are not part of the backup
+    pg.wait_for_timeout(2300); assert pg.evaluate('JSON.parse(localStorage.getItem("oitolados.usage.v1")).days')[took['today']]['k']['board'] == day['k']['board'] and 'usage' not in held and 'days' not in held
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
     # the cards on screen: the next three that are not over. A card the source marks as over leaves, and the three after it are what
@@ -1071,6 +1116,25 @@ with sync_playwright() as p:
     names, on, row, ahead = cards_on(3, far)
     assert names == NEXT3 + ['NOGUEIRA VS. PIRES'], ('a card further ahead with a bet still open on it is shown too', names)
     ESPN['next'] = False; ESPN['later'] = False; PHASE['n'] = was_phase
+    # the count against the source, call by call, on a page of its own: a fight over, one under way with a bet on its takedowns, one
+    # to come, and a second event. What the app says it asked for is what the source saw being asked, kind by kind; a page loaded again
+    # keeps what was counted before, and starts the count of the session over
+    was_phase = PHASE['n']; PHASE['n'] = 2; ESPN['next'] = True
+    now_ms = int(datetime.datetime.now().timestamp() * 1000)
+    tdbet = dict(v=1, cur='BRL', deposits=[dict(t=now_ms, v=100)], seen=now_ms, bets=[dict(id='td1', t=now_ms, type='single', stake=10, unit=10, odd=2, sgp={}, status='open', payout=0,
+        legs=[dict(fid='f2', eid='600000001', key='td:o:2.5', market='Total de quedas', sel='+2.5 quedas', cat='Quedas', weight='Lightweight', fight='Brandt x Kessler', event='UFC Fight Night: Almeida vs. Dunne', date=now_ms - 7 * 3600000, odd=2, src='est')])])
+    c5 = b.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo', has_touch=True, is_mobile=True)
+    c5.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c5.route('https://cdn.jsdelivr.net/**', local_cdn)
+    p5 = c5.new_page(); p5.add_init_script('if (!localStorage.getItem("oitolados.v1")) localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(tdbet)))
+    since = len(calls); p5.goto((ROOT / 'dist' / 'index.html').as_uri()); p5.wait_for_selector('.fight'); p5.wait_for_timeout(2500)
+    p5.click('.tabbar [data-tab=carteira]'); first = counted(p5)
+    assert first == asked(since) and sorted(first) == sorted(KINDS), ('every kind of call is counted under its own name, as many times as the source was asked', first, asked(since))
+    said = re.search(r'Hoje: ([\d.]+) chamadas .* Desde que o app abriu \(\d+ min\): ([\d.]+) chamadas', p5.locator('#usagenow').inner_text()); assert said and said.group(1) == said.group(2) == str(sum(first.values())), p5.locator('#usagenow').inner_text()
+    p5.evaluate('window.__OL.sync(true)'); p5.wait_for_timeout(500)          # calls made a moment before leaving: only leaving the page writes them down
+    mid = len(calls); p5.reload(); p5.wait_for_selector('.fight'); p5.wait_for_timeout(2500); p5.click('.tabbar [data-tab=carteira]'); again = counted(p5)
+    said = re.search(r'Hoje: ([\d.]+) chamadas .* Desde que o app abriu \(\d+ min\): ([\d.]+) chamadas', p5.locator('#usagenow').inner_text())
+    assert again == asked(since) and sum(again.values()) > sum(first.values()) and int(said.group(1)) == sum(again.values()) and int(said.group(2)) == sum(asked(mid).values()) < sum(again.values()), ('loaded again, the page keeps what was counted, the calls made just before leaving too, and counts the session from nothing', first, again, asked(mid), said.groups())
+    c5.close(); ESPN['next'] = False; PHASE['n'] = was_phase
     # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
     # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone
     was_phase = PHASE['n']; PHASE['n'] = 0; ESPN['extra'] = True; ESPN['next'] = True          # the card of the walk-through, before any fight, is the one on screen

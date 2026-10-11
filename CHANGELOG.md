@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.23.0] - 2026-10-11
+
+### Adicionado
+- Cartão "Uso da ESPN" na Carteira: as chamadas que o app faz à ESPN, contadas neste aparelho por tipo (quantas, quantas falharam, tempo e tamanho), de hoje e dos últimos 7 dias, com exportar em arquivo, copiar como texto e zerar.
+
 ## [0.22.1] - 2026-10-11
 
 ### Corrigido

@@ -554,6 +554,25 @@ export default function cases(Core) {
   eq('cards: a card further ahead with a bet still open on it is shown; one that is over, an old one and Contender Series never', [cids(Core.cardsToShow(line, NOWC, new Set(['d']))), cids(Core.cardsToShow(line, NOWC, new Set(['b', 'done', 'old', 'cs'])))], [['a', 'b', 'c', 'd'], ['a', 'b', 'c']]);
   eq('cards: an event the source never marks as over leaves after five days', cids(Core.cardsToShow([cev('stuck', -6), cev('late', -4), cev('a', 6)], NOWC)), ['late', 'a']);
   eq('cards: fewer than three to come, none at all, only cards that are over, and how many and for how long', [cids(Core.cardsToShow([cev('a', 6), cev('b', 13)], NOWC)), Core.cardsToShow([], NOWC), Core.cardsToShow([cev('done', -1, true)], NOWC), Core.NEXT_CARDS, Core.RECENT_CARD / DAYC], [['a', 'b'], [], [], 3, 5]);
+  /* the calls to the source, counted: by day and by kind, how long they took, how much came back, which failed */
+  const T0 = Date.UTC(2026, 9, 11, 15, 0, 0), ucall = (kind, ms, bytes, ok = true, t = T0, day = '2026-10-11') => ({ t, day, kind, ms, bytes, ok });
+  const ulog = cs => cs.reduce((l, c) => Core.usageAdd(l, c), Core.usageEmpty());
+  const u1 = ulog([ucall('board', 120, 4000), ucall('board', 80, 5000), ucall('board', 300, 0, false), ucall('odds', 50, 700)]);
+  eq('usage: calls of a kind add up on their day: how many, how many failed, the time, the size and the slowest', u1.days['2026-10-11'].k, { board: { n: 3, err: 1, ms: 500, bytes: 9000, max: 300 }, odds: { n: 1, err: 0, ms: 50, bytes: 700, max: 50 } });
+  eq('usage: a time or a size that is not a number counts the call and adds nothing', ulog([ucall('td', NaN, -5), ucall('td', -3, undefined)]).days['2026-10-11'].k.td, { n: 2, err: 0, ms: 0, bytes: 0, max: 0 });
+  const MINU = 60e3, u2 = ulog([ucall('odds', 1, 1, true, T0), ucall('odds', 1, 1, true, T0 + 59e3), ucall('odds', 1, 1, true, T0 + 59.9e3), ucall('odds', 1, 1, true, T0 + MINU), ucall('odds', 1, 1, true, T0 + MINU + 1)]);
+  eq('usage: the peak is the most calls within one minute of the clock', [u2.days['2026-10-11'].peak, u1.days['2026-10-11'].peak, u2.min], [3, 4, { m: (T0 + MINU) / MINU, n: 2 }]);
+  const uday = i => '2026-' + String(8 + Math.floor(i / 28)).padStart(2, '0') + '-' + String(1 + (i % 28)).padStart(2, '0');
+  const u3 = ulog(Array.from({ length: 33 }, (_, i) => ucall('board', 10, 100, true, T0 + i * MINU, uday(i))));
+  eq('usage: only the latest thirty days are kept', [Object.keys(u3.days).length, Object.keys(u3.days).sort()[0], Object.keys(u3.days).sort().pop(), Core.USAGE_DAYS], [30, uday(3), uday(32), 30]);
+  const u4 = ulog([ucall('board', 100, 1000, true, T0, '2026-10-09'), ucall('form', 40, 300, false, T0 + 5 * MINU, '2026-10-10'), ucall('form', 60, 500, true, T0 + 5 * MINU, '2026-10-10'), ucall('result', 20, 200, true, T0 + 9 * MINU, '2026-10-11')]);
+  const su = (from) => { const x = Core.usageSum(u4, from); return [x.total, x.peak, x.days, Object.fromEntries(Object.entries(x.k).filter(([, c]) => c.n).map(([k, c]) => [k, c.n]))]; };
+  eq('usage: the sum from a day on, by kind and in all', [su('2026-10-10'), su('2026-10-11'), su('2026-10-12')], [[{ n: 3, err: 1, ms: 120, bytes: 1000, max: 60 }, 2, 2, { result: 1, form: 2 }], [{ n: 1, err: 0, ms: 20, bytes: 200, max: 20 }, 1, 1, { result: 1 }], [{ n: 0, err: 0, ms: 0, bytes: 0, max: 0 }, 0, 0, {}]]);
+  eq('usage: the sum of everything, with every kind there even when it has no call', [su('')[0], Object.keys(Core.usageSum(u4, '').k), Core.USAGE_KINDS], [{ n: 4, err: 1, ms: 220, bytes: 2000, max: 100 }, ['board', 'odds', 'result', 'td', 'astats', 'form'], ['board', 'odds', 'result', 'td', 'astats', 'form']]);
+  eq('usage: a log read back from storage is the same log', Core.usageRead(JSON.parse(JSON.stringify({ v: 1, days: u4.days }))).days, u4.days);
+  eq('usage: what is not a log reads as an empty one', [Core.usageRead(null), Core.usageRead('x'), Core.usageRead({ days: 7 }), Core.usageRead({ days: { 'not a day': { peak: 1, k: {} }, '2026-10-11': 3 } })].map(l => l.days), [{}, {}, {}, {}]);
+  eq('usage: what is damaged in a saved log is dropped, and the rest stands', Core.usageRead({ days: { '2026-10-11': { peak: 'many', k: { board: { n: 2, err: -1, ms: '9', bytes: 10, max: null }, made_up: { n: 5 }, odds: { n: 0, ms: 4 }, td: 'x' } } } }).days, { '2026-10-11': { peak: 0, k: { board: { n: 2, err: 0, ms: 0, bytes: 10, max: 0 } } } });
+  eq('usage: a saved log longer than what is kept is cut to the latest days', Object.keys(Core.usageRead({ days: Object.fromEntries(Array.from({ length: 40 }, (_, i) => [uday(i), { peak: 1, k: { board: { n: 1 } } }])) }).days).length, 30);
   /* the filter by country: the fights with a fighter from one, and the countries there are to choose from */
   const lf = (id, ca, cb) => ({ id, a: { name: 'A' + id, country: ca }, b: { name: 'B' + id, country: cb } });
   const LF = [lf('1', 'Brazil', 'England'), lf('2', 'China', 'default'), lf('3', 'Brazil', 'Brazil'), lf('4', '', 'USA'), lf('5', ' brazil ', 'Atlantis')];

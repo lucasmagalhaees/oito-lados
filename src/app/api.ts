@@ -1,15 +1,23 @@
 import { Core } from '../core';
 import { DAY, H } from './format';
 import { D, S, index, ui } from './state';
-import type { Bet, Fight, Json, Leg, PastFight } from '../core';
+import { record } from './usage';
+import type { Bet, Fight, Json, Leg, PastFight, UsageKind } from '../core';
 
 /* ================= ESPN API ================= */
 export const SITE = 'https://site.api.espn.com/apis/site/v2/sports/mma/ufc';
 export const CORE = 'https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc';
-export async function getJSON(url: string, ms?: number): Promise<Json> {
-  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 12000);
-  try { const r = await fetch(url, { signal: ctl.signal, cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
-  finally { clearTimeout(t); }
+/** One call. `kind` says what it is for, and the call is counted under it (how long it took, how much came back,
+ *  whether it failed); null is for a call that is not to ESPN, which is not counted. */
+export async function getJSON(url: string, kind: UsageKind | null, ms?: number): Promise<Json> {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 12000), t0 = performance.now();
+  let size = 0, ok = false;
+  try {
+    const r = await fetch(url, { signal: ctl.signal, cache: 'no-store' }); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text(); size = text.length;
+    const j = JSON.parse(text); ok = true; return j;
+  }
+  finally { clearTimeout(t); if (kind) record(kind, performance.now() - t0, size, ok); }
 }
 export async function pool(jobs: (() => Promise<void>)[], n: number): Promise<void> { let i = 0; const run = async () => { while (i < jobs.length) { const j = jobs[i++]; try { await j(); } catch (e) { /* one failed call must not sink the batch */ } } }; await Promise.all(Array.from({ length: Math.min(n, jobs.length) }, run)); }
 const ATHLETES = 'https://sports.core.api.espn.com/v2/sports/mma/athletes';
@@ -35,11 +43,11 @@ export async function loadForm(ids: string[]): Promise<void> {
   await pool(todo.map(id => async () => {
     try {
       const had = (D.form[id] && D.form[id].fights) || [], fights: PastFight[] = [];
-      const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`)).filter(x => x.played).slice(0, FORM_FIGHTS);
+      const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`, 'form')).filter(x => x.played).slice(0, FORM_FIGHTS);
       for (const it of log) {
         const known = had.find(x => x.id === it.id && x.method !== 'unknown' && typeof x.desc === 'string');
         if (known) { fights.push(known); continue; }
-        const c = await getJSON(it.competition), f = Core.normPastFight(c, await getJSON(Core.statusRef(c)), id);
+        const c = await getJSON(it.competition, 'form'), f = Core.normPastFight(c, await getJSON(Core.statusRef(c), 'form'), id);
         if (!f) throw new Error('not a fight');
         fights.push(f);
       }
@@ -58,7 +66,7 @@ export const BOARD_AHEAD = 30 * DAY;
 export async function loadBoard(): Promise<void> {
   const now = Date.now();
   const from = Math.min(now - 4 * DAY, ...openLegs().map(l => l.date - DAY));
-  const j = await getJSON(`${SITE}/scoreboard?dates=${ymd(from)}-${ymd(now + BOARD_AHEAD)}&limit=100`);
+  const j = await getJSON(`${SITE}/scoreboard?dates=${ymd(from)}-${ymd(now + BOARD_AHEAD)}&limit=100`, 'board');
   D.events = ((j.events || []) as Json[]).map(Core.normEvent).filter(e => e.fights.length).sort((a, b) => a.date - b.date);
   D.from = from; index();
 }
@@ -71,13 +79,13 @@ export async function loadOdds(eid: string | null, force?: boolean, onlyFids?: s
   for (const f of fights) {
     jobs.push(async () => {
       const base = `${CORE}/events/${ev.id}/competitions/${f.id}/odds`;
-      const o = Core.normOdds(await getJSON(base), f);
+      const o = Core.normOdds(await getJSON(base, 'odds'), f);
       if (!o) { delete D.odds[f.id]; return; }
-      if (o.props) try { Core.attachDistance(o, f, await getJSON(o.props + (o.props.includes('?') ? '&' : '?') + 'limit=100')); } catch (e) { /* distance line is optional */ }
+      if (o.props) try { Core.attachDistance(o, f, await getJSON(o.props + (o.props.includes('?') ? '&' : '?') + 'limit=100', 'odds')); } catch (e) { /* distance line is optional */ }
       D.odds[f.id] = o;
     });
     for (const x of [f.a, f.b]) if (!D.astats[x.id] || now - D.astats[x.id].ts > 7 * DAY) jobs.push(async () => {
-      let v = null; try { v = Core.statValue(await getJSON(`https://sports.core.api.espn.com/v2/sports/mma/athletes/${x.id}/statistics`), 'takedownAvg'); } catch (e) { /* debutants have no stats page */ }
+      let v = null; try { v = Core.statValue(await getJSON(`https://sports.core.api.espn.com/v2/sports/mma/athletes/${x.id}/statistics`, 'astats'), 'takedownAvg'); } catch (e) { /* debutants have no stats page */ }
       D.astats[x.id] = { tdAvg: v, ts: now };
     });
   }
@@ -86,7 +94,7 @@ export async function loadOdds(eid: string | null, force?: boolean, onlyFids?: s
 }
 export async function fetchTd(f: Fight): Promise<{ a: number; b: number }> {
   const u = (id: string): string => `${CORE}/events/${f.eventId}/competitions/${f.id}/competitors/${id}/statistics`;
-  const [a, b] = await Promise.all([getJSON(u(f.a.id)), getJSON(u(f.b.id))]);
+  const [a, b] = await Promise.all([getJSON(u(f.a.id), 'td'), getJSON(u(f.b.id), 'td')]);
   const va = Core.statValue(a, 'takedownsLanded'), vb = Core.statValue(b, 'takedownsLanded');
   if (va == null || vb == null) throw new Error('sem stats');
   return { a: va, b: vb };
@@ -109,7 +117,7 @@ export async function loadResults(): Promise<void> {
     if (!D.finalSeen[f.id]) D.finalSeen[f.id] = now;
     const recent = now - f.date < 5 * DAY;
     if (!D.results[f.id] && (recent || betFids.has(f.id))) jobs.push(async () => {
-      const r = Core.normResult(await getJSON(`${CORE}/events/${f.eventId}/competitions/${f.id}/status`));
+      const r = Core.normResult(await getJSON(`${CORE}/events/${f.eventId}/competitions/${f.id}/status`, 'result'));
       // A result under a name the app does not know may still be being written, or be one a later version will know.
       // For a day it is asked for again, and only then taken as final: taking it at once would void every bet on the
       // method or the rounds of that fight for good. Winner picks do not wait for it.

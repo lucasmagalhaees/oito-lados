@@ -12,7 +12,7 @@ export let FX: Kept | null = (kept && kept.rates && kept.ts) ? kept : null;
 export async function loadFx(): Promise<Kept> {
   if (FX && Date.now() - FX.ts < FX_TTL) return FX;
   try {
-    const fx = Core.normFx(await getJSON(FX_URL, 8000));
+    const fx = Core.normFx(await getJSON(FX_URL, null, 8000));
     if (!fx) throw new Error('unexpected answer');
     FX = Object.assign(fx, { ts: Date.now() }); LS.set('oitolados.fx.v1', FX);
   } catch (e) { if (!FX) throw e; }          // no answer: an older rate still converts, and the screen shows its date
