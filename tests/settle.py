@@ -131,6 +131,12 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=apostas]'); pg.click('[data-act=filter][data-f=done]')
     won = pg.locator('.bet', has=pg.locator('.tally')).first
     check('closed, it still says what happened to each selection and what it paid', [t.lower() for t in won.locator('.ls').all_inner_texts()] == ['anulada', 'bateu'] and won.locator('.tally').inner_text() == '1 bateu · 1 anulada' and won.locator('.bf .odd').inner_text() == '1.80' and won.locator('.bf .was').inner_text() == 'era 4.05' and '+R$ 80,00' in won.locator('.bf').inner_text().replace('\xa0', ' '), won.inner_text())
+    # nobody was copied here: the statement in units has the person's column alone, and the voided bet is in the money and out of the record
+    pg.click('.tabbar [data-tab=carteira]')
+    srow = lambda k: [re.sub(r'\s*\n\s*', ' | ', td.inner_text().replace('\xa0', ' ').strip()) for td in pg.locator(f'#stmtspans tr[data-k="{k}"] td').all()]
+    check('with no tipster the statement has one column: the units, the record and the return of the person', [t.lower() for t in pg.locator('#stmtspans thead th').all_inner_texts()] == ['período', 'unidades'] and srow('all') == ['Geral | 2 apostas | +R$ 80,00', '+0,8u | 1V 0D | +53,3%'] and srow('7d') == ['7 dias | 2 apostas | +R$ 80,00', '+0,8u | 1V 0D | +53,3%'], (srow('all'), srow('7d')))
+    check('and nothing about who is ahead', pg.locator('#stmt .ldot').count() == 0 and 'ponto dourado' not in txt('#stmthow') and pg.locator('#duel').count() == 0 and pg.locator('#stmtevents tbody tr').count() == 1, txt('#stmthow'))
+    check('the statement fits the phone', pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0)
     check('no script error in the draw', not errs, errs)
     PHASE['n'] = 0; ESPN['draw'] = None
     cov.stop(pg, 'settle-draw')

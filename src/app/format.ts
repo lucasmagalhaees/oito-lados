@@ -37,6 +37,7 @@ export const signedPct = (d: number): string => { const v = Math.round(d * 1000)
 const nodot = (f: Intl.DateTimeFormat) => ({ format: (t: number): string => f.format(t).replace('.', '') });
 export const dWhen = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 export const dDay = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
+export const dDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
 export const dTime = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const dMon = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
 /** A month and a year, short: "mar/26". */

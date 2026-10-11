@@ -24,7 +24,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Cashout:** devolve o valor integral enquanto nenhuma luta da aposta foi decidida. Se parte da múltipla já bateu e o resto ainda não começou, oferece um valor para encerrar, calculado pelas odds de agora. Com luta em andamento, cashout e apostas ficam congelados.
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
 - **Copiar aposta:** cola o texto de um palpite ou escolhe um ou vários prints; o app acha a luta e a seleção, entende se é simples ou múltipla (dupla, tripla...) e monta a aposta com a odd de agora. Com várias fotos, cada uma vira uma aposta e dá para fazer todas de uma vez. Cupom de acumulador que só mostra a primeira seleção é completado pela foto da lista de seleções, por outra aposta da lista ou à mão, e o valor e o tipo de cada uma podem ser mudados ali mesmo. Dá para dizer de quem é a aposta: a origem e a odd do print ficam guardadas, e a Carteira mostra o resultado por origem e quanto a sua odd ficou acima ou abaixo da do print. Antes de apostar várias de uma vez, o app avisa o que já está apostado, o que está repetido e a odd que caiu além do limite que você escolheu, e deixa corrigir o que o leitor leu errado. O valor segue a sua configuração, à risca: em dinheiro, o mesmo valor do original; em unidades, a stake do original, ou 1u quando ele não diz unidades. A imagem é lida no próprio aparelho.
-- **Carteira:** resultado, ROI, acerto e gráfico de tudo, dos últimos 30 dias ou do último evento, com quebra por mercado, evento e origem. Ao reabrir o app, uma faixa resume o que fechou desde a última vez.
+- **Carteira:** resultado, ROI, acerto e gráfico de tudo, dos últimos 7, 15 ou 30 dias ou do último evento, com quebra por mercado e por origem. Um extrato em unidades fica sempre à vista: unidades, cartel e ROI por período e por evento, seu e do tipster. Ao reabrir o app, uma faixa resume o que fechou desde a última vez.
 - **Últimas lutas:** nos detalhes de cada luta, as três últimas de cada lutador, com o método e o tempo em que acabaram. As do card da semana são buscadas ao abrir o app e ficam guardadas por uma semana.
 - **Você × tipster:** o que entra pelo copiar é do tipster, o que você monta é seu; a Carteira compara os dois e diz quem está na frente.
 - **Achar a luta:** um campo de busca pelo nome do lutador, em todos os eventos carregados, e botões para ver só o card principal ou só as preliminares.
@@ -34,7 +34,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Tema e cores:** tema automático, claro ou escuro. Os cantos têm três pares de cor (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
 - **Abre sem internet:** o app fica guardado no aparelho e abre na hora, com os últimos dados que carregou. Quando sai uma versão nova, ele avisa e troca com um toque.
 - **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
-- **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado e quebra por mercado e por evento.
+- **Ganhos e perdas:** lucro ou prejuízo, ROI, taxa de acerto, gráfico acumulado, quebra por mercado e o extrato em unidades por período e por evento.
 
 ## Como funciona
 
