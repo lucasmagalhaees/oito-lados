@@ -140,7 +140,8 @@ function formHtml(f: Fight): string {
         const how = p.method === 'unknown' ? (p.label || 'resultado não informado') : p.method === 'draw' ? 'Empate' : p.method === 'nc' ? 'No contest' : Core.ML[p.method];
         const when = p.method === 'dec' || p.method === 'draw' ? (p.round ? `${p.round} rounds` : '') : p.round ? `R${p.round} ${esc(p.clock)}` : '';
         const which = p.method === 'sub' && p.desc ? p.desc : '';      // which submission it was, as the source names it
-        return `<li class="${res[0]}"><i aria-label="${res[2]}">${res[1]}</i><span><b>${esc(how)}</b>${when ? ` · ${when}` : ''}<small>${[which, p.date ? monthYear(p.date) : ''].filter(Boolean).map(esc).join(' · ')}</small></span></li>`;
+        // how it ended on a line of its own, the submission under it, and when on the last one: a column of half a phone holds no more than that across
+        return `<li class="${res[0]}"><i aria-label="${res[2]}">${res[1]}</i><span><b>${esc(how)}</b>${which ? `<small class="which">${esc(which)}</small>` : ''}<small>${[when, p.date ? esc(monthYear(p.date)) : ''].filter(Boolean).join(' · ')}</small></span></li>`;
       }).join('')}</ul>`;
     }
     return `<div class="fcol ${k}" data-athlete="${esc(x.id)}"><span class="fname"><i></i>${flagHtml(x.country)}${esc(x.last)}</span>${body}</div>`;

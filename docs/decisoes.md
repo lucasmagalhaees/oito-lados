@@ -50,6 +50,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 19. PR #21 aberto às 20:25, em cima do #20, com o CI verde em seguida; mesclar o #21 leva os dois. Em seguida o retrospecto (D79): workflow de captura disparado às 20:27, amostras gravadas no branch, e o quadro das últimas lutas feito em cima delas.
 20. Os PRs #20, #21 e #22 foram mesclados entre 00:49:18 e 00:49:35 de 11/10/2026; o workflow `Produção` passou no commit `e665175`, sem a troca de versão da D32. Às 00:50 o Lucas escreveu: "app aprovado no primeiro dia de uso". Às 09:24 e 09:25, três pedidos: backup em arquivo (D81), "Tipster" sem o "sem nome" e o cartel do card da semana inteiro adiantado (D80).
 21. PR #23 (D80, D81) aberto às 10:07 de 11/10/2026 e mesclado às 10:11; o workflow `Produção` passou no commit `dd6efa8`. Às 09:34, com ele quase pronto, o pedido do extrato em unidades e de melhorar a comparação com o tipster (D82, D83), feito em seguida, num PR à parte.
+22. PR #24 (D82, D83) aberto às 10:44 e mesclado às 10:49 de 11/10/2026. Às 10:34 e 10:35, com ele na verificação final: a bandeira do país de cada lutador (D84) e "submission" no lugar de "finalização", dizendo qual foi (D85). Os dois campos já eram lidos e estavam nas amostras gravadas; a conferência ao vivo foi disparada no branch para ver os nomes de verdade antes de fechar.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -862,6 +863,29 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Interpretação:** "ainda pode melhorar" não disse o quê. O que mudou: unidades em primeiro lugar, o cartel de cada lado, e a comparação visível em cada janela de tempo e em cada evento (D82). **Quem está na frente continua decidido pelo ROI** (D77): mudar o critério para unidades é decisão dele.
 - **Também:** o resultado em unidades, na linha embaixo do resultado em dinheiro do período, ficou maior e com cor.
 
+## D84. Bandeira do país de cada lutador
+
+- **Contexto (11/10/2026, 10:34):** "tem como colocar a bandeirinha da nacionalidade dos lutadores?".
+- **Decisão:** a bandeira vem antes do sobrenome, no card da luta e no quadro das últimas lutas.
+- **De onde vem:** o país já era lido do placar (`athlete.flag.alt`, o nome em inglês; está nas amostras gravadas desde 09/10) e não era mostrado. A bandeira é um emoji, tirado do nome por uma tabela do app (`Core.flagOf`). Nenhuma chamada nova, nenhuma imagem baixada.
+- **Conferido na ESPN de verdade em 11/10/2026** (execução 38144909204 do workflow `ESPN contract`, neste branch): os placares de 120 dias traziam 58 nomes de país, e a tabela tinha bandeira para os 58 sem precisar de ajuste. O 59º valor era "default", que é o lutador sem país: fica sem bandeira.
+- **Interpretações:** emoji em vez da imagem da ESPN (a imagem seria um campo novo, uma chamada a mais por bandeira e não abriria sem internet); onde aparece (card e últimas lutas; não nas apostas, onde o texto é copiado na hora da aposta); país que a tabela não conhece fica sem bandeira, e a conferência semanal avisa.
+- **Não verificado:** a bandeira no iPhone. No Chromium dos testes ela aparece (vi a captura); que o iOS desenha as bandeiras de Inglaterra, Escócia e Gales vem da memória.
+
+## D85. "Submission" no lugar de "finalização", e qual foi
+
+- **Contexto (11/10/2026, 10:35):** "troca o termo finalização por submission e se puder dizer qual a finalização seria bem bacana".
+- **Decisão do Lucas:** a interface escreve "Submission". Onde a luta acabou assim, diz qual foi.
+- **Como ficou:** mercados ("por Submission", "Luta termina por Submission", "por nocaute ou submission"), o resultado da luta no card e nas apostas ("venceu por Submission (Rear Naked Choke)"), e o quadro das últimas lutas ("2 por submission", e o nome embaixo da linha da luta).
+- **De onde vem o nome:** `result.displayDescription` do `status`, que o app já lia (`Result.desc`, conferido contra a amostra gravada desde 09/10) e não mostrava. A luta passada passou a guardá-lo também.
+- **Interpretações:**
+  - **O nome fica em inglês, como a ESPN escreve** ("Rear Naked Choke", não "mata-leão"). Traduzir pediria uma tabela de nomes que eu teria de inventar para os que não vi; e o pedido foi justamente trocar o termo em português pelo inglês.
+  - **Só a submission ganha o nome.** O nocaute também vem com descrição ("Punches"); ele não pediu, e não entrou.
+  - **"submission" em minúscula no meio de frase** ("2 por submission"), com maiúscula como nome de mercado.
+  - **Aposta antiga continua com "Finalização"** no histórico: o texto é copiado na hora da aposta (mesma regra da D34).
+  - **O que estava guardado das últimas lutas é buscado de novo uma vez**, porque foi lido sem o nome. São as mesmas chamadas da D80, uma vez.
+- **Conferido na ESPN de verdade em 11/10/2026** (mesma execução): das 160 lutas encerradas varridas, 23 foram submissions e as 23 vieram com nome; oito nomes diferentes.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -874,6 +898,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
+| Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
+| Confirmar: o nome da submission em inglês, como a ESPN escreve, e só a submission com nome, não o nocaute (D85) | Lucas |
 | Confirmar o extrato em unidades: "a todo momento" como um cartão fixo na Carteira (e não em todas as telas), o cartel sem anulada e cashout, as três colunas, e a tabela por evento antiga ter saído (D82) | Lucas |
 | Dizer se quem está na frente deve ser decidido pelo ROI, como hoje, ou pelas unidades (D77, D83) | Lucas |
 | Salvar o backup em arquivo no iPhone, mandar pelo Telegram e restaurar dele (D81) | Lucas |

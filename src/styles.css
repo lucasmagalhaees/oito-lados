@@ -166,6 +166,7 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .fcol li span{min-width:0;color:var(--muted);overflow-wrap:anywhere}
 .fcol li b{color:var(--fg);font-weight:600}
 .fcol li small{display:block;font-size:11px}
+.fcol li small.which{color:var(--fg)}
 .mk h4{margin:14px 0 7px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:400}
 .mk h4 em{font-style:normal;font-size:12px;color:var(--muted)}
 .grid{display:grid;gap:6px}

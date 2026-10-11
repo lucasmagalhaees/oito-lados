@@ -97,7 +97,8 @@ async () => {
   const results = {}, samples = {}, marks = [], subs = {}; let swept = 0, bare = 0;
   // the flag of each fighter comes from the name of the country on the board; a name the app has no flag for is reported, so the table can learn it
   const lands = {};
-  for (const c of fights.concat(past).flatMap(f => [f.a.country, f.b.country]).filter(Boolean)) lands[c] = !!Core.flagOf(c);
+  // "default" is what ESPN writes for a fighter with no country (seen on 11/10/2026): there is no flag to show, and nothing to report
+  for (const c of fights.concat(past).flatMap(f => [f.a.country, f.b.country]).filter(c => c && c !== 'default')) lands[c] = !!Core.flagOf(c);
   const noFlag = Object.keys(lands).filter(c => !lands[c]).sort();
   ok(`fighters come with the name of a country (${Object.keys(lands).length} different ones on the boards)`, Object.keys(lands).length > 0);
   if (noFlag.length) warns.push(`${noFlag.length} country name(s) on the boards the app has no flag for: ${noFlag.join(', ')}`);
