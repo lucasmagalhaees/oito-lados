@@ -1,6 +1,7 @@
 import { Core } from '../core';
 import { DAY, H } from './format';
 import { D, S, index, ui } from './state';
+import { shownEvents } from './sync';
 import { record } from './usage';
 import type { Bet, Fight, Json, Leg, PastFight, UsageKind } from '../core';
 
@@ -107,6 +108,7 @@ export async function loadResults(): Promise<void> {
   const now = Date.now(), legs = openLegs();
   const betFids = new Set(legs.map(l => l.fid));
   const tdFids = new Set(legs.filter(l => /^td/.test(l.key)).map(l => l.fid));
+  const onScreen = new Set(shownEvents().map(e => e.id));
   const jobs: (() => Promise<void>)[] = [];
   for (const f of D.fights.values()) {
     if (f.state === 'in' && (tdFids.has(f.id) || f.id === liveShown())) {
@@ -115,8 +117,8 @@ export async function loadResults(): Promise<void> {
     }
     if (f.state !== 'post' || f.canceled) continue;
     if (!D.finalSeen[f.id]) D.finalSeen[f.id] = now;
-    const recent = now - f.date < 5 * DAY;
-    if (!D.results[f.id] && (recent || betFids.has(f.id))) jobs.push(async () => {
+    // a result is asked for only where it is used: on a card that is on screen, or to close a bet
+    if (!D.results[f.id] && (onScreen.has(f.eventId) || betFids.has(f.id))) jobs.push(async () => {
       const r = Core.normResult(await getJSON(`${CORE}/events/${f.eventId}/competitions/${f.id}/status`, 'result'));
       // A result under a name the app does not know may still be being written, or be one a later version will know.
       // For a day it is asked for again, and only then taken as final: taking it at once would void every bet on the

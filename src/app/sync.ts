@@ -9,11 +9,14 @@ import type { Fight, FightEvent } from '../core';
 /* ================= sync loop ================= */
 export let busy = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
+/** How many rounds in a row could not read the board, and how long until the next one (shown while the source is out of reach). */
+let fails = 0;
+export let nextIn = 0;
 export async function sync(force: boolean): Promise<void> {
   if (busy) return; busy = true;
   try {
     await loadBoard();
-    D.err = null; D.lastSync = Date.now();
+    D.err = null; fails = 0; D.lastSync = Date.now();
     pickEvent(); render();
     await Promise.all([loadOdds(ui.eventId, force), loadResults()]);
     const other = [...new Set(slip.sels.map(s => D.fights.get(s.fid)).filter((f): f is Fight => !!f && f.eventId !== ui.eventId).map(f => f.eventId))];
@@ -22,8 +25,8 @@ export async function sync(force: boolean): Promise<void> {
     for (const eid of left) await loadOdds(eid, force);
     settle(); saveCache();
     preloadForm();
-  } catch (e) { const err = e as { name?: string; message?: string } | null; D.err = (err && err.name === 'AbortError') ? 'tempo esgotado' : String((err && err.message) || e); }
-  finally { busy = false; render(); schedule(); }
+  } catch (e) { fails++; const err = e as { name?: string; message?: string } | null; D.err = (err && err.name === 'AbortError') ? 'tempo esgotado' : String((err && err.message) || e); }
+  finally { busy = false; schedule(); render(); }
 }
 /** Whether an open bet is waiting on a fight that is already over: for its result, or for its takedown count to stop
  *  moving. Only for half an hour after the fight was first seen over, so a result that never comes does not keep the
@@ -41,7 +44,8 @@ export function schedule(): void {
   const now = Date.now(), fs = [...D.fights.values()];
   const live = fs.some(f => f.state === 'in');
   const night = D.events.some(e => !e.completed && now > e.date - H && now < e.date + 12 * H);
-  timer = setTimeout(() => sync(false), settling(now) ? 8e3 : live ? 15e3 : night ? 30e3 : 120e3);
+  nextIn = Core.retryDelay(settling(now) ? 8e3 : live ? 15e3 : night ? 30e3 : 120e3, fails);
+  timer = setTimeout(() => sync(false), nextIn);
 }
 export function initSync(): void {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(false); else clearTimeout(timer); });

@@ -57,6 +57,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 26. PR #28 (D89) mesclado às 15:07 de 11/10/2026. Às 15:12: com um card encerrado, mostrar os três próximos (D90).
 27. PR #29 (D90) mesclado às 16:10 de 11/10/2026. Às 16:16: o card encerrado ainda aparecia, e não devia (D91).
 28. PR #30 (D91) mesclado às 16:40 de 11/10/2026. Entre 16:23 e 16:41: como está o uso da API da ESPN, e como medir (D92).
+29. PR #31 (D92) mesclado às 17:15 de 11/10/2026. Às 17:43: "quero que proponha melhorias"; oito propostas, três recomendadas, e "pode fazer" (D93, D94, D95). As outras cinco ficaram propostas: odds em ritmo mais lento longe da luta e placar longo só de vez em quando (as duas depois de medir), trocar os três seletores do sistema que sobraram, os resultados do último card, e fechar as pendências de confirmação numa lista.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -986,6 +987,34 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **O cartão fica sempre à vista**, no fim da Carteira, e não escondido atrás de uma opção.
 - **O que isto não é:** otimização. Nada mudou em quantas chamadas o app faz. A ideia é usar numa noite de card, mandar o arquivo e decidir com número.
 
+## D93. Resultado de luta só é pedido onde é usado
+
+- **Contexto (11/10/2026, 17:43):** "quero que proponha melhorias". Propus oito, recomendei três para já (esta, a D94 e a D95) e ele respondeu "pode fazer". Li como as três recomendadas.
+- **O que acontecia:** o app pedia o resultado de toda luta encerrada nos últimos 5 dias, com ou sem aposta. Desde a D91 o card encerrado não está mais na tela: na primeira abertura depois de um card, eram umas 13 chamadas cujo resultado ninguém via.
+- **Decisão:** o resultado é pedido só para um card que está na tela, ou para fechar uma aposta aberta.
+- **O que não muda:** enquanto o card está na tela (em andamento, ou com as lutas encerradas e o evento ainda não marcado), toda luta encerrada tem o resultado pedido, uma vez. Aposta aberta fecha como antes.
+
+## D94. Quando a ESPN não responde, o app pede menos
+
+- **O que acontecia:** com a ESPN fora do ar, ou recusando, o app continuava pedindo no ritmo do momento, que numa noite de card chega a uma rodada a cada 8 s.
+- **Decisão:** cada rodada seguida que falha dobra a espera, até 5 min; a primeira que dá certo traz o ritmo de volta. A tela diz em quanto tempo é a nova tentativa.
+- **Interpretações que precisaram ser feitas:**
+  - **Falha é o placar não vir.** Odds, resultados e quedas falham uma a uma sem derrubar a rodada, como já era, e não contam.
+  - **Teto de 5 min**, para o app voltar sozinho em tempo razoável quando a ESPN volta.
+  - **Quem pede na mão não espera:** o botão Atualizar, a volta ao app e a volta da conexão tentam na hora.
+- **O custo:** numa falha passageira no meio de uma luta, a rodada seguinte vem em 30 s em vez de 15 s.
+- **Não sei:** se a ESPN limita chamadas, nem como ela responde quando limita. O recuo vale para qualquer falha do placar.
+
+## D95. O uso da ESPN também hora a hora
+
+- **Por quê:** o total do dia e o pico não dizem onde, numa noite de card, as chamadas vão. Por hora dá para separar a luta ao vivo da espera do resultado, que é o que precisa ser visto antes de mexer nos intervalos.
+- **Decisão:** dos 7 dias mais recentes fica também, por hora, o número de chamadas, as que falharam, o tamanho, o pico num minuto e quantas de cada tipo. O cartão mostra as últimas 24 horas atrás de um botão, e o arquivo exportado leva as horas.
+- **Interpretações que precisaram ser feitas:**
+  - **Últimas 24 horas, e não "hoje":** card de sábado atravessa a meia-noite.
+  - **7 dias de horas, 30 de dias:** para o que fica guardado não crescer à toa.
+  - **Atrás de um botão,** para o cartão não dobrar de tamanho.
+  - **Por hora não fica o tempo de resposta,** só no total do dia por tipo.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -1002,6 +1031,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar: o card encerrado sair mesmo com aposta ainda esperando o resultado dele (D91) | Lucas |
 | Reparar numa noite de card: quanto tempo depois da luta principal o card some (D91) | Lucas |
 | Usar o app na noite do card de 17/10 e mandar o arquivo do "Uso da ESPN", para decidir o que otimizar (D92) | Lucas |
+| Confirmar: "pode fazer" era para as três propostas recomendadas, e não para as oito (D93) | Lucas |
+| Decidir, com o arquivo do card de 17/10: odds em ritmo mais lento longe da luta, e placar longo só de vez em quando | Lucas |
 | Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
 | Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |

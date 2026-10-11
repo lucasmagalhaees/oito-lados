@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.24.0] - 2026-10-11
+
+### Adicionado
+- O cartão "Uso da ESPN" mostra também as últimas 24 horas, hora a hora, e o arquivo exportado leva as horas.
+
+### Alterado
+- O resultado de uma luta só é pedido à ESPN onde é usado: num card que está na tela, ou para fechar uma aposta.
+- Quando a ESPN não responde, a espera até a próxima tentativa dobra a cada falha, até 5 min, e a tela diz em quanto tempo é a nova tentativa.
+
 ## [0.23.0] - 2026-10-11
 
 ### Adicionado

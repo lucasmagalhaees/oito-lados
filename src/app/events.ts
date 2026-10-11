@@ -166,6 +166,7 @@ document.addEventListener('click', e => {
   else if (a === 'usagesave') saveUsageFile();
   else if (a === 'usagecopy') copyUsage();
   else if (a === 'usagereset') resetUsage();
+  else if (a === 'usagehours') { ui.usageHours = !ui.usageHours; render(); }
   else if (a === 'bkapply') { if (!ui.restoreFile || !restoreFrom(ui.restoreFile.text)) toast('Esse arquivo não é um backup do Oito Lados.'); }
   else if (a === 'bkcancel') { ui.restoreFile = null; render(); }
   else if (a === 'backup') {
