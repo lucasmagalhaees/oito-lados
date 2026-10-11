@@ -851,7 +851,6 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
-| Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
 | Salvar o backup em arquivo no iPhone, mandar pelo Telegram e restaurar dele (D81) | Lucas |
 | Ver, no card da semana, se o cartel de todo mundo aparece ao abrir os mercados sem esperar, e se alguma coluna diz "Não deu pra buscar agora" (D80) | Lucas |
 | Abrir os mercados de uma luta de verdade e ver se as últimas lutas aparecem e batem com o cartel do lutador (D79) | Lucas |
