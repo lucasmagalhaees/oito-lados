@@ -135,11 +135,14 @@ const stakeBoth = (value: number, unit: number): string => !(unit > 0) ? money(v
 /** What an item of the list comes back as if it wins, at the odds of now and at its stake; null while it has no price. */
 const payOf = (r: Resolved): number | null => r.value > 0 ? payoutOf(r.ok.map(k => ({ s: { fid: k.f.id, key: k.it.key }, f: k.f, x: k.x, ok: true })), r.mode, r.value) : null;
 let opSeq = 0, photoSeq = 0;
-const newOp = (src: ImportOp['src'], name: string, res: Tip, text: string): ImportOp => ({ id: ++opSeq, src, name, res, text, picks: [], noauto: [], stake: null, mode: null, edits: {}, swap: null, force: false, open: null });
+const newOp = (src: ImportOp['src'], name: string, res: Tip, text: string): ImportOp => ({ id: ++opSeq, src, name, res, text, picks: [], noauto: [], stake: null, mode: null, edits: {}, swap: null, picking: null, force: false, open: null });
 const opOf = (id: number): ImportOp | undefined => imp.ops.find(o => o.id === id);
 const label = (o: ImportOp): string => o.src === 'image' ? o.name : 'Texto';
-/** Every market of a fight as the choices of a select, with the odd of now. */
-const marketOptions = (pr: Pricing): string => pr.groups.map(g => `<optgroup label="${esc(g.title)}">${g.opts.map(x => `<option value="${esc(x.key)}">${esc(pr.map[x.key].sel)} · ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</option>`).join('')}</optgroup>`).join('');
+/** Every market of a fight to choose one selection from, with the odd of now: buttons of the app under the name of each
+ *  market, and not a select of the system, whose list is drawn by the device with colours of its own. `act` and `attrs`
+ *  say what a tap does and to which item; `drop` adds the way out of the bet for a selection that was read. */
+const marketPicker = (pr: Pricing, cls: string, act: string, attrs: string, label: string, drop?: boolean): string =>
+  `<div class="mkpick ${cls}" role="group" aria-label="${label}">${pr.groups.map(g => `<span class="label">${esc(g.title)}</span><div class="quick mkopts">${g.opts.map(x => `<button data-act="${act}" ${attrs} data-key="${esc(x.key)}">${esc(pr.map[x.key].sel)} <b>${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</b></button>`).join('')}</div>`).join('')}${drop ? `<button class="btn ghost block" data-act="${act}" ${attrs} data-key="__drop">Tirar esta seleção</button>` : ''}</div>`;
 /** Reads a text into a bet, with the odds it needs (they are only kept for the event on screen): of the selections it
  *  names, and of the fights it names without a selection, so that one can be chosen for them. */
 function parse(text: string): { res: Tip; need: Map<string, string[]> } {
@@ -208,7 +211,7 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
         : `<span class="via">${via === 'hand' ? 'Escolhida por você' : `Completada com a ${esc(src ? label(src).toLowerCase() : 'outra')}`} · <button data-act="impunpick" data-op="${o.id}" data-fid="${esc(f.id)}">desfazer</button></span>`;
       h += `<div class="sel"><div class="t"><b>${sideDot(it.key, f.weight)}${esc(x.sel)}</b><span>${esc(x.market)} · ${esc(f.a.last)} x ${esc(f.b.last)} · ${esc(dWhen.format(f.date))}${it.assumed ? ' · o texto não diz o mercado, considerei vencedor' : ''}</span><span>${it.printedOdd ? `Odd do print ${fo(it.printedOdd)} · ` : ''}odd agora ${x.src === 'est' ? '≈' : ''}${fo(x.odd)}</span>${how}</div></div>`;
       const pr = via === 'read' && o.swap === at ? priceOf(f) : null;
-      if (pr) h += `<select class="impedit" ${mine} aria-label="Trocar a seleção em ${esc(f.a.last)} x ${esc(f.b.last)}"><option value="">Trocar por…</option>${marketOptions(pr)}<option value="__drop">Tirar esta seleção</option></select>`;
+      if (pr) h += marketPicker(pr, 'impedit', 'impeditkey', mine, `Trocar a seleção em ${esc(f.a.last)} x ${esc(f.b.last)}`, true);
     }
     const spent = r.mode === 'single' ? Core.r2(r.value * r.ok.length) : r.value, pay = payOf(r);
     const src = { units: `${fu(r.units || 0)} do print`, same: 'mesmo valor do print', default: 'o print não diz o valor, considerei 1u', one: `1u, pela sua configuração${r.shown ? `: o print só traz ${money(r.shown)}, que não é copiado` : ''}` }[r.how];
@@ -232,7 +235,9 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
     h += `<div class="impmiss" data-fid="${esc(m.f.id)}"><p class="msg">Achei ${esc(m.f.a.last)} x ${esc(m.f.b.last)}, mas ${r.tip.kind === 'multi' ? 'a aposta nela não está nessa imagem' : 'não entendi qual é a aposta'}.</p>`;
     for (const hnt of m.hints) h += `<button class="btn ghost block" data-act="impuse" data-op="${o.id}" data-from="${hnt.o.id}" data-fid="${esc(m.f.id)}" data-key="${esc(hnt.it.key)}">Usar da ${esc(label(hnt.o).toLowerCase())}: ${esc(hnt.x.sel)}${hnt.it.printedOdd ? ` · ${fo(hnt.it.printedOdd)}` : ''}</button>`;
     const pr = m.pickable ? priceOf(m.f) : null;
-    if (pr) h += `<select class="imppick" data-op="${o.id}" data-fid="${esc(m.f.id)}" aria-label="Escolher a aposta em ${esc(m.f.a.last)} x ${esc(m.f.b.last)}"><option value="">Escolher a aposta nessa luta…</option>${marketOptions(pr)}</select>`;
+    // the markets of the fight open at a tap: they are many, and a fight left without a bet is not always to be filled in by hand
+    const at = `data-op="${o.id}" data-fid="${esc(m.f.id)}"`, picking = o.picking === m.f.id;
+    if (pr) h += `<button class="btn ghost block" data-act="imppickopen" ${at} aria-expanded="${picking}">${picking ? 'Fechar as opções' : 'Escolher a aposta nessa luta'}</button>${picking ? marketPicker(pr, 'imppick', 'imppickkey', at, `Escolher a aposta em ${esc(m.f.a.last)} x ${esc(m.f.b.last)}`) : ''}`;
     h += '</div>';
   }
   if (r.missing.length && r.tip.kind === 'multi') h += '<p class="hint">Cupom de múltipla costuma mostrar só a primeira seleção. Escolhe a que falta, ou manda junto a foto da lista de seleções.</p>';
@@ -342,7 +347,7 @@ export function pickFor(id: number, fid: string, key: string, from?: number): vo
   const o = opOf(id), src = from == null ? undefined : opOf(from); if (!o || !key) return;
   const it = src && baseOf(src).tip.items.find(x => x.fid === fid && x.key === key);
   o.picks = o.picks.filter(p => p.fid !== fid).concat({ fid, key, ...(it ? { printedOdd: it.printedOdd, src: src!.id } : {}) });
-  imp.msg = ''; renderImport();
+  o.picking = null; imp.msg = ''; renderImport();
 }
 /** Takes a filled-in selection out again. One that was filled in automatically is not filled in again. */
 export function unpickFor(id: number, fid: string): void {
@@ -357,6 +362,8 @@ export function stakeFor(id: number, typed: string): void {
   o.stake = n > 0 ? (iu ? { kind: 'units', units: n } : { kind: 'money', money: n }) : null;
   imp.msg = ''; renderImport();
 }
+/** Opens or closes the markets of a fight the original names without a bet, to choose one by hand. */
+export function pickOpen(id: number, fid: string): void { const o = opOf(id); if (!o) return; o.picking = o.picking === fid ? null : fid; renderImport(); }
 /** Opens or closes the choices for correcting one selection that was read. */
 export function swapFor(id: number, i: number): void { const o = opOf(id); if (!o) return; o.swap = o.swap === i ? null : i; renderImport(); }
 /** Corrects one selection that was read: another selection of the same fight, or out of the bet. One the bet already

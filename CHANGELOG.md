@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.24.1] - 2026-10-11
+
+### Alterado
+- Os três seletores do sistema que sobravam (o tipster a renomear, na Carteira, e os mercados de uma luta na tela de copiar aposta) viraram botões do app, com as cores do tema.
+
 ## [0.24.0] - 2026-10-11
 
 ### Adicionado
