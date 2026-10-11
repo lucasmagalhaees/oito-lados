@@ -48,6 +48,7 @@ export default function cases(Core) {
 
   /* ---- pricing ---- */
   const P = Core.price(F, O, { a: { tdAvg: 1.52 }, b: { tdAvg: 0.43 } }), J = P.J, M = P.map;
+  eq('labels: a submission is called a submission, in the market of each fighter, in how the fight ends and in the round market', [M['mov:a:sub'].sel.endsWith(' por Submission'), M['fm:sub'].sel, P.groups.find(g => g.id === 'rnd').note, Core.ML], [true, 'Luta termina por Submission', 'por nocaute ou submission', { ko: 'KO/TKO', sub: 'Submission', dec: 'Decisão' }]);
   eq('real moneyline kept', [M['ml:a'].odd, M['ml:a'].src], [1.8, 'real']);
   eq('real method kept', [M['mov:b:sub'].odd, M['mov:b:sub'].src], [23, 'real']);
   eq('book total line is real', M['tot:o:3.5'].src, 'real');
@@ -532,6 +533,17 @@ export default function cases(Core) {
   eq('past fight: nobody wins a draw or a no contest, whatever is marked', [Core.normPastFight(pc(false, false), ps('draw', 'Draw', 3, '5:00'), '10').won, Core.normPastFight(pc(true, false), ps('no-contest', 'No Contest', 1, '2:00'), '10').won, Core.normPastFight(pc(true, false), ps('no-contest', 'No Contest', 1, '2:00'), '10').method], [null, null, 'nc']);
   eq('past fight: with no result published the winner still counts, and the method is not made up', (f => [f.won, f.method, f.round, f.clock, f.time])(Core.normPastFight(pc(false, true), { period: 2 }, '20')), [true, 'unknown', 0, '', null]);
   eq('past fight: no winner marked on either side is not a loss', Core.normPastFight(pc(false, false), ps('kotko', 'KO/TKO', 1, '1:00'), '10').won, null);
+  eq('past fight: which submission it was, as the source names it, and nothing made up when it does not say', [Core.normPastFight(pc(true, false), { period: 1, displayClock: '1:03', result: { name: 'submission', displayName: 'Submission', displayDescription: 'Rear Naked Choke' } }, '10'), Core.normPastFight(pc(true, false), ps('submission', 'Submission', 2, '3:00'), '10'), Core.normPastFight(pc(false, true), { period: 2 }, '20')].map(f => [f.method, f.desc]), [['sub', 'Rear Naked Choke'], ['sub', ''], ['unknown', '']]);
+  /* the flag of a fighter's country, from the name of the country as the source writes it */
+  const flag = (...cc) => String.fromCodePoint(...cc);
+  eq('flag: by the name of the country', [Core.flagOf('Brazil'), Core.flagOf('China'), Core.flagOf('USA'), Core.flagOf('United States'), Core.flagOf('South Korea'), Core.flagOf('Georgia')], [flag(0x1F1E7, 0x1F1F7), flag(0x1F1E8, 0x1F1F3), flag(0x1F1FA, 0x1F1F8), flag(0x1F1FA, 0x1F1F8), flag(0x1F1F0, 0x1F1F7), flag(0x1F1EC, 0x1F1EA)]);
+  eq('flag: England, Scotland and Wales have their own', [Core.flagOf('England'), Core.flagOf('Scotland'), Core.flagOf('Wales')].map(f => [...f].map(c => c.codePointAt(0).toString(16)).join(' ')), ['1f3f4 e0067 e0062 e0065 e006e e0067 e007f', '1f3f4 e0067 e0062 e0073 e0063 e0074 e007f', '1f3f4 e0067 e0062 e0077 e006c e0073 e007f']);
+  eq('flag: without minding case, accents or spaces around', [Core.flagOf('  brazil '), Core.flagOf('BRAZIL'), Core.flagOf("Côte d'Ivoire"), Core.flagOf('Türkiye'), Core.flagOf('Czechia') === Core.flagOf('Czech Republic')], [flag(0x1F1E7, 0x1F1F7), flag(0x1F1E7, 0x1F1F7), flag(0x1F1E8, 0x1F1EE), flag(0x1F1F9, 0x1F1F7), true]);
+  // the names on the real boards on 11/10/2026 (read from the annotations of the live check, run 38144909204), as ESPN writes them
+  const SEEN = ['Albania', 'Argentina', 'Armenia', 'Aruba', 'Australia', 'Azerbaijan', 'Bahrain', 'Belgium', 'Brazil', 'Cameroon', 'Canada', 'Chile', 'China', 'Croatia', 'Cuba', 'Democratic Republic of Congo', 'Dominican Republic', 'Ecuador', 'England', 'France', 'Georgia', 'Germany', 'Haiti', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Jamaica', 'Japan', 'Kyrgyzstan', 'Lebanon', 'Lithuania', 'Mexico', 'Moldova', 'Mongolia', 'Morocco', 'Myanmar', 'Netherlands', 'New Zealand', 'Nigeria', 'Peru', 'Poland', 'Portugal', 'Russia', 'Scotland', 'Senegal', 'Slovakia', 'South Korea', 'Spain', 'Sweden', 'Tajikistan', 'Türkiye', 'USA', 'Ukraine', 'Uzbekistan', 'Venezuela', 'Wales'];
+  eq('flag: every country name seen on the real boards has one, and no two countries share a flag', [SEEN.length, SEEN.filter(c => !Core.flagOf(c)), new Set(SEEN.map(Core.flagOf)).size], [58, [], 58]);
+  eq('flag: what ESPN writes for a fighter with no country is not a country', Core.flagOf('default'), '');
+  eq('flag: a name the table does not have gets no flag, never a guessed one', [Core.flagOf('Atlantis'), Core.flagOf(''), Core.flagOf(null), Core.flagOf(undefined), Core.flagOf('Bra'), Core.flagOf('Northern Ireland'), Core.flagOf('constructor'), Core.flagOf('BR')], ['', '', '', '', '', '', '', '']);
   eq('past fight: an answer that is not a fight', [Core.normPastFight(null, null, '10'), Core.normPastFight({}, {}, '10')], [null, null]);
   eq('past fight: where the status is asked for, by https', [Core.statusRef(pc(true, false)), Core.statusRef({}), Core.statusRef(null)], ['https://x/status', '', '']);
   const pf = (won, method, round, time) => ({ won, method, round, time });

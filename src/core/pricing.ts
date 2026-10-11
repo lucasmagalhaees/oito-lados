@@ -97,14 +97,14 @@ export function combo(J: JointModel, keys: string[], legOdds: number[], map?: Re
   const p = J.prob(keys), each = keys.map(k => J.prob([k]));
   if (!(p > 1e-9)) return { ok: false, why: 'impossible' };
   if (p > 0.97 * Math.min(...each)) return { ok: false, why: 'redundant' };
-  // "Allen vence" + "termina por finalização" is exactly the market "Allen por finalização": pay that market's price, not a different one
+  // "Allen vence" + "termina por submission" is exactly the market "Allen por submission": pay that market's price, not a different one
   if (map && !keys.some(k => /^td/.test(k))) for (const k in map) {
     if (/^td/.test(k) || keys.includes(k)) continue;
     if (Math.abs(J.prob([k]) - p) < 1e-9 && Math.abs(J.prob(keys.concat(k)) - p) < 1e-9) return { ok: true, p, odd: Math.max(map[k].odd, ...legOdds), same: map[k].sel };
   }
   return { ok: true, p, odd: Math.max(clamp(r2(1 / (p * COMBO_MARGIN)), 1.02, 301), ...legOdds) };
 }
-export const ML: Record<Finish, string> = { ko: 'KO/TKO', sub: 'Finalização', dec: 'Decisão' };
+export const ML: Record<Finish, string> = { ko: 'KO/TKO', sub: 'Submission', dec: 'Decisão' };
 export function price(f: Fight, o: Odds, st?: FightStats): Pricing {
   const P = probs(f, o), R = f.rounds, A = f.a.last, B = f.b.last;
   const groups: Market[] = [], map: Record<string, Priced> = {};
@@ -143,7 +143,7 @@ export function price(f: Fight, o: Odds, st?: FightStats): Pricing {
   }
   add({ id: 'tot', cat: 'Rounds', title: 'Total de rounds', note: '+ é mais de, − é menos de · X.5 = metade do round seguinte (2:30)', cols: 2, opts: tot });
 
-  add({ id: 'rnd', cat: 'Rounds', title: 'Round em que a luta acaba', note: 'por nocaute ou finalização', cols: 3,
+  add({ id: 'rnd', cat: 'Rounds', title: 'Round em que a luta acaba', note: 'por nocaute ou submission', cols: 3,
     opts: P.sh.map((s, i) => est('rnd:' + (i + 1), 'Round ' + (i + 1), 'Luta acaba no round ' + (i + 1), P.F * s)) });
 
   const wr: Option[] = [];

@@ -1,4 +1,4 @@
-import { FORM_TTL, loadBoard, loadForm, loadOdds, loadResults, openBets, openLegs } from './api';
+import { formFresh, loadBoard, loadForm, loadOdds, loadResults, openBets, openLegs } from './api';
 import { DAY, H } from './format';
 import { render } from './render';
 import { settle } from './settle';
@@ -67,7 +67,7 @@ let formAt = 0;
 export function preloadForm(): void {
   const ev = weekEvent(), now = Date.now();
   if (!ev || now - formAt < FORM_RETRY) return;
-  const ids = ev.fights.filter(f => f.state === 'pre' && !f.canceled).flatMap(f => [f.a.id, f.b.id]).filter(id => !(D.form[id] && now - D.form[id].ts < FORM_TTL));
+  const ids = ev.fights.filter(f => f.state === 'pre' && !f.canceled).flatMap(f => [f.a.id, f.b.id]).filter(id => !formFresh(id, now));
   if (!ids.length) return;
   formAt = now;
   loadForm(ids).then(() => { saveCache(); render(); });

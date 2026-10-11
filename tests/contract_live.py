@@ -94,7 +94,14 @@ async () => {
   // whether the scoreboard marks the winner once the fight is over (a winner pick is settled by that mark)
   const wide = await tryGet(`${SITE}/scoreboard?dates=${ymd(now - 120 * DAY)}-${ymd(now)}&limit=100`);
   const past = wide.__error ? [] : (wide.events || []).map(Core.normEvent).flatMap(e => e.fights).filter(f => f.state === 'post' && !f.canceled).sort((a, b) => b.date - a.date).slice(0, 160);
-  const results = {}, samples = {}, marks = []; let swept = 0, bare = 0;
+  const results = {}, samples = {}, marks = [], subs = {}; let swept = 0, bare = 0;
+  // the flag of each fighter comes from the name of the country on the board; a name the app has no flag for is reported, so the table can learn it
+  const lands = {};
+  // "default" is what ESPN writes for a fighter with no country (seen on 11/10/2026): there is no flag to show, and nothing to report
+  for (const c of fights.concat(past).flatMap(f => [f.a.country, f.b.country]).filter(c => c && c !== 'default')) lands[c] = !!Core.flagOf(c);
+  const noFlag = Object.keys(lands).filter(c => !lands[c]).sort();
+  ok(`fighters come with the name of a country (${Object.keys(lands).length} different ones on the boards)`, Object.keys(lands).length > 0);
+  if (noFlag.length) warns.push(`${noFlag.length} country name(s) on the boards the app has no flag for: ${noFlag.join(', ')}`);
   for (const f of past) {
     const st = await tryGet(`${CORE}/events/${f.eventId}/competitions/${f.id}/status`);
     if (st.__error) continue;
@@ -103,6 +110,7 @@ async () => {
     if (!r) { bare++; continue; }
     const k = `${(st.result || {}).name || ''} | ${(st.result || {}).displayName || ''}`;
     (results[k] = results[k] || { method: r.method, n: 0 }).n++;
+    if (r.method === 'sub') subs[r.desc || '(no name)'] = (subs[r.desc || '(no name)'] || 0) + 1;      // which submission it was: the app shows the name as it comes
     if (!samples[k]) samples[k] = { fight: f.id, event: f.eventId, winner: f.winner, status: { result: st.result, period: st.period, clock: st.clock, displayClock: st.displayClock, type: st.type && { name: st.type.name, state: st.type.state, completed: st.type.completed } } };
     if (['ko', 'sub', 'dec'].includes(r.method) && !f.winner) marks.push(`no winner marked: ${f.a.last} x ${f.b.last} (${k}, fight ${f.id})`);
     if (['draw', 'nc'].includes(r.method) && f.winner) marks.push(`winner marked on a ${r.method}: ${f.a.last} x ${f.b.last} (fight ${f.id})`);
@@ -143,7 +151,7 @@ async () => {
     else ok('athlete statistics expose takedownAvg', typeof Core.statValue(as, 'takedownAvg') === 'number');
   }
   if (window.pyGet) { const bad = cors.filter(c => !(c.acao === '*' || c.acao === window.ORIGIN)); ok(`all ${cors.length} answers carry the CORS header a browser on ${window.ORIGIN} needs`, !bad.length, bad.slice(0, 3).map(c => c.acao + ' ' + c.u).join(' | ')); }
-  return { checks, warns, fxRaw, results, samples, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}, ${swept} results swept` };
+  return { checks, warns, fxRaw, results, samples, lands, subs, summary: `${events.length} events, ${fights.length} fights, finished sample ${done ? done.id : '-'}, priced sample ${priced ? priced.f.id : '-'}, ${swept} results swept` };
 }
 """
 
@@ -195,6 +203,13 @@ for w in res['warns']:
 for k, v in sorted((res.get('results') or {}).items(), key=lambda kv: -kv[1]['n']):
     print(f"res  {k} -> {v['method']} x{v['n']}")
     annotate('notice', f"result name: {k} -> {v['method']} x{v['n']}")
+# the countries on the boards and whether the app has a flag for each, and the names ESPN gives to submissions
+lands = res.get('lands') or {}
+if lands:
+    text = ', '.join(sorted(lands)); print('land ' + text); annotate('notice', f"countries on the boards ({len(lands)}, {sum(1 for v in lands.values() if v)} with a flag): {text}")
+subs = res.get('subs') or {}
+if subs:
+    text = ', '.join(f'{k} x{v}' for k, v in sorted(subs.items(), key=lambda kv: -kv[1])); print('sub  ' + text); annotate('notice', 'submission names: ' + text)
 if os.environ.get('OL_SAMPLES') == '1':
     for k, v in (res.get('samples') or {}).items():
         print('sample ' + json.dumps({k: v}, ensure_ascii=False))

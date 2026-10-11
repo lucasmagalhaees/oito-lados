@@ -20,7 +20,8 @@ export function resultText(f: Fight, res: Result | null | undefined): string {
   const w = f.winner ? f[f.winner].last : '—';
   const how = res.method === 'unknown' ? (res.label || 'resultado sem método') : Core.ML[res.method];
   const when = res.method === 'dec' ? `${res.round} rounds` : `R${res.round} ${res.clock}`;
-  return `${w} venceu por ${how}${res.method === 'dec' && DEC[res.label] ? ' ' + DEC[res.label] : ''} · ${when}${tds}`;
+  // a submission is said by its name, as the source writes it
+  return `${w} venceu por ${how}${res.method === 'sub' && res.desc ? ` (${res.desc})` : ''}${res.method === 'dec' && DEC[res.label] ? ' ' + DEC[res.label] : ''} · ${when}${tds}`;
 }
 export function legOut(l: Leg, early: boolean): Outcome | null {
   const f = D.fights.get(l.fid);

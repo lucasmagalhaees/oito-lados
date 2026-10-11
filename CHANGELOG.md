@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.20.0] - 2026-10-11
+
+### Adicionado
+- Bandeira do país de cada lutador, antes do nome, no card da luta e no quadro das últimas lutas.
+- A luta que acabou em submission diz qual foi ("Rear Naked Choke"), no resultado e nas últimas lutas, com o nome que a ESPN dá.
+- A conferência semanal da ESPN lista os países dos placares, avisa de nome sem bandeira e lista os nomes de submission.
+
+### Alterado
+- "Finalização" passou a ser "Submission" em toda a interface. Apostas já feitas continuam com o texto de quando foram feitas.
+
 ## [0.19.0] - 2026-10-11
 
 ### Adicionado

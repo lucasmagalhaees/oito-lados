@@ -63,6 +63,9 @@ JS = r"""
   const past = FX.past_competitions.map((c, i) => Core.normPastFight(c, FX.past_statuses[i], '4077451'));
   eq('past fights: who won, how and when each one ended', past.map(x => [x.id, x.won, x.method, x.round, x.clock, x.time, x.weight, x.rounds]),
      [['401855749', false, 'sub', 1, '1:03', 63, 'Welterweight', 3], ['401859133', false, 'ko', 1, '1:42', 102, 'Welterweight', 3], ['401783702', false, 'sub', 2, '4:03', 243, 'Welterweight', 3]]);
+  eq('past fights: which submission it was, as ESPN names it', past.map(x => [x.method, x.desc]), [['sub', 'Rear Naked Choke'], ['ko', 'Punches'], ['sub', 'Rear Naked Choke']]);
+  eq('the country of every fighter on the recorded boards has a flag', [FX.scoreboard_pre, FX.scoreboard_post].flatMap(b => b.events.map(Core.normEvent)).flatMap(e => e.fights).flatMap(f => [f.a.country, f.b.country]).map(c => [c, !!Core.flagOf(c)]).filter(x => !x[1]), []);
+  eq('the countries on the recorded boards', [...new Set([FX.scoreboard_pre, FX.scoreboard_post].flatMap(b => b.events.map(Core.normEvent)).flatMap(e => e.fights).flatMap(f => [f.a.country, f.b.country]))].sort(), ['Brazil', 'China', 'England']);
   eq('past fights: the dates, the latest first', past.map(x => x.date), [Date.UTC(2026, 2, 29, 0, 0), Date.UTC(2026, 1, 7, 22, 0), Date.UTC(2025, 5, 28, 23, 0)]);
   eq('past fights: the same fight seen from the other corner is a win', Core.normPastFight(FX.past_competitions[0], FX.past_statuses[0], '2960681').won, true);
   eq('past fights: an athlete who was not in the fight has no result in it', Core.normPastFight(FX.past_competitions[0], FX.past_statuses[0], '1').won, null);

@@ -42,12 +42,17 @@ NEXT = {'g1': dict(a=('701','Hugo Teles','H. Teles','11-3-0'), b=('702','Otto Fa
 # athlete_eventlog.json, past_competitions.json, past_statuses.json). Each: (fight id, days ago, won, result, round, clock).
 KO = dict(id=356, name='kotko', displayName='KO/TKO', shortDisplayName='KO/TKO'); SUBM = dict(id=284, name='submission', displayName='Submission', shortDisplayName='Sub')
 UD = dict(id=263, name='decision---unanimous', displayName='Decision - Unanimous'); NOCON = dict(id=1, name='no-contest', displayName='No Contest')
+# a submission by its name, as in the recorded answer ("Rear Naked Choke") and as seen in the live sweep of 11/10/2026 ("Triangle Choke"); SUBM alone has none
+RNC = dict(SUBM, description='Rear Naked Choke', displayDescription='Rear Naked Choke'); TRI = dict(SUBM, description='Triangle Choke', displayDescription='Triangle Choke'); KOP = dict(KO, description='Punches', displayDescription='Punches')    # a knockout comes with a description too, which the app does not show
+# where each athlete is from, as the board says it: the three names of the recorded boards, "default" (what ESPN writes for an athlete with no country, seen on
+# 11/10/2026) and a name the app has no flag for
+LAND = {'101': 'Brazil', '102': 'England', '201': 'China', '202': 'default', '302': 'Atlantis'}
 PAST = {
  '101': [('p1011', 120, True, KO, 1, '2:10'), ('p1012', 300, True, UD, 3, '5:00'), ('p1013', 500, False, SUBM, 2, '3:45'), ('p1014', 700, True, KO, 3, '1:00')],   # four: only the latest three are read
  '102': [('p1021', 90, False, UD, 3, '5:00')],
  '201': [],                                                                                              # a debut: nothing fought yet
  '202': [('p2021', 60, None, dict(id=269, name='draw', displayName='Draw', shortDisplayName='Draw'), 3, '5:00'), ('p2022', 200, None, NOCON, 1, '2:00'), ('p2023', 400, True, None, 2, '4:00')],   # a draw, a no contest, and a win whose result was never published
- '301': [('p3011', 150, True, SUBM, 1, '1:03'), ('p3012', 330, True, SUBM, 2, '4:03'), ('p3013', 520, True, KO, 1, '0:45')],
+ '301': [('p3011', 150, True, RNC, 1, '1:03'), ('p3012', 330, True, TRI, 2, '4:03'), ('p3013', 520, True, KOP, 1, '0:45')],
  '302': [('p3021', 100, False, KO, 2, '3:00'), ('p3022', 280, True, UD, 5, '5:00'), ('p3023', 450, True, UD, 3, '5:00')],
 }
 PASTC = {cid: (aid, row) for aid, rows in PAST.items() for row in rows for cid in [row[0]]}
@@ -70,7 +75,7 @@ def past_status(cid):
     if res: o['result'] = res
     return o
 def comp(fid, f, st, when):
-    mk = lambda x, order, side: dict(id=x[0], order=order, winner=(st[5]==side), athlete=dict(displayName=x[1], fullName=x[1], shortName=x[2], flag=dict(alt='Brazil')), records=[dict(summary=x[3])])
+    mk = lambda x, order, side: dict(id=x[0], order=order, winner=(st[5]==side), athlete=dict(displayName=x[1], fullName=x[1], shortName=x[2], **({'flag': dict(alt=LAND.get(x[0], 'Brazil'))} if LAND.get(x[0], 'Brazil') else {})), records=[dict(summary=x[3])])
     return dict(id=fid, date=iso(when), type=dict(abbreviation=f['w']),
         competitors=[mk(f['b'],2,'b'), mk(f['a'],1,'a')],
         status=dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post')),

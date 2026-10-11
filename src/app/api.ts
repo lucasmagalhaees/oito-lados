@@ -24,8 +24,11 @@ export const formBusy = new Set<string>(), formFailed = new Set<string>();
  *  a time and one call after the other for each of them. A fight already read is not asked for again, since a past
  *  fight does not change; what was read stands for a week. Either all the fights of an athlete are read or none is
  *  kept, so that a list is never one fight short without saying so. */
+/** Whether what is kept of an athlete still stands: read within the week, and with all that is read of a fight today
+ *  (the fights kept by a version that did not read how each one ended are read again). */
+export const formFresh = (id: string, now: number): boolean => { const g = D.form[id]; return !!g && now - g.ts < FORM_TTL && g.fights.every(x => typeof x.desc === 'string'); };
 export async function loadForm(ids: string[]): Promise<void> {
-  const now = Date.now(), todo = [...new Set(ids)].filter(id => id && !formBusy.has(id) && !(D.form[id] && now - D.form[id].ts < FORM_TTL));
+  const now = Date.now(), todo = [...new Set(ids)].filter(id => id && !formBusy.has(id) && !formFresh(id, now));
   for (const k of Object.keys(D.form)) if (now - D.form[k].ts > FORM_KEEP && !todo.includes(k)) delete D.form[k];
   if (!todo.length) return;
   for (const id of todo) { formBusy.add(id); formFailed.delete(id); }
@@ -34,7 +37,7 @@ export async function loadForm(ids: string[]): Promise<void> {
       const had = (D.form[id] && D.form[id].fights) || [], fights: PastFight[] = [];
       const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`)).filter(x => x.played).slice(0, FORM_FIGHTS);
       for (const it of log) {
-        const known = had.find(x => x.id === it.id && x.method !== 'unknown');
+        const known = had.find(x => x.id === it.id && x.method !== 'unknown' && typeof x.desc === 'string');
         if (known) { fights.push(known); continue; }
         const c = await getJSON(it.competition), f = Core.normPastFight(c, await getJSON(Core.statusRef(c)), id);
         if (!f) throw new Error('not a fight');
