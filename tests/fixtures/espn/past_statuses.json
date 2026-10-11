@@ -1,0 +1,80 @@
+[
+ {
+  "clock": 63.0,
+  "displayClock": "1:03",
+  "period": 1,
+  "type": {
+   "id": "3",
+   "name": "STATUS_FINAL",
+   "state": "post",
+   "completed": true,
+   "description": "Final"
+  },
+  "result": {
+   "id": 284,
+   "name": "submission",
+   "displayName": "Submission",
+   "description": "Rear Naked Choke",
+   "displayDescription": "Rear Naked Choke",
+   "shortDisplayName": "Sub",
+   "target": {
+    "id": 122,
+    "name": "head",
+    "description": "Head",
+    "displayDescription": "Head"
+   }
+  }
+ },
+ {
+  "clock": 102.0,
+  "displayClock": "1:42",
+  "period": 1,
+  "type": {
+   "id": "3",
+   "name": "STATUS_FINAL",
+   "state": "post",
+   "completed": true,
+   "description": "Final"
+  },
+  "result": {
+   "id": 356,
+   "name": "kotko",
+   "displayName": "KO/TKO",
+   "description": "Punches",
+   "displayDescription": "Punches",
+   "shortDisplayName": "KO/TKO",
+   "target": {
+    "id": 122,
+    "name": "head",
+    "description": "Head",
+    "displayDescription": "Head"
+   }
+  }
+ },
+ {
+  "clock": 243.0,
+  "displayClock": "4:03",
+  "period": 2,
+  "type": {
+   "id": "3",
+   "name": "STATUS_FINAL",
+   "state": "post",
+   "completed": true,
+   "description": "Final"
+  },
+  "result": {
+   "id": 284,
+   "name": "submission",
+   "displayName": "Submission",
+   "description": "Rear Naked Choke",
+   "displayDescription": "Rear Naked Choke",
+   "shortDisplayName": "Sub",
+   "target": {
+    "id": 122,
+    "name": "head",
+    "description": "Head",
+    "displayDescription": "Head"
+   }
+  }
+ }
+]

@@ -1,12 +1,12 @@
 import { Core } from '../core';
-import { loadOdds } from './api';
+import { loadForm, loadOdds } from './api';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
 import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
 import { paintList, place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
-import { S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
+import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import type { Currency } from '../core';
@@ -90,7 +90,11 @@ document.addEventListener('click', e => {
   else if (a === 'part') { ui.part = d.p === 'main' || d.p === 'prelims' || d.p === 'early' ? d.p : null; render(); }
   else if (a === 'qclear') { ui.q = ''; if (q) { q.value = ''; q.focus(); } paintList(); }
   else if (a === 'refresh') { sync(true); render(); }
-  else if (a === 'more') { const id = d.fid as string; if (ui.open.has(id)) ui.open.delete(id); else ui.open.add(id); render(); }
+  else if (a === 'more') {
+    const id = d.fid as string, f = D.fights.get(id);
+    if (ui.open.has(id)) ui.open.delete(id); else { ui.open.add(id); if (f) loadForm([f.a.id, f.b.id]).then(() => { saveCache(); render(); }); }      // the latest fights of the two come with the details
+    render();
+  }
   else if (a === 'pick') {
     const fid = d.fid as string, key = d.key as string, g = key.split(':')[0];
     const i = slip.sels.findIndex(s => s.fid === fid && s.key === key);

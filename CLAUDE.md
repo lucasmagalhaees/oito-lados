@@ -63,6 +63,7 @@ O que cada peça do harness cobre:
 - `package.json`, `package-lock.json`, `vite.config.js`, `tsconfig.json`: o build. Sem framework e sem dependência em tempo de execução.
 - `scripts/verify.sh`: o comando único de verificação.
 - `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção está no commit da `main`.
+- `scripts/capture_espn.py`: grava respostas reais da ESPN como amostra em `tests/fixtures/espn/`. De uma máquina que não alcança a ESPN, roda pelo workflow `ESPN contract` com a entrada `capture`, que commita as amostras no branch em que foi disparado (nunca na `main`).
 - `tests/unit.cases.mjs`: os casos do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação, leitor de apostas, histórico), num arquivo só. Dois executores rodam os mesmos casos: `tests/unit.py`, no navegador, contra a página gerada, e `tests/core.mjs`, no Node, contra o núcleo construído sozinho.
 - `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
@@ -108,6 +109,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 23. Em cada aposta, cada seleção diz em palavras e em cor onde está: bateu, perdeu, anulada, ao vivo, vai começar, aguardando, não começou ou não contou. A múltipla conta as seleções no alto, e com uma seleção anulada mostra a odd, o retorno e o ganho que passa a pagar.
 24. A Carteira abre com a gestão da banca: a banca, o que está em jogo, quanto vale uma unidade e para onde a banca vai se as apostas abertas baterem todas ou perderem todas, com ganho e perda em cores diferentes.
 25. Toda aposta que entra pelo "Copiar aposta" é marcada como do tipster; a que é montada no card é do próprio usuário. Cada aposta mostra de quem é.
+26. Os detalhes de uma luta trazem as três últimas lutas de cada lutador: vitória ou derrota, como acabou e em que round e tempo.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -131,12 +133,16 @@ Bases:
 | Resultado | `CORE/events/{ev}/competitions/{luta}/status` | `result.{name,displayName,displayDescription}`, `period`, `clock`, `displayClock` |
 | Quedas da luta | `CORE/events/{ev}/competitions/{luta}/competitors/{atleta}/statistics` | `splits.categories[].stats[]` com `name == "takedownsLanded"` |
 | Média de quedas do lutador | `https://sports.core.api.espn.com/v2/sports/mma/athletes/{atleta}/statistics` | stat `takedownAvg` (quedas por 15 min) |
+| Lutas que o lutador já fez | `https://sports.core.api.espn.com/v2/sports/mma/athletes/{atleta}/eventlog` | `events.items[]`: `competition.$ref`, `played` |
+| Uma luta passada | o `competition.$ref` acima | `id`, `date`, `type.abbreviation`, `format.regulation.periods`, `competitors[].{id,winner}`, `status.$ref` (o resultado vem desse `status`, no formato de sempre) |
 
 Detalhes que já morderam:
 - O placar lista as lutas da primeira preliminar até a luta principal (a principal é o último índice).
 - Lutador `a` é o de `order` 1, `b` o de `order` 2. Casa e visitante das odds são mapeados pelo id em `athlete.$ref`.
 - `state`: `pre`, `in`, `post`. O objeto `result` só existe no `status` do CORE, não no placar.
-- O tempo do fim da luta é lido de `displayClock` ("3:26"); o `clock` numérico é só reserva, porque só foi visto em decisão.
+- O tempo do fim da luta é lido de `displayClock` ("3:26"); o `clock` numérico é só reserva. Nas amostras de 10/10/2026 ele veio também em lutas que acabaram antes da hora, e é o tempo decorrido em segundos (63 para "1:03").
+- A lista de lutas do atleta (`eventlog`) vem da mais recente para a mais antiga, com a luta ainda por acontecer na frente, marcada `played: false`. Vem paginada de 25 em 25; o app só olha a primeira página. As referências (`$ref`) vêm com `http`, e o app troca por `https`.
+- A luta, no CORE, traz também `cardSegment` ("Main Card", "Prelims", "Early Prelims"). O placar, que é de onde o app tira o card, não foi visto com esse campo; por isso as partes do card continuam saindo das horas.
 - No nível do evento só o `status.type.name` foi visto. `normEvent` aceita `completed`, `state` ou o nome contendo FINAL.
 - Nomes de resultado vistos em 160 lutas encerradas, em 10/10/2026: `kotko` (80), `decision---unanimous` (45), `submission` (25), `decision---split` (8), `dq` (1) e `tko---doctors-stoppage` (1). Empate, no contest e decisão majoritária não apareceram. Classificação por regex em `normResult` (ordem: no contest, draw, sub, dec, ko/dq). O `tests/contract_live.py` refaz essa varredura toda semana e falha se aparecer um nome que o app não classifica.
 - Nas mesmas 160 lutas, toda luta com vencedor tinha o vencedor marcado no placar, e todas tinham o objeto `result`. Quanto tempo a ESPN leva, depois do fim da luta, para marcar o vencedor e para publicar o resultado não foi medido.
@@ -147,7 +153,7 @@ Detalhes que já morderam:
 - Eventos do Contender Series vêm no mesmo placar e não têm odds; o app esconde.
 - A ESPN recusa navegador headless (403, sem cabeçalho de CORS). Por isso nenhum teste automatizado chama a ESPN pelo Chromium, e o script de conferência não se disfarça de navegador comum.
 - Vistos em 10/10/2026, no card ao vivo, pelo resumo de uma ferramenta de leitura de páginas, **sem amostra gravada**:
-  - **Empate:** `result.name` "draw" e `displayName` "Draw", sem descrição, e nenhum dos dois lutadores com `winner` no placar. É o que `normResult` já classifica como empate.
+  - **Empate:** `result.name` "draw" e `displayName` "Draw", sem descrição, e nenhum dos dois lutadores com `winner` no placar. É o que `normResult` já classifica como empate. O `status` desse empate foi gravado depois, como amostra, em `tests/fixtures/espn/status_draw.json`.
   - **Luta prestes a começar:** `status.type.name` "STATUS_PRE_FIGHT" com `state` "in", `period` 0 e `displayClock` "-". O app não mostra "R0": diz "vai começar". Apostas e cashout já travam, porque o `state` é `in`.
   - **Relógio:** numa luta encerrada no round 1, o placar trazia `displayClock` "3:11" e o `status` do CORE "1:49". Somam 5:00: o relógio do placar parece contar o que falta no round, e o do CORE o que já passou. O app mostra o do placar com a luta rolando e fecha a aposta pelo do CORE. Visto numa luta só.
   - **Partes do card:** sete lutas com uma hora e cinco com outra, três horas depois. As lutas do card principal tinham todas a mesma hora.
@@ -167,7 +173,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 |---|---|
 | `src/core/types.ts` | As formas dos dados: `Fight`, `Odds`, `Result`, `Bet`, `Leg`, `AppState`, `Pricing`, `Cashout`, `Tip` e as demais |
 | `src/core/odds.ts` | `r2`, `clamp`, `am2dec`, `devig`, `mo` (odd estimada com margem), mistura histórica por categoria |
-| `src/core/espn.ts` | Os leitores da ESPN: `normEvent`, `normOdds`, `attachDistance`, `normResult`, `statValue`. Único lugar que conhece o formato da API |
+| `src/core/espn.ts` | Os leitores da ESPN: `normEvent`, `normOdds`, `attachDistance`, `normResult`, `statValue`, e os do histórico do atleta (`normEventlog`, `normPastFight`, `statusRef`). Único lugar que conhece o formato da API |
 | `src/core/pricing.ts` | `probs`, `jointModel`, `combo`, `price`, `sideOf`, `overUnder`, `isWomens` |
 | `src/core/settlement.ts` | `legOutcome`, `betResult`, `oddLeft` (a odd que a aposta paga sem as lutas anuladas) e `legState` (onde está cada seleção, nas palavras da lista de apostas) |
 | `src/core/cashout.ts` | `cashout`, `CASHOUT_MARGIN` |
@@ -175,6 +181,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/core/fx.ts` | `normFx`, `fxRate`, `convertState`, `balanceOf` |
 | `src/core/tip.ts` | `parseTip`, `tipStake`, `completeTip` (preenche a seleção que o original não mostra), `printedEdge` e `edgeSummary` (a odd do original contra a odd pega) |
 | `src/core/history.ts` | Perguntas feitas ao histórico de apostas: `selSig`, `dupBets` (a aposta já está aberta?), `exposure` (quanto já está em jogo numa luta), `openTotals` (o que um conjunto de abertas tem em jogo e pode pagar, em dinheiro e em unidades), `oddNow` (a odd que uma aberta paga agora), `openByEvent` (as abertas por evento, na ordem das lutas), `copyDrop` (quanto a odd caiu em relação ao print), `isTip` (a aposta veio de um tipster?), `byOrigin`, `benchmark` (as próprias contra as de tipster), `renameOrigin`, `periodBets` e `sinceSummary` |
+| `src/core/form.ts` | As últimas lutas de um atleta somadas: `formSummary` (vitórias, derrotas e como as lutas acabaram) e `fightSeconds` (quanto a luta durou) |
 | `src/core/card.ts` | O card de um evento: `cardSections` (as partes do card, pela hora em que as lutas começam) e `findFights` (as lutas com o que foi digitado no nome dos lutadores) |
 | `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
 
@@ -184,7 +191,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 |---|---|
 | `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS`. Também o tema (`applyTheme`), os pares de cor dos cantos (`CORNER_SETS`, `cornerSet`) e `settingsOf`, a lista única do que é configuração |
 | `src/app/format.ts` | Moeda da banca, datas pt-BR, categorias de peso, `esc`, e os acessos ao DOM (`$`, `part`, `valOf`, `blurField`) |
-| `src/app/api.ts` | `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd` |
+| `src/app/api.ts` | `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`, e `loadForm`, que busca as últimas lutas dos dois lutadores de uma luta |
 | `src/app/fx.ts` | `FX` (cotação guardada) e `loadFx` |
 | `src/app/settle.ts` | `legOut`, `settle`, `resultText` |
 | `src/app/cashout.ts` | `cashoutOf`, `chanceNow`, as mensagens de cada motivo |
@@ -235,7 +242,7 @@ Configuração nova entra em `settingsOf` (`src/app/state.ts`): é o que um "Zer
 
 O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma dos payouts`. Não criar campo de saldo.
 
-`oitolados.cache.v1`: último placar, odds, resultados, quedas e estatísticas, para abrir instantâneo e offline.
+`oitolados.cache.v1`: último placar, odds, resultados, quedas, estatísticas e as últimas lutas de cada lutador já buscadas (`form`), para abrir instantâneo e offline.
 
 `oitolados.fx.v1`: última cotação lida, `{ date, rates: { BRL: 1, USD, EUR }, ts }`.
 
@@ -435,6 +442,18 @@ Botão "Copiar aposta de um print ou texto" na tela de Lutas. Aceita texto colad
 - O "×" limpa o campo e deixa o cursor nele. Escolher um evento no alto limpa a busca. A tecla "buscar" do teclado só guarda o teclado.
 - No iPhone um botão tocado não tira o foco do campo. Por isso o que é tocado dentro da lista (uma odd, "Método, rounds e quedas") repinta só a lista, com o campo no lugar, e qualquer toque fora dela solta o campo antes.
 
+## Últimas lutas de cada lutador
+
+Pedido do Lucas em 10/10/2026 (D57, feito na D79): nos detalhes de uma luta, as três últimas lutas de cada um.
+
+- **Onde aparece:** ao abrir os mercados de uma luta ("Método, rounds e quedas"), logo abaixo da legenda dos cantos, um quadro "Últimas 3 lutas" com uma coluna por lutador, na cor do canto dele. Em cada coluna: o cartel recente ("2V 1D", e "1E" para o que ninguém venceu), "Como acabaram" (quantas por KO/TKO, por finalização e por decisão, **de quem quer que tenha vencido**) e uma linha por luta: V, D ou E, o método, o round e o tempo em que acabou (ou o número de rounds, numa decisão) e o mês e o ano.
+- **De onde vem:** `loadForm` pede a lista de lutas do atleta (`eventlog`), fica com as 3 primeiras já lutadas (`FORM_FIGHTS`) e, para cada uma, pede a luta e o `status` dela. `Core.normPastFight` junta os dois; o resultado é lido por `normResult`, como o de qualquer luta. Não traz o nome do adversário, que custaria mais uma chamada por luta.
+- **Quanto custa:** 7 chamadas por lutador (1 da lista e 2 por luta), 14 por luta do card. **Só quando os mercados daquela luta são abertos**, nunca para o card inteiro e nunca no laço de sincronização.
+- **Guardado:** o que foi lido fica em `D.form`, por atleta, dentro de `oitolados.cache.v1`, e vale por 7 dias (`FORM_TTL`). Passado o prazo, a lista é pedida de novo (1 chamada) e só a luta que ainda não estava guardada é buscada, porque luta passada não muda.
+- **Tudo ou nada:** se uma das chamadas de um atleta falha, nada dele é guardado e a coluna diz "Não deu pra buscar agora"; abrir a luta de novo tenta outra vez. Assim a lista nunca fica com uma luta a menos sem avisar.
+- **Estreante:** lista sem luta já feita mostra "Nenhuma luta anterior na ESPN."
+- **Limites conhecidos:** a ESPN lista também lutas fora do UFC (referências em `leagues/other`), e o app segue a referência como vem; a resposta de uma dessas não foi gravada como amostra. Luta com resultado sem método publicado aparece como "resultado não informado", com o vencedor que o placar marcar.
+
 ## Sincronização
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 16 dias à frente.
@@ -496,13 +515,13 @@ Os casos do núcleo ficam em `tests/unit.cases.mjs`, uma função de `Core` com 
 
 Os casos são JavaScript, não TypeScript: muitos passam de propósito dados tortos, que o compilador recusaria. A verificação não ficou mais rápida com isso (o `unit.py` leva pouco mais de um segundo); o ganho é o núcleo provado fora da página.
 
-`contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio), e varre até 160 lutas encerradas dos últimos 120 dias para conferir que todo nome de resultado é classificado e que toda luta com vencedor tem o vencedor marcado no placar: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
+`contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores, inclusive a lista de lutas de um atleta, três lutas passadas com o `status` de cada uma e o `status` de um empate. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio), e varre até 160 lutas encerradas dos últimos 120 dias para conferir que todo nome de resultado é classificado e que toda luta com vencedor tem o vencedor marcado no placar: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código em `src/`, e também a configuração do build (versões exatas, modo `strict`, núcleo sem DOM, módulos documentados).
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%). `cov.stop` para a medição e solta a página: com o medidor ainda preso, uma página fechada continuava contando como aberta para o service worker.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive uma imagem que só está na área de transferência, e quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), mostra uma parte do card só e busca luta pelo nome (com um segundo evento no placar, e com o toque que não tira o foco do campo), confere a etiqueta de tipster em cada aposta e a comparação com as próprias, renomeia tipster, filtra as apostas por quem é, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive uma imagem que só está na área de transferência, e quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), confere as últimas lutas de cada lutador nos detalhes da luta (o que mostra, quantas chamadas faz, o que guarda e o que faz quando a fonte falha), mostra uma parte do card só e busca luta pelo nome (com um segundo evento no placar, e com o toque que não tira o foco do campo), confere a etiqueta de tipster em cada aposta e a comparação com as próprias, renomeia tipster, filtra as apostas por quem é, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 `settle.py` aposta pela interface na primeira luta do card (vencedor, o outro lado, método, quedas e uma múltipla) e confere a etiqueta de cada seleção pelo caminho. Faz a ESPN simulada segurar respostas: primeiro a luta acaba com o vencedor marcado e sem resultado (as duas de vencedor fecham, o resto espera, e a fonte é consultada de novo em menos de 10 s); depois o resultado vem com um nome inventado (nada anula, o nome aparece); depois vem certo (método e quedas fecham). Confere também a volta ao app e a múltipla perdida na luta principal. Numa segunda sessão, limpa, a primeira luta acaba em empate: a simples no vencedor é devolvida, e a múltipla segue aberta com a seleção marcada como anulada, a odd reduzida e os totais acompanhando, até ganhar na luta que restou. O `e2e.py` liquida com tudo chegando de uma vez; este é o que cobre a noite em que não chega.
 

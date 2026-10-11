@@ -50,6 +50,26 @@ JS = r"""
   const k = Core.normResult(FX.status_ko);
   eq('ko result (time read from the displayed clock)', [k.method, k.label, k.desc, k.round, k.time, k.clock], ['ko', 'KO/TKO', 'Punch', 3, 206, '3:26']);
 
+  // a real draw: no description, and read as a draw
+  const dr = Core.normResult(FX.status_draw);
+  eq('draw result', [dr.method, dr.label, dr.desc, dr.round, dr.time, dr.clock], ['draw', 'Draw', '', 3, 300, '5:00']);
+
+  // the fights an athlete has had: the event log (the latest first, the fight still to come included), then each fight and its status
+  const log = Core.normEventlog(FX.athlete_eventlog);
+  eq('event log: what the list holds', [log.length, log.map(x => x.played), log.slice(0, 4).map(x => x.id)], [8, [false, true, true, true, true, true, true, true], ['401927419', '401855749', '401859133', '401783702']]);
+  eq('event log: each fight is asked for by https, at the address the API gives', log[1].competition, 'https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/600057366/competitions/401855749?lang=en&region=us');
+  eq('event log: the three latest fights fought are the three recorded', log.filter(x => x.played).slice(0, 3).map(x => x.id), FX.past_competitions.map(c => c.id));
+  eq('past fight: where its result is asked for', Core.statusRef(FX.past_competitions[0]), 'https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/600057366/competitions/401855749/status?lang=en&region=us');
+  const past = FX.past_competitions.map((c, i) => Core.normPastFight(c, FX.past_statuses[i], '4077451'));
+  eq('past fights: who won, how and when each one ended', past.map(x => [x.id, x.won, x.method, x.round, x.clock, x.time, x.weight, x.rounds]),
+     [['401855749', false, 'sub', 1, '1:03', 63, 'Welterweight', 3], ['401859133', false, 'ko', 1, '1:42', 102, 'Welterweight', 3], ['401783702', false, 'sub', 2, '4:03', 243, 'Welterweight', 3]]);
+  eq('past fights: the dates, the latest first', past.map(x => x.date), [Date.UTC(2026, 2, 29, 0, 0), Date.UTC(2026, 1, 7, 22, 0), Date.UTC(2025, 5, 28, 23, 0)]);
+  eq('past fights: the same fight seen from the other corner is a win', Core.normPastFight(FX.past_competitions[0], FX.past_statuses[0], '2960681').won, true);
+  eq('past fights: an athlete who was not in the fight has no result in it', Core.normPastFight(FX.past_competitions[0], FX.past_statuses[0], '1').won, null);
+  eq('past fights: summed up', Core.formSummary(past), { n: 3, won: 0, lost: 3, other: 0, ko: 1, sub: 2, dec: 0 });
+  eq('past fights: how long each one lasted', past.map(Core.fightSeconds), [63, 102, 543]);
+  eq('the numeric clock of a finish is the time elapsed, the same as the displayed one', FX.past_statuses.map(x => x.clock), [63, 102, 243]);
+
   eq('takedowns landed in the fight', Core.statValue(FX.competitor_statistics, 'takedownsLanded'), 3);
   eq('career takedown average', Core.statValue(FX.athlete_statistics, 'takedownAvg'), 1.52);
   eq('missing stat', Core.statValue(FX.athlete_statistics, 'takedownsLanded'), null);

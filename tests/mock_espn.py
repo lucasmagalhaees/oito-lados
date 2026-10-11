@@ -38,6 +38,37 @@ TD = {'f1': [None,(1,0),(2,1),(2,1)], 'f2': [None,None,(0,0),(0,0)], 'f3': [None
 # one more event, a week ahead and with no line published yet, on the board only while a test asks for it (ESPN['next'])
 EV2 = '600000002'
 NEXT = {'g1': dict(a=('701','Hugo Teles','H. Teles','11-3-0'), b=('702','Otto Farias','O. Farias','9-2-0'), rounds=5, w='Featherweight')}
+# what each athlete did before this card: invented fights, in the shape of the recorded answers (tests/fixtures/espn/
+# athlete_eventlog.json, past_competitions.json, past_statuses.json). Each: (fight id, days ago, won, result, round, clock).
+KO = dict(id=356, name='kotko', displayName='KO/TKO', shortDisplayName='KO/TKO'); SUBM = dict(id=284, name='submission', displayName='Submission', shortDisplayName='Sub')
+UD = dict(id=263, name='decision---unanimous', displayName='Decision - Unanimous'); NOCON = dict(id=1, name='no-contest', displayName='No Contest')
+PAST = {
+ '101': [('p1011', 120, True, KO, 1, '2:10'), ('p1012', 300, True, UD, 3, '5:00'), ('p1013', 500, False, SUBM, 2, '3:45'), ('p1014', 700, True, KO, 3, '1:00')],   # four: only the latest three are read
+ '102': [('p1021', 90, False, UD, 3, '5:00')],
+ '201': [],                                                                                              # a debut: nothing fought yet
+ '202': [('p2021', 60, None, dict(id=269, name='draw', displayName='Draw', shortDisplayName='Draw'), 3, '5:00'), ('p2022', 200, None, NOCON, 1, '2:00'), ('p2023', 400, True, None, 2, '4:00')],   # a draw, a no contest, and a win whose result was never published
+ '301': [('p3011', 150, True, SUBM, 1, '1:03'), ('p3012', 330, True, SUBM, 2, '4:03'), ('p3013', 520, True, KO, 1, '0:45')],
+ '302': [('p3021', 100, False, KO, 2, '3:00'), ('p3022', 280, True, UD, 5, '5:00'), ('p3023', 450, True, UD, 3, '5:00')],
+}
+PASTC = {cid: (aid, row) for aid, rows in PAST.items() for row in rows for cid in [row[0]]}
+CREF = 'http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/%s/competitions/%s'
+def eventlog(aid):
+    upcoming = [fid for fid, f in {**ALL, **NEXT}.items() if aid in (f['a'][0], f['b'][0])]
+    items = [dict(event={'$ref': CREF.split('/competitions')[0] % EV + '?lang=en&region=us'}, competition={'$ref': CREF % (EV, fid) + '?lang=en&region=us'}, competitor={'$ref': CREF % (EV, fid) + '/competitors/%s?lang=en&region=us' % aid}, played=False) for fid in upcoming]
+    items += [dict(event={'$ref': CREF.split('/competitions')[0] % ('9' + cid[1:]) + '?lang=en&region=us'}, competition={'$ref': CREF % ('9' + cid[1:], cid) + '?lang=en&region=us'}, competitor={'$ref': CREF % ('9' + cid[1:], cid) + '/competitors/%s?lang=en&region=us' % aid}, played=True) for cid, *_ in PAST.get(aid, [])]
+    return {'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/%s/eventlog?lang=en&region=us' % aid, 'events': dict(count=len(items), pageIndex=1, pageSize=25, pageCount=1, items=items)}
+def past_competition(cid):
+    aid, (_, days, won, _res, _period, _clock) = PASTC[cid]
+    return dict(id=cid, date=iso(NOW - days*86400e3), description='3 Rnd (5-5-5)', type=dict(id='969', text='Welterweight', abbreviation='Welterweight'), format=dict(regulation=dict(periods=3, clock=300.0)),
+        competitors=[dict(id=aid, order=1, winner=(won is True), type='athlete', athlete={'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/%s?lang=en&region=us' % aid}),
+                     dict(id='9999', order=2, winner=(won is False), type='athlete', athlete={'$ref': 'http://sports.core.api.espn.com/v2/sports/mma/athletes/9999?lang=en&region=us'})],
+        status={'$ref': CREF % ('9' + cid[1:], cid) + '/status?lang=en&region=us'})
+def past_status(cid):
+    _aid, (_, _days, _won, res, period, clock) = PASTC[cid]
+    m, sec = clock.split(':')
+    o = dict(clock=float(int(m)*60 + int(sec)), displayClock=clock, period=period, type=dict(id='3', name='STATUS_FINAL', state='post', completed=True, description='Final'))
+    if res: o['result'] = res
+    return o
 def comp(fid, f, st, when):
     mk = lambda x, order, side: dict(id=x[0], order=order, winner=(st[5]==side), athlete=dict(displayName=x[1], fullName=x[1], shortName=x[2], flag=dict(alt='Brazil')), records=[dict(summary=x[3])])
     return dict(id=fid, date=iso(when), type=dict(abbreviation=f['w']),
@@ -52,9 +83,9 @@ def scoreboard():
     if ESPN['next']: evs.append(dict(id=EV2, name='UFC 999: Teles vs. Farias', date=iso(NOW+7*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, f, PRE, NOW+7*86400e3) for fid, f in NEXT.items()]))
     return dict(events=evs)
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
-# knobs for the tests: a second event on the board (next), a fight that ends in a draw (draw: its id), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
+# knobs for the tests: the latest fights of the athletes unreachable (formdown), a second event on the board (next), a fight that ends in a draw (draw: its id), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
 # is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None}
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False}
 def odds(fid):
     if fid not in ALL: return dict(count=0, items=[])          # a fight with no line published, as the source answers it
     f = ALL[fid]
@@ -87,6 +118,12 @@ def handle(route):
     if m: return ok(props(m.group(1)))
     m = re.search(r'/competitions/(\w+)/odds', u)
     if m: return ok(odds(m.group(1)))
+    m = re.search(r'/athletes/(\w+)/eventlog', u)
+    if m: return route.abort() if ESPN['formdown'] else ok(eventlog(m.group(1)))
+    m = re.search(r'/competitions/(p\w+)/status', u)
+    if m: return ok(past_status(m.group(1)))
+    m = re.search(r'/competitions/(p\w+)(\?|$)', u)
+    if m: return ok(past_competition(m.group(1)))
     m = re.search(r'/competitions/(\w+)/status', u)
     if m:
         fid = m.group(1); st = ST[fid][PHASE['n']] if fid in ST else PRE

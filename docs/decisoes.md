@@ -47,6 +47,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 16. PR #18 mesclado às 18:33; o workflow `Produção` passou no commit `23ed70e`. Às 18:37, quatro coisas: perguntou se o retrospecto das três últimas lutas tinha sido feito (não tinha: ele mesmo tinha dito que avisaria; a pergunta voltou para ele); pediu busca pelo nome do lutador (D71); sugeriu separar o card em preliminar e principal para navegar melhor (D72); e perguntou da aposta com a luta em andamento, respondendo ele mesmo "deixa como tá" (D73).
 17. PR #19 mesclado às 19:03; o workflow `Produção` passou no commit `c425193`. Às 19:24, com o card rolando, uma captura do iPhone e o pedido: a sinalização da seleção que bateu e da que foi perdida numa múltipla não está clara. Às 19:26: é de interface que ele fala; "de resto, acho que está funcionando bem, ele está mostrando as apostas conforme o evento vai transcorrendo" (D74). É o primeiro retorno dele com luta de verdade: as apostas fecharam sozinhas, e um empate real foi lido como empate. Às 19:36, outra captura: as informações de gestão de banca no topo da Carteira eram só texto, sem cor nem formatação (D75). Às 19:40, mais dois pedidos, **fora deste PR**: colar uma imagem que não está na galeria, e marcar toda aposta que vem do copiar como do tipster, para comparar com as dele.
 18. PR #20 aberto às 19:53, com o CI verde em seguida. Os dois pedidos das 19:40 saem num PR em cima dele: colar imagem (D76) e tipster ou minha (D77). Às 20:00 ele perguntou de novo pelo cartel com as três últimas lutas de cada lutador; a pergunta foi tomada como o "pode fazer" que a D57 esperava, e fica para o PR seguinte, começando pela amostra real da ESPN. Às 20:15: o indicador de luta ao vivo, em vermelho, parece aposta perdida (D78); vai no mesmo PR.
+19. PR #21 aberto às 20:25, em cima do #20, com o CI verde em seguida; mesclar o #21 leva os dois. Em seguida o retrospecto (D79): workflow de captura disparado às 20:27, amostras gravadas no branch, e o quadro das últimas lutas feito em cima delas.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -798,6 +799,20 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Decisão:** "ao vivo" passa a ser azul nos dois temas, com a marca da seleção pulsando. Vermelho fica só para o que foi perdido. O aviso de falta de conexão com a ESPN, que pegava a mesma cor, fica no vermelho.
 - **Interpretação:** a cor escolhida. Verde é ganho, vermelho é perda, dourado é seleção e tipster; azul era o que sobrava longe dos três. O canto azul do lutador é um quadradinho ao lado do nome, de outro tom.
 
+## D79. As três últimas lutas de cada lutador, nos detalhes da luta
+
+- **Contexto:** a D57 deixou o retrospecto esperando o Lucas mandar. Em 10/10/2026 ele perguntou duas vezes: às 18:37 ("você conseguiu fazer aquele lance de quantas por finalização, quantas por KO, quantas por decisão? Eu não vi isso implementado") e às 20:00 ("e a parte do cartel dos lutadores, últimas 3 lutas, no detalhe?"). A segunda foi tomada como o "pode fazer".
+- **Antes do código, a amostra** (regra 2 do `CLAUDE.md`): o terminal de onde o código é escrito não alcança a ESPN. Foi criado `scripts/capture_espn.py` e uma entrada `capture` no workflow `ESPN contract`, que roda o script no GitHub e commita as amostras no branch. Gravados em 10/10/2026: a lista de lutas de um atleta, as três lutas mais recentes dele com o `status` de cada uma, e o `status` do empate daquela noite.
+- **Decisão:** ao abrir os mercados de uma luta, um quadro "Últimas 3 lutas" com uma coluna por lutador: cartel recente, como as lutas acabaram, e uma linha por luta com vitória ou derrota, método, round e tempo, mês e ano.
+- **O que o pedido original dizia e onde está:** "quantas decisões, quantos TKO, quantas subs" é a linha "Como acabaram"; "em quanto tempo terminou as lutas" é o round e o tempo de cada linha; "ficar cacheado" é o `D.form`, guardado no aparelho por 7 dias.
+- **Interpretações que precisaram ser feitas:**
+  - **"Como acabaram" conta o método da luta, de quem quer que tenha vencido.** Uma derrota por nocaute conta como uma luta que acabou por KO/TKO. Cada linha diz se foi vitória ou derrota.
+  - **Sem o nome do adversário:** custaria mais uma chamada por luta (10 por lutador em vez de 7), e ele não pediu.
+  - **Só ao abrir os mercados da luta**, como a D57 propunha. Ele se preocupou com o número de chamadas à ESPN no mesmo dia (D73). Um card de 12 lutas inteiro custaria umas 170 chamadas; uma luta aberta custa 14, uma vez por semana.
+  - **Tudo ou nada por lutador:** se uma chamada falha, não aparece lista pela metade.
+- **O que se viu nas amostras e muda o que estava escrito:** o `clock` numérico vem também em luta que acaba antes da hora (o `CLAUDE.md` dizia que só tinha sido visto em decisão); a luta, no CORE, traz `cardSegment`, que diz a parte do card. O placar não foi visto com esse campo, então a D72 não muda.
+- **Não verificado:** o quadro com a ESPN de verdade num navegador (o app chama a ESPN do navegador do Lucas; os testes usam a ESPN simulada, no formato das amostras); a resposta de uma luta fora do UFC; se a ESPN limita rajada de chamadas.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -811,13 +826,14 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
-| Dizer se o retrospecto dos lutadores é para fazer agora (D57) | Lucas |
+| Abrir os mercados de uma luta de verdade e ver se as últimas lutas aparecem e batem com o cartel do lutador (D79) | Lucas |
+| Confirmar: "como acabaram" contando o método de quem quer que tenha vencido, e o quadro sem o nome do adversário (D79) | Lucas |
 | Confirmar o azul de "ao vivo" (D78) | Lucas |
 | Testar o "Colar" com um print copiado no iPhone, sem salvar na galeria (D76) | Lucas |
 | Confirmar: quem está na frente pelo ROI, a repetição de aposta de tipster continuar do tipster, e a palavra "Tipster" (D77) | Lucas |
 | Confirmar o quadro "se todas perderem" e a unidade no topo da Carteira (D75) | Lucas |
 | Confirmar as palavras de cada estado da seleção, e "Bateu" e "Perdeu" já com a luta rolando quando está decidido no papel (D74) | Lucas |
-| Gravar como amostra a resposta real de um empate e de uma luta em "STATUS_PRE_FIGHT" (D74) | Quem rodar `OL_SAMPLES=1 python3 tests/contract_live.py` de uma conexão comum |
+| Gravar como amostra a resposta real de uma luta em "STATUS_PRE_FIGHT" (D74). A do empate já foi gravada (D79) | Quem disparar o workflow `ESPN contract` com `capture` durante um card |
 | Confirmar: a busca em todos os eventos carregados e sem chamada à ESPN, e "separar o card" como ver uma parte por vez (D71, D72) | Lucas |
 | Ver num card de verdade se as partes do card saem certas das horas das lutas (D72) | Lucas, no próximo card |
 | Confirmar: "ganhos potenciais" como lucro (retorno menos a stake), o retorno sem unidades e as telas escolhidas (D70) | Lucas |

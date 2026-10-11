@@ -73,6 +73,23 @@ async () => {
     ok('takedownsLanded is published for both fighters of a finished fight', tds.every(v => typeof v === 'number'), JSON.stringify(tds));
   }
 
+  // the latest fights of an athlete: the event log, then a past fight and its status, by the addresses the API itself gives
+  const who = done ? done.a : (fights[0] && fights[0].a);
+  if (!who) warns.push('no athlete in the window: the event log was not checked');
+  else {
+    const lg = await tryGet(`https://sports.core.api.espn.com/v2/sports/mma/athletes/${who.id}/eventlog`);
+    ok("an athlete's event log is readable", !lg.__error, lg.__error);
+    const log = lg.__error ? [] : Core.normEventlog(lg), fought = log.filter(x => x.played);
+    ok('the event log lists fights, each with the address to ask for it', log.length > 0 && log.every(x => /^https:\/\/sports\.core\.api\.espn\.com\//.test(x.competition)), JSON.stringify(log.slice(0, 2)));
+    if (!fought.length) warns.push('the athlete checked has no fight already fought in the event log');
+    else {
+      const c = await tryGet(fought[0].competition), s = c.__error ? c : await tryGet(Core.statusRef(c));
+      ok('a past fight and its status are readable by the addresses in the event log', !c.__error && !s.__error, c.__error || s.__error);
+      const pf = c.__error || s.__error ? null : Core.normPastFight(c, s, who.id);
+      ok('a past fight reads with a date, how it ended and whether the athlete won', !!pf && pf.date > 0 && pf.method !== 'unknown' && (pf.won !== null || pf.method === 'draw' || pf.method === 'nc'), JSON.stringify(pf));
+    }
+  }
+
   // every finished fight of the last months: the names ESPN gives to results, how the app classifies each of them, and
   // whether the scoreboard marks the winner once the fight is over (a winner pick is settled by that mark)
   const wide = await tryGet(`${SITE}/scoreboard?dates=${ymd(now - 120 * DAY)}-${ymd(now)}&limit=100`);
