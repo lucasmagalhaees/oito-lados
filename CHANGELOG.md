@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.21.2] - 2026-10-11
+
+### Corrigido
+- No computador, o botão de país que não cabia na fileira ficava cortado e fora de alcance. Com mouse, as fileiras de países e de eventos passam a quebrar em linhas; no celular continuam rolando para o lado.
+
 ## [0.21.1] - 2026-10-11
 
 ### Alterado

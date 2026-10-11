@@ -53,6 +53,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 22. PR #24 (D82, D83) aberto às 10:44 e mesclado às 10:49 de 11/10/2026. Às 10:34 e 10:35, com ele na verificação final: a bandeira do país de cada lutador (D84) e "submission" no lugar de "finalização", dizendo qual foi (D85). Os dois campos já eram lidos e estavam nas amostras gravadas; a conferência ao vivo foi disparada no branch para ver os nomes de verdade antes de fechar.
 23. PR #25 (D84, D85) mesclado às 11:21 de 11/10/2026; o workflow `Produção` passou no commit `ad6fab5`. Às 12:32, o filtro por país com atalho para os brasileiros (D86).
 24. PR #26 (D86) mesclado às 12:49 de 11/10/2026. Às 12:52 e 12:53, com ele no ar: o seletor de países branco no tema escuro, e o filtro devendo olhar só o card escolhido (D87). Às 12:58: no navegador do PC as bandeiras não aparecem (D88).
+25. PR #27 (D87, D88) mesclado às 14:34 de 11/10/2026; o workflow `Produção` passou no commit `9e09f7a`. Às 14:39, uma captura do PC: as bandeiras aparecem, e o botão da Bélgica está cortado na ponta da fileira (D89). Às 14:43: só no PC; no Safari do iOS está funcionando perfeito.
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -931,6 +932,14 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **O "combo branco" da D87 também era no computador**, pelo que entendi depois: no navegador do PC a lista que abre de um seletor é do sistema. Continua valendo a troca por botões.
 - **Não verificado:** um Windows de verdade. O que rodei foi o Chromium no Linux sem a fonte de emoji, que mostra o mesmo sintoma. Não sei qual é o sistema do PC do Lucas; num Mac as bandeiras já apareceriam.
 
+## D89. No computador, as fileiras quebram em linhas
+
+- **Contexto (11/10/2026, 14:39 a 14:43, com o PR #27 no ar):** uma captura do navegador do PC com o botão da Bélgica cortado na ponta da fileira de países, e "apenas na versão web PC, no iOS Safari tá funcionando perfeito".
+- **Causa:** a fileira foi feita para rolar para o lado com o dedo (D87) e esconde a barra de rolagem. Com mouse não há como arrastá-la: o que não cabe fica cortado e não dá para alcançar.
+- **Decisão:** onde o aparelho aponta com mouse, a fileira quebra em linhas. No toque fica como está, que é o que ele disse estar perfeito.
+- **Interpretação:** a fileira de eventos, no alto da tela, é feita do mesmo jeito e teria o mesmo defeito com um evento a mais no placar (na captura dele cabem os três). Ele não pediu; entrou junto por ser o mesmo erro. Se ele preferir a de eventos como estava, é uma linha de estilo.
+- **O que a captura dele também mostrou:** as bandeiras desenhadas no navegador do PC (Brasil, Rússia, Austrália, Estados Unidos, Alemanha). Era o que a D88 deixava para conferir.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -943,7 +952,6 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
-| Abrir a produção no navegador do PC depois deste PR e ver se as bandeiras aparecem; dizer qual é o sistema do PC (D88) | Lucas |
 | Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
 | Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
