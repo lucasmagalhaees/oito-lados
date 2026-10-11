@@ -87,10 +87,12 @@ export interface Ui {
   origin: string | null;
   /** Which closed bets the wallet's numbers cover. */
   period: Period;
+  /** A backup file that was picked, read and not applied yet: what it holds is shown first. */
+  restoreFile: { name: string; text: string; bets: number; open: number; deposited: number; cur: Currency; savedAt: number | null } | null;
   /** What is typed in the search of the fights screen, and the part of the card it shows (null shows all of it). */
   q: string; part: CardPart | null;
 }
-export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null };
+export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */

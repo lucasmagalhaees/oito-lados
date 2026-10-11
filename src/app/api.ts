@@ -1,7 +1,7 @@
 import { Core } from '../core';
 import { DAY, H } from './format';
 import { D, S, index, ui } from './state';
-import type { Bet, Fight, Json, Leg } from '../core';
+import type { Bet, Fight, Json, Leg, PastFight } from '../core';
 
 /* ================= ESPN API ================= */
 export const SITE = 'https://site.api.espn.com/apis/site/v2/sports/mma/ufc';
@@ -13,31 +13,37 @@ export async function getJSON(url: string, ms?: number): Promise<Json> {
 }
 export async function pool(jobs: (() => Promise<void>)[], n: number): Promise<void> { let i = 0; const run = async () => { while (i < jobs.length) { const j = jobs[i++]; try { await j(); } catch (e) { /* one failed call must not sink the batch */ } } }; await Promise.all(Array.from({ length: Math.min(n, jobs.length) }, run)); }
 const ATHLETES = 'https://sports.core.api.espn.com/v2/sports/mma/athletes';
-/** The latest fights of the two athletes of a fight: how many are read for each, and for how long what was read stands. */
-export const FORM_FIGHTS = 3, FORM_TTL = 7 * DAY;
+/** The latest fights of an athlete: how many are read, for how long what was read stands, and for how long it is kept
+ *  after that (an athlete who is not on a card any more is dropped in the end). */
+export const FORM_FIGHTS = 3, FORM_TTL = 7 * DAY, FORM_KEEP = 35 * DAY;
+/** How many athletes are asked for at the same time when a whole card is read. */
+export const FORM_AT_ONCE = 3;
 /** What is being asked for right now, and what could not be read the last time it was asked (by athlete id). Not saved. */
 export const formBusy = new Set<string>(), formFailed = new Set<string>();
-/** Reads the latest fights of these athletes: the event log of each, then each fight and its status. A fight already
- *  read is not asked for again, since a past fight does not change; what was read stands for a week. Either all the
- *  fights of an athlete are read or none is kept, so that a list is never one fight short without saying so. */
+/** Reads the latest fights of these athletes: the event log of each, then each fight and its status, a few athletes at
+ *  a time and one call after the other for each of them. A fight already read is not asked for again, since a past
+ *  fight does not change; what was read stands for a week. Either all the fights of an athlete are read or none is
+ *  kept, so that a list is never one fight short without saying so. */
 export async function loadForm(ids: string[]): Promise<void> {
-  const now = Date.now(), todo = ids.filter(id => id && !formBusy.has(id) && !(D.form[id] && now - D.form[id].ts < FORM_TTL));
+  const now = Date.now(), todo = [...new Set(ids)].filter(id => id && !formBusy.has(id) && !(D.form[id] && now - D.form[id].ts < FORM_TTL));
+  for (const k of Object.keys(D.form)) if (now - D.form[k].ts > FORM_KEEP && !todo.includes(k)) delete D.form[k];
   if (!todo.length) return;
   for (const id of todo) { formBusy.add(id); formFailed.delete(id); }
-  await Promise.all(todo.map(async id => {
+  await pool(todo.map(id => async () => {
     try {
-      const had = (D.form[id] && D.form[id].fights) || [];
+      const had = (D.form[id] && D.form[id].fights) || [], fights: PastFight[] = [];
       const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`)).filter(x => x.played).slice(0, FORM_FIGHTS);
-      const fights = await Promise.all(log.map(async it => {
-        const known = had.find(x => x.id === it.id && x.method !== 'unknown'); if (known) return known;
+      for (const it of log) {
+        const known = had.find(x => x.id === it.id && x.method !== 'unknown');
+        if (known) { fights.push(known); continue; }
         const c = await getJSON(it.competition), f = Core.normPastFight(c, await getJSON(Core.statusRef(c)), id);
         if (!f) throw new Error('not a fight');
-        return f;
-      }));
+        fights.push(f);
+      }
       D.form[id] = { ts: now, fights };
     } catch (e) { formFailed.add(id); }
     finally { formBusy.delete(id); }
-  }));
+  }), FORM_AT_ONCE);
 }
 export const ymd = (t: number): string => { const d = new Date(t); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
 export const openBets = (): Bet[] => S.bets.filter(b => b.status === 'open');

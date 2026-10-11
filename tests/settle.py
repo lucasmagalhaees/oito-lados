@@ -5,7 +5,7 @@ Usage: python3 tests/settle.py   (needs dist/ built: npm run build)
 ESPN is the mock (tests/mock_espn.py), with invented fighters. The walk-through in tests/e2e.py settles bets with every
 answer arriving at once and in full; this one holds answers back, the way a real night can.
 """
-import pathlib, sys
+import pathlib, re, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mock_espn import PHASE, ESPN, handle, calls
 import cov
@@ -134,5 +134,21 @@ with sync_playwright() as p:
     check('no script error in the draw', not errs, errs)
     PHASE['n'] = 0; ESPN['draw'] = None
     cov.stop(pg, 'settle-draw')
+    ctx.close()
+
+    # 7. the app opened in the middle of the card: the latest fights are read ahead only for who still has a fight to come
+    PHASE['n'] = 2; logs = lambda: [re.search(r'/athletes/(\w+)/eventlog', u).group(1) for u in calls if '/eventlog' in u]; before = len(logs())
+    ctx = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
+    ctx.route('**/*', lambda r: r.continue_() if r.request.url.startswith('file:') else handle(r))
+    pg = ctx.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
+    cov.start(pg)
+    pg.goto((ROOT / 'dist' / 'index.html').as_uri()); pg.wait_for_function('window.__OL && window.__OL.S'); pg.wait_for_selector('.fight')
+    pg.wait_for_function('Object.keys(window.__OL.D.form).length >= 2'); pg.wait_for_timeout(500)
+    check('with the card half way, only the two of the fight still to come are read ahead', sorted(pg.evaluate('Object.keys(window.__OL.D.form)')) == ['301', '302'] and sorted(logs()[before:]) == ['301', '302'], (pg.evaluate('Object.keys(window.__OL.D.form)'), logs()[before:]))
+    pg.evaluate('window.__OL.sync(true)'); pg.wait_for_timeout(500)
+    check('and what was read is not asked for again at the next round', len(logs()) == before + 2, logs()[before:])
+    check('no script error half way through the card', not errs, errs)
+    PHASE['n'] = 0
+    cov.stop(pg, 'settle-form')
     b.close()
 print(f'{n}/{n} settlement checks passed')
