@@ -25,7 +25,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Repetir aposta:** um toque devolve as mesmas seleções e o mesmo valor ao cupom.
 - **Copiar aposta:** cola o texto de um palpite ou escolhe um ou vários prints; o app acha a luta e a seleção, entende se é simples ou múltipla (dupla, tripla...) e monta a aposta com a odd de agora. Com várias fotos, cada uma vira uma aposta e dá para fazer todas de uma vez. Cupom de acumulador que só mostra a primeira seleção é completado pela foto da lista de seleções, por outra aposta da lista ou à mão, e o valor e o tipo de cada uma podem ser mudados ali mesmo. Dá para dizer de quem é a aposta: a origem e a odd do print ficam guardadas, e a Carteira mostra o resultado por origem e quanto a sua odd ficou acima ou abaixo da do print. Antes de apostar várias de uma vez, o app avisa o que já está apostado, o que está repetido e a odd que caiu além do limite que você escolheu, e deixa corrigir o que o leitor leu errado. O valor segue a sua configuração, à risca: em dinheiro, o mesmo valor do original; em unidades, a stake do original, ou 1u quando ele não diz unidades. A imagem é lida no próprio aparelho.
 - **Carteira:** resultado, ROI, acerto e gráfico de tudo, dos últimos 30 dias ou do último evento, com quebra por mercado, evento e origem. Ao reabrir o app, uma faixa resume o que fechou desde a última vez.
-- **Últimas lutas:** nos detalhes de cada luta, as três últimas de cada lutador, com o método e o tempo em que acabaram.
+- **Últimas lutas:** nos detalhes de cada luta, as três últimas de cada lutador, com o método e o tempo em que acabaram. As do card da semana são buscadas ao abrir o app e ficam guardadas por uma semana.
 - **Você × tipster:** o que entra pelo copiar é do tipster, o que você monta é seu; a Carteira compara os dois e diz quem está na frente.
 - **Achar a luta:** um campo de busca pelo nome do lutador, em todos os eventos carregados, e botões para ver só o card principal ou só as preliminares.
 - **Exposição:** antes de apostar numa luta que já tem aposta aberta, o app diz quanto já está em jogo nela e se a aposta nova vai contra a que existe. No card, a luta mostra quantas apostas abertas tem. As abertas aparecem agrupadas por evento, na ordem das lutas, com o total em jogo e o que pagam se todas baterem.
@@ -49,7 +49,7 @@ O código é TypeScript em módulos (`src/`). O build do Vite gera `dist/index.h
 | Liquidação | Sempre o resultado oficial: vencedor, método, round, tempo e quedas |
 | Cotação para trocar a moeda da banca | Frankfurter (`api.frankfurter.dev`), consultado só quando um depósito muda a moeda |
 
-Saldo e apostas ficam no `localStorage` do aparelho. A Carteira tem backup e restauração por texto.
+Saldo e apostas ficam no `localStorage` do aparelho. A Carteira salva um backup em arquivo, que dá para mandar por mensagem, e restaura a partir dele; também copia e cola o backup como texto.
 
 A especificação completa (endpoints, formato dos dados, modelo de preço e regras de liquidação) está em [`CLAUDE.md`](CLAUDE.md).
 
@@ -79,7 +79,7 @@ scripts/verify.sh           # confere os tipos, faz o build e roda tudo contra a
 | `tests/contract.py` | Os leitores da ESPN e do serviço de câmbio contra respostas reais gravadas em `tests/fixtures/` |
 | `tests/docs_check.py` | A documentação contra o código: links, arquivos, constantes, chaves |
 | `tests/e2e.py` | O fluxo inteiro pela interface, com a ESPN simulada, do pré-luta ao resultado |
-| `tests/settle.py` | A liquidação quando a ESPN não responde tudo de uma vez: resultado que atrasa e resultado com nome desconhecido |
+| `tests/settle.py` | A liquidação quando a ESPN não responde tudo de uma vez: resultado que atrasa e resultado com nome desconhecido. E o app aberto com o card pela metade |
 | `tests/pwa.py` | O service worker, com a página servida por um servidor local: abrir sem conexão, aviso de versão nova e troca pelo botão |
 | `tests/cov.py` | Cobertura de código, medida pelo navegador durante os testes. O `verify.sh` falha abaixo de 95% das funções ou 90% do código |
 | `tests/contract_live.py` | A API real da ESPN e o serviço de câmbio. Roda toda semana no GitHub Actions e avisa se o formato mudar |

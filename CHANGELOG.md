@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.18.0] - 2026-10-11
+
+### Adicionado
+- Backup em arquivo: "Salvar backup em arquivo" abre a folha de compartilhamento do aparelho (ou baixa o arquivo), e "Restaurar de um arquivo" mostra o que o arquivo traz antes de substituir qualquer coisa.
+
+### Alterado
+- As últimas lutas de todo mundo do card da semana são buscadas sozinhas, em segundo plano, e guardadas por uma semana. Antes eram buscadas ao abrir os mercados de cada luta.
+- A aposta de tipster sem nome aparece só como "Tipster".
+- O backup por texto continua, em botões menores ("Copiar como texto", "Colar um texto").
+
 ## [0.17.0] - 2026-10-10
 
 ### Adicionado

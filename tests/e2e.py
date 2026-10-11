@@ -164,9 +164,19 @@ with sync_playwright() as p:
     pg.click('.events .ev >> nth=0'); pg.wait_for_function('window.__OL.ui.eventId === "600000001"'); assert pg.input_value('#q') == '' and nfights() == 3
     ESPN['next'] = False; pg.click('[data-act=refresh]'); pg.wait_for_function('window.__OL.D.events.length === 1'); assert nfights() == 3 and pg.locator('.events .ev').count() == 1
     pick = lambda fid, key: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
+    # the latest fights of everybody on the card of the week are read ahead, beside the sync loop: one call for the list and two for each fight
+    logs = lambda: sum(1 for u in calls if '/eventlog' in u); past = lambda: sum(1 for u in calls if re.search(r'/competitions/p\w+', u))
+    pg.wait_for_function('Object.keys(window.__OL.D.form).length === 6')
+    assert (logs(), past()) == (6, 26) and pg.locator('.fcol').count() == 0, (logs(), past())          # six athletes; 3 + 1 + 0 + 3 + 3 + 3 fights, two calls each; nothing was opened yet
+    # a few athletes at a time, and one call after the other for each: never more than three fights asked for and still waiting for their status
+    waiting, most = set(), 0
+    for u in calls:
+        m = re.search(r'/competitions/(p\w+)(/status)?', u)
+        if m: (waiting.discard if m.group(2) else waiting.add)(m.group(1)); most = max(most, len(waiting))
+    assert 1 <= most <= 3, most
     for fid in ('f1','f2','f3'): pg.click(f'[data-act=more][data-fid="{fid}"]')
     # the details of a fight bring the three latest fights of each of the two: won or lost, how and when each one ended
-    pg.wait_for_function('document.querySelectorAll(".fcol").length === 6 && ![...document.querySelectorAll(".fcol")].some(e => e.textContent.includes("Buscando"))')
+    assert pg.locator('.fcol').count() == 6 and 'Buscando' not in txt('#list') and (logs(), past()) == (6, 26), 'opening a fight finds them already there, and asks for nothing'
     fcol = lambda aid: pg.locator(f'.fcol[data-athlete="{aid}"]')
     rows = lambda aid: [[li.locator('i').inner_text(), li.locator('span b').inner_text(), re.sub(r'\s+', ' ', li.locator('span').inner_text().replace(li.locator('small').inner_text(), '')).strip()] for li in fcol(aid).locator('li').all()]
     assert txt('.form[data-fid=f1] h4').upper().startswith('ÚLTIMAS 3 LUTAS') and fcol('101').locator('.fname').inner_text().upper() == 'TELES', txt('.form[data-fid=f1]')
@@ -177,17 +187,19 @@ with sync_playwright() as p:
     assert fcol('202').locator('.fsum').inner_text() == '1V 0D 2E' and fcol('202').locator('.fends').count() == 0 and rows('202') == [['E', 'Empate', 'Empate · 3 rounds'], ['–', 'No contest', 'No contest · R1 2:00'], ['V', 'resultado não informado', 'resultado não informado']], (fcol('202').inner_text(), rows('202'))
     assert fcol('301').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por finalização' and fcol('302').locator('.fsum').inner_text() == '2V 1D' and fcol('302').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por decisão' and rows('302')[1] == ['V', 'Decisão', 'Decisão · 5 rounds']
     assert pg.evaluate('getComputedStyle(document.querySelector(".fcol li.w > i")).backgroundColor !== getComputedStyle(document.querySelector(".fcol li.l > i")).backgroundColor') and all(e.is_visible() for e in pg.locator('.fcol').all())
-    # it costs one call for the list and two for each fight, once: what was read is kept and not asked for again
-    logs = lambda: sum(1 for u in calls if '/eventlog' in u); past = lambda: sum(1 for u in calls if re.search(r'/competitions/p\w+', u))
-    assert (logs(), past()) == (6, 26), (logs(), past())          # six athletes; 3 + 1 + 0 + 3 + 3 + 3 fights, two calls each
+    # what was read is kept and not asked for again
     pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_timeout(300); assert (logs(), past()) == (6, 26) and fcol('101').locator('li').count() == 3, 'closing and opening the fight asks for nothing'
     assert pg.evaluate('JSON.parse(localStorage.getItem("oitolados.cache.v1")).form["101"].fights.length') == 3, 'and it is kept on the device with the rest of what was read'
-    # after a week the list is asked for again, and the fights already read are not
-    pg.evaluate('window.__OL.D.form["101"].ts = 0'); pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_function('window.__OL.D.form["101"].ts > 0')
+    # after a week the list is asked for again, and the fights already read are not; an athlete nobody asked about for five weeks is dropped
+    pg.evaluate('(() => { const F = window.__OL.D.form, day = 864e5, now = Date.now(); window.__was = now - 8 * day; F["101"].ts = window.__was; F["998"] = { ts: now - 10 * day, fights: [] }; F["999"] = { ts: now - 40 * day, fights: [] }; })()')
+    pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_function('window.__OL.D.form["101"].ts > window.__was')
     assert (logs(), past()) == (7, 26) and fcol('101').locator('li').count() == 3, (logs(), past())
+    assert pg.evaluate('["998", "999"].map(k => k in window.__OL.D.form)') == [True, False]; pg.evaluate('delete window.__OL.D.form["998"]')
     # when the source cannot be reached it says so, keeps nothing half read, and a new opening of the fight tries again
     pg.evaluate('delete window.__OL.D.form["101"]'); ESPN['formdown'] = True; pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]')
     pg.wait_for_function('document.querySelector(\'.fcol[data-athlete="101"]\').textContent.includes("Não deu pra buscar agora")'); assert pg.evaluate('window.__OL.D.form["101"]') is None and fcol('102').locator('li').count() == 1
+    # the reading ahead tries it once more at the next round of the sync loop, and then leaves a source that is refusing alone for a while
+    sync(); asked = logs(); sync(); sync(); assert logs() == asked and pg.evaluate('window.__OL.D.form["101"]') is None, (logs(), asked)
     ESPN['formdown'] = False; pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_function('document.querySelectorAll(\'.fcol[data-athlete="101"] li\').length === 3')
     assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0
     pg.locator('.form[data-fid=f1]').scroll_into_view_if_needed(); shot('s44-ultimas-lutas.png'); window_top = pg.evaluate('window.scrollTo(0, 0)')
@@ -536,7 +548,7 @@ with sync_playwright() as p:
     pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]'); assert froms() == ['Canal do Zé']
     # a copy that came with no name is still the tipster's, and can be given a name later
     pg.evaluate(f'delete window.__OL.S.bets.find(b => b.id === "{cid}").from'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]')
-    assert pg.locator('#orgfrom option').all_inner_texts() == ['Tipster sem nome (1)', 'Canal do Zé'] and cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Tipster sem nome | 1 aposta'), pg.locator('#origins').inner_text()
+    assert pg.locator('#orgfrom option').all_inner_texts() == ['Tipster (1)', 'Canal do Zé'] and cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Tipster | 1 aposta'), pg.locator('#origins').inner_text()
     pg.select_option('#orgfrom', ''); pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]')
     assert '1 aposta mudou de origem' in pg.inner_text('#toast') and pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{cid}").from') == 'Canal do Zé' and pg.locator('#orgfrom option').all_inner_texts() == ['Canal do Zé'], pg.inner_text('#toast')
     # the list of bets can show one origin at a time
@@ -805,6 +817,10 @@ with sync_playwright() as p:
     print('final balance', bal())
     assert bal().replace('\xa0', ' ') == 'R$ 1.609,59', bal()
     n3 = newly(); assert n3[0] >= 3 and n3[1] == 3 and said(n3[0]) in txt('#since') and 'Canal do Zé: 3, ' in txt('#since') and f'Minhas: {n3[0] - 3}, ' in txt('#since'), (n3, txt('#since'))
+    # copies that came with no name are just the tipster's
+    pg.evaluate('(() => { window.__named = window.__OL.S.bets.filter(b => b.from === "Canal do Zé"); window.__named.forEach(b => { b.__c = b.copied; delete b.from; b.copied = true; }); })()'); pg.click('.tabbar [data-tab=carteira]')
+    assert 'Tipster: 3, ' in txt('#since') and 'sem nome' not in txt('#since'), txt('#since')
+    pg.evaluate('window.__named.forEach(b => { b.from = "Canal do Zé"; if (b.__c) b.copied = true; else delete b.copied; delete b.__c; })')
     pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=sinceview]')
     assert pg.locator('#since').count() == 0 and pg.evaluate('[window.__OL.ui.tab, window.__OL.ui.filter]') == ['apostas', 'done'], '"Ver" goes to what closed, and that counts as seen'
     assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Minhas', 'Tipster', 'Canal do Zé']
@@ -872,6 +888,34 @@ with sync_playwright() as p:
     assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 15, (bal(), final)
     assert settings() == kept, ('the settings come back with the backup', settings(), kept)
     print('backup e restauração: saldo', final, 'de volta depois de zerar')
+    # the backup as a file: where a page cannot hand a file to the share sheet it is downloaded, with the day and the hour in its name
+    import tempfile
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    with pg.expect_download() as dl: pg.click('[data-act=bksave]')
+    assert re.fullmatch(r'oito-lados-backup-\d{4}-\d\d-\d\d-\d{4}\.json', dl.value.suggested_filename), dl.value.suggested_filename
+    bkfile = tmp / dl.value.suggested_filename; dl.value.save_as(str(bkfile)); held = json.loads(bkfile.read_text())
+    assert held['app'] == 'oito-lados' and held['savedAt'] > 0 and len(held['bets']) == 15 and held['deposits'] == pg.evaluate('window.__OL.S.deposits') and 'Backup baixado' in pg.inner_text('#toast'), sorted(held)
+    # on a phone the file goes to the share sheet (a chat, the files of the device); giving up there does nothing, and a share that fails falls back to the download
+    pg.evaluate('''() => { window.__shared = []; window.__share = 'ok'; navigator.canShare = d => !!(d && d.files && d.files.length);
+        navigator.share = async d => { if (window.__share === 'abort') { const e = new Error('closed'); e.name = 'AbortError'; throw e; } if (window.__share === 'fail') throw new Error('no'); window.__shared.push([d.files[0].name, d.files[0].type, await d.files[0].text()]); }; }''')
+    pg.click('[data-act=bksave]'); pg.wait_for_function('window.__shared.length === 1')
+    sent = pg.evaluate('window.__shared[0]'); assert sent[0].endswith('.json') and sent[1] == 'application/json' and len(json.loads(sent[2])['bets']) == 15 and 'Backup salvo em arquivo' in pg.inner_text('#toast'), sent[:2]
+    pg.evaluate('window.__share = "abort"; document.getElementById("toast").textContent = ""'); pg.click('[data-act=bksave]'); pg.wait_for_timeout(300); assert pg.inner_text('#toast') == '' and pg.evaluate('window.__shared.length') == 1, 'closing the share sheet is not an error and downloads nothing'
+    pg.evaluate('window.__share = "fail"')
+    with pg.expect_download() as dl2: pg.click('[data-act=bksave]')
+    assert dl2.value.suggested_filename.endswith('.json'); pg.evaluate('delete navigator.canShare; delete navigator.share')
+    # restoring from a file: what the file holds is shown first, and nothing is replaced before the person says so
+    pg.click('[data-act=reset]'); pg.click('[data-act=doreset]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00'
+    bad = tmp / 'outra-coisa.json'; bad.write_text('{"deposits": "nada"}'); pg.set_input_files('#bkfile', str(bad)); pg.wait_for_function('document.getElementById("toast").textContent.includes("não é um backup")')
+    assert pg.locator('#bkpeek').count() == 0 and bal().replace('\xa0', ' ') == 'R$ 0,00', 'a file that is not a backup changes nothing'
+    pg.set_input_files('#bkfile', str(bkfile)); pg.wait_for_selector('#bkpeek')
+    peek = txt('#bkpeek'); assert bkfile.name in peek and 'Salvo em' in peek and '15 apostas e R$ 1.000,00 depositados' in peek and bal().replace('\xa0', ' ') == 'R$ 0,00', peek
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; pg.locator('#bkpeek').scroll_into_view_if_needed(); shot('s45-backup-arquivo.png')
+    pg.click('[data-act=bkcancel]'); assert pg.locator('#bkpeek').count() == 0 and bal().replace('\xa0', ' ') == 'R$ 0,00', 'backing out keeps what is on the device'
+    pg.set_input_files('#bkfile', str(bkfile)); pg.wait_for_selector('#bkpeek'); pg.click('[data-act=bkapply]'); pg.wait_for_timeout(400)
+    assert bal() == final and pg.evaluate('window.__OL.S.bets.length') == 15 and settings() == kept and pg.locator('#bkpeek').count() == 0 and 'app' not in pg.evaluate('Object.keys(window.__OL.S)'), (bal(), final)
+    # the text is still there for who wants it, and reads a backup taken either way
+    pg.click('[data-act=reset]'); pg.click('[data-act=doreset]'); pg.click('[data-act=restore]'); pg.fill('#rs', bkfile.read_text()); pg.click('[data-act=dorestore]'); pg.wait_for_timeout(400); assert bal() == final
     # converting a bankroll with a whole history: every amount follows, and the result in units stays the same
     assert len(pg.evaluate('window.__OL.S.conv')) == 3, 'the conversion log comes back with the backup'
     pg.click('[data-act=depcur][data-c=USD]'); pg.wait_for_selector('#fxinfo b'); pg.fill('#dep', '100'); pg.click('[data-act=deposit]'); pg.wait_for_function('window.__OL.S.cur === "USD"')

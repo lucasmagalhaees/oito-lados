@@ -1,12 +1,13 @@
 import { Core } from '../core';
 import { loadForm, loadOdds } from './api';
+import { backupText, pickBackupFile, restoreFrom, saveBackupFile } from './backup';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
 import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
 import { paintList, place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
-import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui, validState } from './state';
+import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import type { Currency } from '../core';
@@ -158,18 +159,17 @@ document.addEventListener('click', e => {
   else if (a === 'depcur') pickDepCur(d.c);
   else if (a === 'deposit') deposit();
   else if (a === 'convonly') convertOnly();
+  else if (a === 'bksave') saveBackupFile();
+  else if (a === 'bkapply') { if (!ui.restoreFile || !restoreFrom(ui.restoreFile.text)) toast('Esse arquivo não é um backup do Oito Lados.'); }
+  else if (a === 'bkcancel') { ui.restoreFile = null; render(); }
   else if (a === 'backup') {
-    const txt = JSON.stringify(S);
+    const txt = backupText(Date.now());
     const fail = (): void => { ui.backup = txt; render(); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => toast('Backup copiado. Cola nas Notas pra guardar.'), fail); else fail();
   }
-  else if (a === 'restore') { ui.restore = !ui.restore; render(); }
-  else if (a === 'dorestore') {
-    let s: unknown = null; try { s = JSON.parse(valOf('#rs') || ''); } catch (err) { /* handled below */ }
-    if (!validState(s)) { toast('Esse texto não é um backup válido.'); return; }
-    setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0), ...settingsOf(s), seen: Date.now() });
-    if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20); setCurrency(s.cur); applyTheme(); saveS(); ui.restore = false; blurField(); render(); toast('Backup restaurado.'); sync(true);
-  }
+  else if (a === 'restore') { ui.restore = !ui.restore; ui.restoreFile = null; render(); }
+  else if (a === 'dorestore') { if (!restoreFrom(valOf('#rs') || '')) toast('Esse texto não é um backup válido.'); }
+
   else if (a === 'reset') { ui.reset = !ui.reset; render(); }
   else if (a === 'doreset') { setS({ v: 1, deposits: [], bets: [], cur: S.cur, ...settingsOf(S), seen: Date.now() }); saveS(); slip.sels = []; slip.copy = null; ui.reset = false; render(); toast('Simulação zerada.'); }
 });
@@ -186,6 +186,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target as HTMLInputElement;
   if (t.id === 'impfile') importImages([...(t.files || [])]);
+  else if (t.id === 'bkfile') pickBackupFile((t.files || [])[0]);
   else if (t.classList.contains('imppick')) pickFor(Number(t.dataset.op), t.dataset.fid as string, t.value);
   else if (t.classList.contains('impedit')) editFor(Number(t.dataset.op), Number(t.dataset.i), t.value);
   else if (t.classList.contains('opstake')) stakeFor(Number(t.dataset.op), t.value);

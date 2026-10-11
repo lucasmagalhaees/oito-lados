@@ -325,6 +325,9 @@ td small{display:block;font-size:11px;color:var(--muted)}
 textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:10px;font-size:16px;resize:vertical}
 .rowbtns{display:flex;gap:8px;flex-wrap:wrap}
 .rowbtns .btn{flex:1 1 140px}
+.rowbtns.bktext .btn{min-height:38px;font-size:13px}
+.bkpeek{border:1px solid var(--gold);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.bkpeek b{overflow-wrap:anywhere}
 .rowbtns.three .btn{flex:1 1 96px;padding-inline:8px}
 .rowbtns.four .btn{flex:1 1 40%;padding-inline:8px}
 /* the copy screen: one block per bet read, and the batch at the end */

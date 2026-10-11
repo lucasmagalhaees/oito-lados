@@ -1,4 +1,4 @@
-import { loadBoard, loadOdds, loadResults, openBets, openLegs } from './api';
+import { FORM_TTL, loadBoard, loadForm, loadOdds, loadResults, openBets, openLegs } from './api';
 import { DAY, H } from './format';
 import { render } from './render';
 import { settle } from './settle';
@@ -20,6 +20,7 @@ export async function sync(force: boolean): Promise<void> {
     const left = [...new Set(openBets().filter(b => b.legs.some(l => { const f = D.fights.get(l.fid); return f && f.state === 'post'; })).flatMap(b => b.legs).map(l => D.fights.get(l.fid)).filter((f): f is Fight => !!f && f.state === 'pre' && f.eventId !== ui.eventId && !other.includes(f.eventId)).map(f => f.eventId))];
     for (const eid of left) await loadOdds(eid, force);
     settle(); saveCache();
+    preloadForm();
   } catch (e) { const err = e as { name?: string; message?: string } | null; D.err = (err && err.name === 'AbortError') ? 'tempo esgotado' : String((err && err.message) || e); }
   finally { busy = false; render(); schedule(); }
 }
@@ -47,11 +48,28 @@ export function initSync(): void {
   const back = (): void => { if (!document.hidden && Date.now() - D.lastSync > 5e3) sync(false); };
   window.addEventListener('pageshow', back); window.addEventListener('online', back);
 }
+/** The card of the week: the next event that is not over, or the last one there is. */
+export function weekEvent(): FightEvent | undefined {
+  const evs = shownEvents(), now = Date.now();
+  return evs.find(e => !e.completed && e.date > now - 14 * H) || evs[evs.length - 1];
+}
 export function pickEvent(): void {
-  const evs = shownEvents();
-  if (evs.find(e => e.id === ui.eventId)) return;
-  const now = Date.now();
-  const next = evs.find(e => !e.completed && e.date > now - 14 * H) || evs[evs.length - 1];
+  if (shownEvents().find(e => e.id === ui.eventId)) return;
+  const next = weekEvent();
   ui.eventId = next ? next.id : null;
+}
+/** How long before the reading of a card that stopped half way is tried again: a source that is refusing is not asked
+ *  at every round of the sync loop. */
+export const FORM_RETRY = 10 * 60e3;
+let formAt = 0;
+/** Reads ahead the latest fights of everybody who still has a fight on the card of the week, so that the details of a
+ *  fight open with them already there. It runs beside the sync loop and never holds it; what is read stands for a week. */
+export function preloadForm(): void {
+  const ev = weekEvent(), now = Date.now();
+  if (!ev || now - formAt < FORM_RETRY) return;
+  const ids = ev.fights.filter(f => f.state === 'pre' && !f.canceled).flatMap(f => [f.a.id, f.b.id]).filter(id => !(D.form[id] && now - D.form[id].ts < FORM_TTL));
+  if (!ids.length) return;
+  formAt = now;
+  loadForm(ids).then(() => { saveCache(); render(); });
 }
 export const shownEvents = (): FightEvent[] => D.events.filter(e => e.date > Date.now() - 5 * DAY && !/Contender Series/i.test(e.name));

@@ -48,6 +48,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 17. PR #19 mesclado às 19:03; o workflow `Produção` passou no commit `c425193`. Às 19:24, com o card rolando, uma captura do iPhone e o pedido: a sinalização da seleção que bateu e da que foi perdida numa múltipla não está clara. Às 19:26: é de interface que ele fala; "de resto, acho que está funcionando bem, ele está mostrando as apostas conforme o evento vai transcorrendo" (D74). É o primeiro retorno dele com luta de verdade: as apostas fecharam sozinhas, e um empate real foi lido como empate. Às 19:36, outra captura: as informações de gestão de banca no topo da Carteira eram só texto, sem cor nem formatação (D75). Às 19:40, mais dois pedidos, **fora deste PR**: colar uma imagem que não está na galeria, e marcar toda aposta que vem do copiar como do tipster, para comparar com as dele.
 18. PR #20 aberto às 19:53, com o CI verde em seguida. Os dois pedidos das 19:40 saem num PR em cima dele: colar imagem (D76) e tipster ou minha (D77). Às 20:00 ele perguntou de novo pelo cartel com as três últimas lutas de cada lutador; a pergunta foi tomada como o "pode fazer" que a D57 esperava, e fica para o PR seguinte, começando pela amostra real da ESPN. Às 20:15: o indicador de luta ao vivo, em vermelho, parece aposta perdida (D78); vai no mesmo PR.
 19. PR #21 aberto às 20:25, em cima do #20, com o CI verde em seguida; mesclar o #21 leva os dois. Em seguida o retrospecto (D79): workflow de captura disparado às 20:27, amostras gravadas no branch, e o quadro das últimas lutas feito em cima delas.
+20. Os PRs #20, #21 e #22 foram mesclados entre 00:49:18 e 00:49:35 de 11/10/2026; o workflow `Produção` passou no commit `e665175`, sem a troca de versão da D32. Às 00:50 o Lucas escreveu: "app aprovado no primeiro dia de uso". Às 09:24 e 09:25, três pedidos: backup em arquivo (D81), "Tipster" sem o "sem nome" e o cartel do card da semana inteiro adiantado (D80).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -813,6 +814,31 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **O que se viu nas amostras e muda o que estava escrito:** o `clock` numérico vem também em luta que acaba antes da hora (o `CLAUDE.md` dizia que só tinha sido visto em decisão); a luta, no CORE, traz `cardSegment`, que diz a parte do card. O placar não foi visto com esse campo, então a D72 não muda.
 - **Não verificado:** o quadro com a ESPN de verdade num navegador (o app chama a ESPN do navegador do Lucas; os testes usam a ESPN simulada, no formato das amostras); a resposta de uma luta fora do UFC; se a ESPN limita rajada de chamadas.
 
+## D80. O cartel do card da semana inteiro, adiantado, e "Tipster" sem o "sem nome"
+
+- **Contexto (11/10/2026, 09:25):** "na parte de nomear o tipster não precisa colocar 'nome desconhecido', apenas tipster, e você pode carregar o cartel de todo mundo do card da semana e cachear por 1 semana as últimas 3 lutas".
+- **Decisão do Lucas, que revê a D79:** as últimas lutas deixam de ser buscadas só ao abrir os mercados. O app adianta as de todo mundo do card da semana e guarda por uma semana.
+- **Como ficou:**
+  - "Card da semana" é o próximo evento que ainda não acabou, o mesmo que o app abre sozinho.
+  - Só entra quem ainda tem luta por fazer: num card em andamento, quem já lutou não é buscado.
+  - 3 lutadores por vez, uma chamada depois da outra para cada um: no máximo 3 chamadas ao mesmo tempo. Um card de 12 lutas são umas 170 chamadas, uma vez por semana.
+  - Corre ao lado do laço de sincronização. Se a ESPN recusar no meio, só tenta de novo depois de 10 min.
+  - Luta de outro evento continua buscando ao abrir os mercados.
+  - Lutador de quem ninguém pede nada há 35 dias sai do que está guardado, para o aparelho não acumular cards antigos.
+- **Interpretações que precisaram ser feitas:** o que é o card da semana; o ritmo das chamadas (ele não disse, e não sei se a ESPN limita rajada); a limpeza depois de 35 dias.
+- **"Tipster":** a aposta copiada sem nome aparece só como "Tipster", na etiqueta, na tabela e no cartão de dar nome (onde vem com o número de apostas, para dizer de quais se trata).
+
+## D81. Backup em arquivo
+
+- **Contexto (11/10/2026, 09:24):** "pra restaurar o backup é mais interessante baixar um arquivo que pode ser mandado via Telegram".
+- **Decisão:** "Salvar backup em arquivo" e "Restaurar de um arquivo" passam a ser os botões principais do cartão "Seus dados". O texto continua, em botões menores.
+- **Interpretações que precisaram ser feitas:**
+  - **No iPhone o arquivo sai pela folha de compartilhamento**, de onde vai direto para o Telegram, em vez de ser baixado para depois ser achado nos Arquivos. Onde a página não pode compartilhar arquivo, ele é baixado.
+  - **Restaurar mostra antes o que o arquivo traz** (quando foi salvo, quantas apostas, quanto depositado) e pede a confirmação. Com texto, quem cola sabe o que colou; um arquivo escolhido numa lista pode ser o errado, e restaurar apaga o que está no aparelho.
+  - O arquivo é um `.json` com a data e a hora no nome.
+- **Fato de terceiro, não conferido em 11/10/2026:** compartilhar arquivo a partir de uma página (`navigator.share` com `files`) existe no Safari do iPhone desde o iOS 15. Vem da memória.
+- **Não verificado:** nada disso no iPhone. O teste baixa o arquivo no Chromium e simula a folha de compartilhamento.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -826,6 +852,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Dizer se e quando implementar o retrospecto dos lutadores, e com quantas lutas (D57) | Lucas |
+| Salvar o backup em arquivo no iPhone, mandar pelo Telegram e restaurar dele (D81) | Lucas |
+| Ver, no card da semana, se o cartel de todo mundo aparece ao abrir os mercados sem esperar, e se alguma coluna diz "Não deu pra buscar agora" (D80) | Lucas |
 | Abrir os mercados de uma luta de verdade e ver se as últimas lutas aparecem e batem com o cartel do lutador (D79) | Lucas |
 | Confirmar: "como acabaram" contando o método de quem quer que tenha vencido, e o quadro sem o nome do adversário (D79) | Lucas |
 | Confirmar o azul de "ao vivo" (D78) | Lucas |

@@ -38,7 +38,7 @@ export function render(): void {
   renderSlipBar();
 }
 // whose a bet is, in words: the person's own, or a tipster's (by name when the copy has one)
-const whoName = (r: { k: string; tip: boolean }): string => r.tip ? (r.k || 'Tipster sem nome') : 'Minhas';
+const whoName = (r: { k: string; tip: boolean }): string => r.tip ? (r.k || 'Tipster') : 'Minhas';
 /** The filter of the bets list: everything, the person's own picks, every tipster's, or one tipster by name. */
 export const MINE = '@minhas', TIPS = '@tipster';
 /** What closed by itself since the person last looked: how many bets, the result, and the same by origin. It stays
@@ -326,7 +326,7 @@ function benchHtml(done: Bet[]): string {
   const lines: (Pick<OriginRow, 'n' | 'st' | 'ret' | 'won' | 'dec' | 'units' | 'unitBets' | 'edge'> & { name: string; cls: string })[] = [
     { ...bm.mine, edge: none, name: 'Minhas', cls: 'own' },
     ...(tips.length > 1 ? [{ ...bm.tip, edge: Core.edgeSummary(S.bets.filter(Core.isTip)), name: 'Tipster · todos', cls: 'tipall' }] : []),
-    ...tips.map(r => ({ ...r, name: r.k || 'Tipster sem nome', cls: 'tipster' }))];
+    ...tips.map(r => ({ ...r, name: r.k || 'Tipster', cls: 'tipster' }))];
   const roi = (v: number | null): string => v == null ? '—' : signedPct(v);
   const said = bm.ahead == null ? `Ainda não dá pra comparar: falta aposta encerrada ${bm.mine.st > 0 ? 'de tipster' : 'sua'} nesse período.`
     : `${bm.ahead === 'mine' ? 'Você está na frente' : bm.ahead === 'tip' ? 'O tipster está na frente' : 'Empate'}: retorno de ${roi(bm.mine.roi)} nas suas apostas e de ${roi(bm.tip.roi)} nas do tipster.`;
@@ -405,13 +405,16 @@ function vCarteira(w: Wallet): string {
     <div class="segm four" role="group" aria-label="Quanto a odd pode ter caído em relação ao print">${[0, 3, 5, 10].map(v => `<button class="${cd === v ? 'on' : ''}" data-act="copydrop" data-m="${v}" aria-pressed="${cd === v}">${v ? '−' + v + '%' : 'Desligada'}</button>`).join('')}</div>
     <p class="hint" id="drophow">${cd ? `Se a odd de agora estiver mais de ${cd}% abaixo da odd do print, a aposta fica de fora do "apostar todas" até você mandar apostar mesmo assim.` : 'Desligada: a aposta entra no "apostar todas" com a odd de agora, qualquer que seja a do print.'}</p>`;
   if (froms.length || unnamed) h += `<span class="label">Tipsters</span>
-    <div class="field"><select id="orgfrom" aria-label="Tipster a renomear">${unnamed ? `<option value="">Tipster sem nome (${unnamed})</option>` : ''}${froms.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
+    <div class="field"><select id="orgfrom" aria-label="Tipster a renomear">${unnamed ? `<option value="">Tipster (${unnamed})</option>` : ''}${froms.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
     <div class="field"><input id="orgto" maxlength="40" autocomplete="off" placeholder="novo nome" aria-label="Novo nome do tipster"></div>
     <button class="btn ghost block" data-act="orgrename">${froms.length ? 'Renomear' : 'Dar nome'}</button>
     <p class="hint">Toda aposta que entra pelo "Copiar aposta" é do tipster; as que você monta no card são suas. Dar a um tipster o nome de outro junta os dois.</p>`;
   h += '</section>';
-  h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir.</p>
-    <div class="rowbtns"><button class="btn ghost" data-act="backup">Copiar backup</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Restaurar backup'}</button></div>`;
+  h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir. O arquivo pode ser mandado pra você mesmo no Telegram ou guardado nos Arquivos.</p>
+    <div class="rowbtns"><button class="btn" data-act="bksave">Salvar backup em arquivo</button><label class="btn ghost" for="bkfile">Restaurar de um arquivo</label><input type="file" id="bkfile" accept="application/json,.json,text/plain,.txt" hidden></div>`;
+  const rf = ui.restoreFile;
+  if (rf) h += `<div class="bkpeek" id="bkpeek"><p><b>${esc(rf.name)}</b></p><p class="hint">${rf.savedAt ? `Salvo em ${esc(dWhen.format(rf.savedAt))}. ` : ''}${rf.bets} ${rf.bets === 1 ? 'aposta' : 'apostas'}${rf.open ? ` (${rf.open} ${rf.open === 1 ? 'aberta' : 'abertas'})` : ''} e ${esc(fmtOf(rf.cur).format(rf.deposited))} depositados. Restaurar troca tudo o que está neste aparelho pelo que está no arquivo.</p><div class="rowbtns"><button class="btn" data-act="bkapply">Restaurar e substituir tudo</button><button class="btn ghost" data-act="bkcancel">Cancelar</button></div></div>`;
+  h += `<div class="rowbtns bktext"><button class="btn ghost" data-act="backup">Copiar como texto</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Colar um texto'}</button></div>`;
   if (ui.backup) h += `<textarea id="bk" readonly aria-label="Backup">${esc(ui.backup)}</textarea><p class="hint">Não deu pra copiar sozinho. Seleciona o texto acima e copia.</p>`;
   if (ui.restore) h += `<textarea id="rs" placeholder="Cola aqui o backup" aria-label="Backup para restaurar"></textarea><button class="btn block" data-act="dorestore">Restaurar e substituir tudo</button>`;
   h += ui.reset ? `<p class="msg">Isso apaga saldo, depósitos e todas as apostas deste aparelho.</p><div class="rowbtns"><button class="btn danger" data-act="doreset">Apagar tudo</button><button class="btn ghost" data-act="reset">Manter</button></div>`
