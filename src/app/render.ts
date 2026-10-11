@@ -67,7 +67,7 @@ function vLutas(): string {
     ? `<div class="warn">Não consegui falar com a ESPN (${esc(D.err)}). Confere a internet e tenta de novo.</div><p class="empty"><button class="btn" data-act="refresh">Tentar de novo</button></p>`
     : `<p class="empty">${D.lastSync ? 'Nenhum evento do UFC nos próximos dias.' : 'Buscando o card na ESPN…'}</p>`;
   const ev = evs.find(e => e.id === ui.eventId) || evs[0];
-  const chips = evs.map(e => { const l = evLabel(e); return `<button class="ev ${e.id === ev.id ? 'on' : ''}" data-act="event" data-id="${esc(e.id)}"><small>${esc(l.top)}</small><b>${esc(l.main)}</b><small>${esc(dDay.format(e.date))}${e.completed ? ' · encerrado' : ''}</small></button>`; }).join('');
+  const chips = evs.map(e => { const l = evLabel(e); return `<button class="ev ${e.id === ev.id ? 'on' : ''}" data-act="event" data-id="${esc(e.id)}"><small>${esc(l.top)}</small><b>${esc(l.main)}</b><small>${esc(dDay.format(e.date))}</small></button>`; }).join('');
   const priced = ev.fights.map(f => D.odds[f.id]).find(Boolean), book = priced ? priced.book : undefined;
   const info = D.err ? `Sem conexão com a ESPN · dados de ${D.lastSync ? dTime.format(D.lastSync) : '—'}` : `${book ? 'Odds ' + esc(book) + ' via ESPN' : 'Dados ESPN'} · atualizado às ${dTime.format(D.lastSync || Date.now())}`;
   let h = `<div class="events">${chips}</div><div class="sync"><span>${info}</span><button data-act="refresh">${busy ? 'Atualizando…' : 'Atualizar'}</button></div>`;

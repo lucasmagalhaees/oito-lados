@@ -55,6 +55,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 24. PR #26 (D86) mesclado às 12:49 de 11/10/2026. Às 12:52 e 12:53, com ele no ar: o seletor de países branco no tema escuro, e o filtro devendo olhar só o card escolhido (D87). Às 12:58: no navegador do PC as bandeiras não aparecem (D88).
 25. PR #27 (D87, D88) mesclado às 14:34 de 11/10/2026; o workflow `Produção` passou no commit `9e09f7a`. Às 14:39, uma captura do PC: as bandeiras aparecem, e o botão da Bélgica está cortado na ponta da fileira (D89). Às 14:43: só no PC; no Safari do iOS está funcionando perfeito.
 26. PR #28 (D89) mesclado às 15:07 de 11/10/2026. Às 15:12: com um card encerrado, mostrar os três próximos (D90).
+27. PR #29 (D90) mesclado às 16:10 de 11/10/2026. Às 16:16: o card encerrado ainda aparecia, e não devia (D91).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -941,7 +942,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Interpretação:** a fileira de eventos, no alto da tela, é feita do mesmo jeito e teria o mesmo defeito com um evento a mais no placar (na captura dele cabem os três). Ele não pediu; entrou junto por ser o mesmo erro. Se ele preferir a de eventos como estava, é uma linha de estilo.
 - **O que a captura dele também mostrou:** as bandeiras desenhadas no navegador do PC (Brasil, Rússia, Austrália, Estados Unidos, Alemanha). Era o que a D88 deixava para conferir.
 
-## D90. Quando um card acaba, os três seguintes já aparecem
+## D90. Quando um card acaba, os três seguintes já aparecem (revista pela D91)
 
 - **Contexto (11/10/2026, 15:12):** uma captura com o card de sábado encerrado e só os dois seguintes ao lado, e "se já encerrou um card, já mostra os 3 próximos depois dele".
 - **Causa:** o app lia o placar até 16 dias à frente. No domingo depois do card cabiam dois sábados; o terceiro ficava a 20 dias.
@@ -954,6 +955,20 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **O card distante com aposta aberta aparece mesmo fora dos três**, para a aposta não ficar num card que não está na tela (pode acontecer com uma aposta copiada de um print, que procura a luta em tudo o que foi lido).
 - **Custo:** cada sincronização traz um placar maior, uns cinco eventos em vez de três.
 - **Fato de terceiro, visto em 11/10/2026** pelo resumo de uma ferramenta de leitura de páginas, sem amostra gravada: o placar da ESPN de 07/10 a 25/11 traz, depois do card de 10/10, um Contender Series em 13/10, Buckley vs. Malott em 17/10, UFC 333 em 24/10 e Moicano vs. Nolan em 31/10. O terceiro está a 20 dias: dentro dos 30, fora dos 16.
+
+## D91. O card encerrado sai da tela
+
+- **Contexto (11/10/2026, 15:48 a 16:19):** com o PR #29 no ar (o card encerrado e os três seguintes), uma captura do PC e "ainda tá errado". Nas palavras dele: "o que quero é que o card não apareça mais e venham os próximos 3"; "se o card consta como encerrado ele precisa sair da dash"; "tem que ser pelo status de encerrado que vem da API"; e o aviso de que filtrar por data dá errado, porque tem card que termina depois da meia-noite.
+- **O que eu tinha lido errado na D90:** que o card encerrado continuava na fileira, antes dos três.
+- **Decisão do Lucas:** card que consta como encerrado não aparece. O critério é o status que vem da ESPN, não a data.
+- **Como ficou:** `Core.cardsToShow` deixa de fora todo evento que a ESPN marca como encerrado (`completed`, lido por `normEvent` do `status.type` do evento). Ficam os três próximos que não acabaram. A etiqueta "encerrado" da fileira saiu, porque não tem mais onde aparecer.
+- **Um caminho que comecei e larguei:** o card ficar até o dia virar, às 6 h da manhã. É filtro por data, que é o que ele disse para não fazer. Não entrou.
+- **Interpretações que precisaram ser feitas:**
+  - **Sem exceção para aposta aberta:** o card encerrado sai mesmo que uma aposta ainda espere o resultado dele. A aposta fecha do mesmo jeito, e o resultado aparece na aba Apostas.
+  - **O card em andamento continua contando como um dos três** (D90). Enquanto a ESPN não marca o evento como encerrado ele está lá, mesmo com todas as lutas já encerradas.
+  - **O evento que a ESPN nunca marca como encerrado** sai depois de 5 dias, como já saía.
+- **O que deixa de dar para ver:** as lutas e os resultados de um card encerrado, na tela de Lutas. Com um card só no placar e ele encerrado, a tela diz "Nenhum evento do UFC nos próximos dias."
+- **Não sei:** quanto tempo depois da última luta a ESPN marca o evento como encerrado. Se for na hora, o card some assim que a luta principal acaba.
 
 ## Pendências em 10/10/2026
 
@@ -968,6 +983,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
 | Confirmar: o card da semana contar como um dos três (antes de ele acabar aparecem ele e mais dois) (D90) | Lucas |
+| Confirmar: o card encerrado sair mesmo com aposta ainda esperando o resultado dele (D91) | Lucas |
+| Reparar numa noite de card: quanto tempo depois da luta principal o card some (D91) | Lucas |
 | Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
 | Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
