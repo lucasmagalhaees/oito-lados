@@ -100,7 +100,7 @@ export function normPastFight(c: Json, s: Json, athlete: string): PastFight | nu
   return {
     id: String(c.id), date: Date.parse(c.date) || 0, weight: (c.type && c.type.abbreviation) || '', rounds: (c.format && c.format.regulation && c.format.regulation.periods) || 0,
     won: me && !nobody && sides.some(x => x.winner === true) ? me.winner === true : null,
-    method: r ? r.method : 'unknown', label: r ? r.label : '', round: r ? r.round : 0, clock: r ? r.clock : '', time: r ? r.time : null
+    method: r ? r.method : 'unknown', label: r ? r.label : '', desc: r ? r.desc : '', round: r ? r.round : 0, clock: r ? r.clock : '', time: r ? r.time : null
   };
 }
 export function statValue(j: Json, name: string): number | null {

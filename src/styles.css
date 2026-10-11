@@ -270,6 +270,8 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .duel span{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .segm.per{grid-template-columns:repeat(6,1fr)}
 .segm.per button{grid-column:span 2}.segm.per button:nth-child(n+4){grid-column:span 3}
+/* the flag of a fighter's country, before the name */
+.flag{margin-right:5px;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;font-weight:400}
 .bench{font-size:13px;color:var(--fg)}
 .bench.own{color:var(--win)}.bench.tipster{color:var(--loss)}
 #origins tr.own td:first-child,#origins tr.tipall td:first-child{font-weight:700}

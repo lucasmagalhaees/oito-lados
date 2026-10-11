@@ -179,13 +179,23 @@ with sync_playwright() as p:
     assert pg.locator('.fcol').count() == 6 and 'Buscando' not in txt('#list') and (logs(), past()) == (6, 26), 'opening a fight finds them already there, and asks for nothing'
     fcol = lambda aid: pg.locator(f'.fcol[data-athlete="{aid}"]')
     rows = lambda aid: [[li.locator('i').inner_text(), li.locator('span b').inner_text(), re.sub(r'\s+', ' ', li.locator('span').inner_text().replace(li.locator('small').inner_text(), '')).strip()] for li in fcol(aid).locator('li').all()]
-    assert txt('.form[data-fid=f1] h4').upper().startswith('ÚLTIMAS 3 LUTAS') and fcol('101').locator('.fname').inner_text().upper() == 'TELES', txt('.form[data-fid=f1]')
-    assert fcol('101').locator('.fsum').inner_text() == '2V 1D' and fcol('101').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 1 por finalização, 1 por decisão' and rows('101') == [['V', 'KO/TKO', 'KO/TKO · R1 2:10'], ['V', 'Decisão', 'Decisão · 3 rounds'], ['D', 'Finalização', 'Finalização · R2 3:45']], (fcol('101').inner_text(), rows('101'))          # she has four: only the latest three
+    assert txt('.form[data-fid=f1] h4').upper().startswith('ÚLTIMAS 3 LUTAS') and fcol('101').locator('.fname').inner_text().upper().strip().endswith('TELES'), txt('.form[data-fid=f1]')
+    assert fcol('101').locator('.fsum').inner_text() == '2V 1D' and fcol('101').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 1 por submission, 1 por decisão' and rows('101') == [['V', 'KO/TKO', 'KO/TKO · R1 2:10'], ['V', 'Decisão', 'Decisão · 3 rounds'], ['D', 'Submission', 'Submission · R2 3:45']], (fcol('101').inner_text(), rows('101'))          # she has four: only the latest three
     assert all(re.fullmatch(r'[a-zç]{3}/\d\d', t) for t in fcol('101').locator('li small').all_inner_texts()), fcol('101').locator('li small').all_inner_texts()
     assert fcol('102').locator('.fsum').inner_text() == '0V 1D' and fcol('102').locator('.fends').inner_text() == 'Como acabaram: 1 por decisão' and len(rows('102')) == 1, 'an athlete with one fight shows one'
     assert 'Nenhuma luta anterior na ESPN.' in fcol('201').inner_text() and fcol('201').locator('li').count() == 0, 'a debut has nothing to show, and says so'
     assert fcol('202').locator('.fsum').inner_text() == '1V 0D 2E' and fcol('202').locator('.fends').count() == 0 and rows('202') == [['E', 'Empate', 'Empate · 3 rounds'], ['–', 'No contest', 'No contest · R1 2:00'], ['V', 'resultado não informado', 'resultado não informado']], (fcol('202').inner_text(), rows('202'))
-    assert fcol('301').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por finalização' and fcol('302').locator('.fsum').inner_text() == '2V 1D' and fcol('302').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por decisão' and rows('302')[1] == ['V', 'Decisão', 'Decisão · 5 rounds']
+    # a submission is called a submission, and by its name when the source gives one (the one of 101, above, came with none)
+    smalls = lambda aid: [re.sub(r'[a-zç]{3}/\d\d$', '<when>', t) for t in fcol(aid).locator('li small').all_inner_texts()]
+    assert rows('301')[:2] == [['V', 'Submission', 'Submission · R1 1:03'], ['V', 'Submission', 'Submission · R2 4:03']] and smalls('301') == ['Rear Naked Choke · <when>', 'Triangle Choke · <when>', '<when>'] and smalls('101') == ['<when>'] * 3 and 'inaliza' not in txt('#list'), (rows('301'), smalls('301'))
+    # the flag of each one's country comes before the name, on the card and in this box; a country the app has no flag for, or none at all, shows no flag
+    BR, EN, CN = '\U0001F1E7\U0001F1F7', '\U0001F3F4\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F', '\U0001F1E8\U0001F1F3'
+    who = lambda fid, k: pg.locator(f'.fight .row.{k}', has=pg.locator(f'[data-fid="{fid}"]')).locator('.who b')
+    flags = [[f.inner_text(), f.get_attribute('aria-label')] if f.count() else None for f in [who(fid, k).locator('.flag') for fid in ('f1', 'f2', 'f3') for k in ('a', 'b')]]
+    assert flags == [[BR, 'Brazil'], [EN, 'England'], [CN, 'China'], None, [BR, 'Brazil'], None], flags
+    assert who('f1', 'a').inner_text().replace('\xa0', ' ').upper().endswith('TELES') and who('f3', 'b').inner_text().upper() == 'DUNNE' and 'Atlantis' not in txt('#list'), who('f1', 'a').inner_text()
+    assert [fcol(a).locator('.fname .flag').inner_text() if fcol(a).locator('.fname .flag').count() else '' for a in ('101', '102', '201', '202', '302')] == [BR, EN, CN, '', ''] and all(e.is_visible() for e in pg.locator('.flag').all())
+    assert fcol('301').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por submission' and fcol('302').locator('.fsum').inner_text() == '2V 1D' and fcol('302').locator('.fends').inner_text() == 'Como acabaram: 1 por KO/TKO, 2 por decisão' and rows('302')[1] == ['V', 'Decisão', 'Decisão · 5 rounds']
     assert pg.evaluate('getComputedStyle(document.querySelector(".fcol li.w > i")).backgroundColor !== getComputedStyle(document.querySelector(".fcol li.l > i")).backgroundColor') and all(e.is_visible() for e in pg.locator('.fcol').all())
     # what was read is kept and not asked for again
     pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_timeout(300); assert (logs(), past()) == (6, 26) and fcol('101').locator('li').count() == 3, 'closing and opening the fight asks for nothing'
@@ -195,6 +205,11 @@ with sync_playwright() as p:
     pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]'); pg.wait_for_function('window.__OL.D.form["101"].ts > window.__was')
     assert (logs(), past()) == (7, 26) and fcol('101').locator('li').count() == 3, (logs(), past())
     assert pg.evaluate('["998", "999"].map(k => k in window.__OL.D.form)') == [True, False]; pg.evaluate('delete window.__OL.D.form["998"]')
+    # fights read by a version that did not keep how each one ended are read again, once, to get the name of the submission
+    was = (logs(), past()); pg.evaluate('window.__OL.D.form["301"].fights.forEach(x => { delete x.desc; })'); pg.click('[data-act=more][data-fid="f3"]'); pg.click('[data-act=more][data-fid="f3"]')
+    pg.wait_for_function('window.__OL.D.form["301"].fights.every(x => typeof x.desc === "string")'); pg.wait_for_timeout(300)
+    assert (logs() - was[0], past() - was[1]) == (1, 6) and smalls('301')[0] == 'Rear Naked Choke · <when>', (logs() - was[0], past() - was[1])
+    pg.click('[data-act=more][data-fid="f3"]'); pg.click('[data-act=more][data-fid="f3"]'); pg.wait_for_timeout(300); assert (logs() - was[0], past() - was[1]) == (1, 6), 'and not again after that'
     # when the source cannot be reached it says so, keeps nothing half read, and a new opening of the fight tries again
     pg.evaluate('delete window.__OL.D.form["101"]'); ESPN['formdown'] = True; pg.click('[data-act=more][data-fid="f1"]'); pg.click('[data-act=more][data-fid="f1"]')
     pg.wait_for_function('document.querySelector(\'.fcol[data-athlete="101"]\').textContent.includes("Não deu pra buscar agora")'); assert pg.evaluate('window.__OL.D.form["101"]') is None and fcol('102').locator('li').count() == 1
@@ -920,6 +935,8 @@ with sync_playwright() as p:
     pg.evaluate('(() => { const L = JSON.parse(window.__legs); window.__OL.S.bets.forEach((b, i) => { b.legs = L[i]; }); })()'); repaint(); assert pg.locator('#stmtevents tbody tr').count() == 1 and srow('stmtspans', 'all')[1] == side(stj[3][2])
     pg.click('.tabbar [data-tab=apostas]'); assert pg.locator('[data-act=again]').count() == 0, 'nothing can be repeated once every fight is over'
     pg.click('.tabbar [data-tab=lutas]'); shot('s7-final.png', True)
+    # the fight that ended in a submission says which one, on the card and on the bets that rode on it
+    assert 'Almeida venceu por Submission (Rear Naked Choke) · R4 2:00' in txt('#list') and 'Teles venceu por KO/TKO · R2 3:12' in txt('#list') and pg.evaluate('window.__OL.S.bets.flatMap(b => b.legs).filter(l => l.fid === "f3" && l.res).every(l => l.res.includes("venceu por Submission (Rear Naked Choke) · R4 2:00"))'), txt('#list')[:900]
     pg.click('[data-act=event]'); pg.wait_for_selector('.fight')                                       # picking the event again keeps the card on screen
     ow = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     # the person's data: backup, restore and reset

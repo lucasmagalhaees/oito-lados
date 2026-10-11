@@ -3,6 +3,7 @@
 // `Core` keeps the surface the tests have always used.
 import { am2dec, devig, mo, r2 } from './odds';
 import { attachDistance, normEvent, normOdds, normResult, statValue, normEventlog, normPastFight, statusRef } from './espn';
+import { flagOf } from './flags';
 import { fightSeconds, formSummary } from './form';
 import { combo, isWomens, jointModel, ML, overUnder, price, probs, sideOf } from './pricing';
 import { betResult, legOutcome, legState, oddLeft } from './settlement';
@@ -13,7 +14,7 @@ import { completeTip, edgeSummary, parseTip, printedEdge, tipStake } from './tip
 import { cardSections, findFights } from './card';
 import { benchmark, byOrigin, copyDrop, dupBets, exposure, isTip, oddNow, openByEvent, openTotals, periodBets, PERIOD_DAYS, renameOrigin, selSig, sinceSummary, statement } from './history';
 
-export const Core = { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, normEventlog, normPastFight, statusRef, formSummary, fightSeconds, probs, price, jointModel, combo, legOutcome, betResult, oddLeft, legState, sideOf, overUnder, isWomens, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipStake, completeTip, printedEdge, edgeSummary, selSig, dupBets, exposure, openByEvent, openTotals, oddNow, cardSections, findFights, copyDrop, byOrigin, benchmark, isTip, renameOrigin, periodBets, statement, PERIOD_DAYS, sinceSummary, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, suggestedUnits, stepUnits, LONG_MULTI, parseTip, ML };
+export const Core = { r2, am2dec, devig, mo, normEvent, normOdds, attachDistance, normResult, statValue, normEventlog, normPastFight, statusRef, flagOf, formSummary, fightSeconds, probs, price, jointModel, combo, legOutcome, betResult, oddLeft, legState, sideOf, overUnder, isWomens, cashout, CASHOUT_MARGIN, normFx, fxRate, convertState, balanceOf, tipStake, completeTip, printedEdge, edgeSummary, selSig, dupBets, exposure, openByEvent, openTotals, oddNow, cardSections, findFights, copyDrop, byOrigin, benchmark, isTip, renameOrigin, periodBets, statement, PERIOD_DAYS, sinceSummary, maskMoney, parseMoney, moneyText, maskUnits, parseUnits, unitsText, unitPct, unitValue, suggestedUnits, stepUnits, LONG_MULTI, parseTip, ML };
 export type * from './types';
 export type { BenchSide, OpenGroup, OpenTotals, OriginRow, OutOf, Period, StatementRow } from './history';
 export type { LegState } from './settlement';
