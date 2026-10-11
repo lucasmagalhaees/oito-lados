@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { isCurrency, setFmt } from './format';
-import type { AppState, AthleteStats, CardPart, CornerPair, Currency, Fight, FightEvent, Odds, PastFight, Period, Result, Takedowns, Tip, TipPick, TipStakeIn } from '../core';
+import type { AppState, AthleteStats, CardPart, CornerPair, Currency, Fight, FightEvent, Odds, PastFight, Period, Result, Takedowns, Tip, TipPick, TipStakeIn, UsageLog } from '../core';
 
 /* ================= persistent state ================= */
 export const LS = {
@@ -75,13 +75,17 @@ export interface Data {
 }
 export const D: Data = { events: [], fights: new Map(), odds: {}, results: {}, td: {}, astats: {}, finalSeen: {}, oddsAt: {}, lastSync: 0, from: 0, err: null, unread: {}, form: {} };
 (() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events, odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0, form: c.form || {} }); index(); } })();
+/** The calls made to the source, counted on this device (`oitolados.usage.v1`), and the ones made since the page was opened. */
+export const U: UsageLog = Core.usageRead(LS.get('oitolados.usage.v1'));
+export const session: { since: number; log: UsageLog } = { since: Date.now(), log: Core.usageEmpty() };
+export const saveUsage = (): boolean => LS.set('oitolados.usage.v1', { v: 1, days: U.days });
 export function index(): void { D.fights = new Map(); for (const e of D.events) for (const f of e.fights) D.fights.set(f.id, f); }
 export function saveCache(): void { LS.set('oitolados.cache.v1', { events: D.events, odds: D.odds, results: D.results, td: D.td, astats: D.astats, finalSeen: D.finalSeen, lastSync: D.lastSync, from: D.from, form: D.form }); }
 
 /** What is on screen: nothing here is saved. */
 export interface Ui {
   tab: 'lutas' | 'apostas' | 'carteira'; eventId: string | null; open: Set<string>; filter: 'open' | 'done'; sheet: boolean;
-  reset: boolean; restore: boolean; backup: string | null; dep: string; placing: boolean; msg: string;
+  reset: boolean; restore: boolean; backup: string | null; usage: string | null; dep: string; placing: boolean; msg: string;
   cash: string | null; cashing: boolean; cashMsg: string; depCur: string | null; fxBusy: boolean; fxMsg: string; fxRate: number | null;
   /** The bets list shows one origin only ('' is the bets with none); null shows all. */
   origin: string | null;
@@ -96,7 +100,7 @@ export interface Ui {
   /** What is typed in the search of the fights screen, and the part of the card it shows (null shows all of it). */
   q: string; part: CardPart | null;
 }
-export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null, stmtAll: false, land: null };
+export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, usage: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null, stmtAll: false, land: null };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */

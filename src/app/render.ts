@@ -10,6 +10,7 @@ import { legOut, resultText } from './settle';
 import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
 import { busy, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
+import { usageHtml } from './usage';
 import type { BenchSide, Bet, CardPart, Currency, Fight, FightEvent, Leg, LegState, OriginRow, OpenTotals, Option, Outcome, Period, Side, StatementRow } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
 import type { CopyMeta, Slip } from './state';
@@ -472,6 +473,7 @@ function vCarteira(w: Wallet): string {
   h += ui.reset ? `<p class="msg">Isso apaga saldo, depósitos e todas as apostas deste aparelho.</p><div class="rowbtns"><button class="btn danger" data-act="doreset">Apagar tudo</button><button class="btn ghost" data-act="reset">Manter</button></div>`
     : `<button class="btn danger block" data-act="reset">Zerar simulação</button>`;
   h += '</section>';
+  h += usageHtml(Date.now());
   const built = builtFrom();
   h += `<section class="card" id="about"><span class="label">Versão do app</span><p class="hint" id="version">${built ? `Versão ${esc(built.slice(0, 7))}.` : 'Versão de desenvolvimento.'} ${canUpdate() ? 'O app fica guardado neste aparelho: abre na hora e também sem internet, com os últimos dados que carregou.' : 'Neste endereço o app não fica guardado no aparelho.'}</p>${canUpdate() ? '<button class="btn ghost block" data-act="checkupdate">Procurar versão nova</button>' : ''}`;
   return h + '</section>';

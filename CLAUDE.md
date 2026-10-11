@@ -116,6 +116,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 30. O que em português seria finalização é escrito "Submission" em toda a interface, e a luta que acabou assim diz qual foi ("Rear Naked Choke"), com o nome que a ESPN dá.
 31. Na tela de Lutas, um filtro por país mostra as lutas do card escolhido no alto que têm lutador daquele país. O Brasil tem um botão próprio ("Brasileiros"), sempre ali; cada outro país do card tem o seu ao lado.
 32. No alto da tela de Lutas ficam os três próximos cards. O card que a ESPN marca como encerrado sai da tela, e os três seguintes são os que estão lá.
+33. Na Carteira, o cartão "Uso da ESPN" conta as chamadas que o app faz à ESPN neste aparelho: quantas, de que tipo, quanto demoram, quanto voltou e quantas falharam, de hoje e dos últimos 7 dias. As contagens podem ser exportadas em arquivo ou copiadas como texto.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -192,26 +193,28 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/core/flags.ts` | `flagOf`: a bandeira de um país pelo nome em inglês, como a ESPN escreve; nome que a tabela não tem fica sem bandeira. `countryCode`: o código do país, para a página dizer o nome em português |
 | `src/core/form.ts` | As últimas lutas de um atleta somadas: `formSummary` (vitórias, derrotas e como as lutas acabaram) e `fightSeconds` (quanto a luta durou) |
 | `src/core/card.ts` | O card de um evento: `cardSections` (as partes do card, pela hora em que as lutas começam) e `cardsToShow` (os eventos que aparecem no alto: os três próximos que não acabaram), `findFights` (as lutas com o que foi digitado no nome dos lutadores), `fromCountry` (as lutas com lutador de um país) e `countries` (os países que há, e em quantas lutas cada um tem lutador) |
+| `src/core/usage.ts` | A contagem das chamadas à ESPN: `usageAdd` (conta uma chamada no dia e no tipo dela), `usageSum` (as somas de um dia em diante, por tipo e no total), `usageRead` (lê o que foi guardado, descartando o que não é contagem) e os tipos de chamada (`USAGE_KINDS`) |
 | `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
 
 ### `src/app/`: a página
 
 | Módulo | O que tem |
 |---|---|
-| `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS`. Também o tema (`applyTheme`), os pares de cor dos cantos (`CORNER_SETS`, `cornerSet`) e `settingsOf`, a lista única do que é configuração |
+| `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `U` (as chamadas à ESPN contadas neste aparelho), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS`. Também o tema (`applyTheme`), os pares de cor dos cantos (`CORNER_SETS`, `cornerSet`) e `settingsOf`, a lista única do que é configuração |
 | `src/app/format.ts` | Moeda da banca, datas pt-BR, categorias de peso, `esc`, e os acessos ao DOM (`$`, `part`, `valOf`, `blurField`) |
-| `src/app/api.ts` | `getJSON`, `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`, e `loadForm`, que busca as últimas lutas de uma lista de lutadores |
+| `src/app/api.ts` | `getJSON` (toda chamada passa por ele, dizendo para que é, e é contada), `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`, e `loadForm`, que busca as últimas lutas de uma lista de lutadores |
 | `src/app/fx.ts` | `FX` (cotação guardada) e `loadFx` |
 | `src/app/settle.ts` | `legOut`, `settle`, `resultText` |
 | `src/app/cashout.ts` | `cashoutOf`, `chanceNow`, as mensagens de cada motivo |
 | `src/app/repeat.ts` | `repeatBet`, `doCashout` |
-| `src/app/backup.ts` | O backup: como texto (`backupText`), como arquivo (`saveBackupFile`, `backupName`), o que um backup traz (`peekBackup`, `pickBackupFile`) e a restauração (`restoreFrom`) |
+| `src/app/backup.ts` | O backup: como texto (`backupText`), como arquivo (`saveBackupFile`, `backupName`, e `handFile`, que entrega qualquer texto como arquivo), o que um backup traz (`peekBackup`, `pickBackupFile`) e a restauração (`restoreFrom`) |
 | `src/app/import.ts` | Copiar aposta: leitor de imagem, a lista de apostas lidas (`runImport`, `importImages`, `renderImport`), o que cada item vira agora (`impResolve`: seleções, correções, avisos), `importToSlip` e `placeAll`, que faz várias de uma vez |
 | `src/app/sync.ts` | `sync`, `schedule`, `pickEvent`, `weekEvent` (o card da semana) e `preloadForm`, que adianta as últimas lutas de quem está nele |
 | `src/app/helpers.ts` | `wallet`, `statsOf` (os números de um conjunto de apostas encerradas), `priceOf`, `slipCalc`, `groupsOf` e `payoutOf` (o preço por luta e o que uma stake devolve, do jeito que o cupom calcula), `exposureNotes`, valor do cupom em dinheiro e em unidades |
 | `src/app/render.ts` | `render` e as três telas, a lista de lutas que se repinta sozinha debaixo da busca (`paintList`), cupom (`renderSheet`, `slipSummary`), gráfico, `place` e as duas partes dele que o lote também usa (`recheck`, `writeBets`) |
 | `src/app/events.ts` | Um listener delegado por `data-act`, depósito e troca de moeda |
 | `src/app/update.ts` | Registro do service worker, aviso de versão nova (`initUpdates`, `applyUpdate`, `checkNow`) e `builtFrom`, o commit da página |
+| `src/app/usage.ts` | O uso da ESPN: `record` (conta cada chamada, chamado por `getJSON`), o cartão da Carteira (`usageHtml`), e as contagens entregues como arquivo, como texto ou zeradas (`saveUsageFile`, `copyUsage`, `resetUsage`) |
 | `src/main.ts` | Entrada: liga os listeners, expõe `window.__OL`, dispara a primeira sincronização e registra o service worker |
 | `src/env.d.ts` | Declarações de tipo de `window.__OL` e do leitor de imagem; os tipos do Vite (import de CSS, `import.meta.env`) vêm por referência |
 
@@ -255,6 +258,8 @@ O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma d
 `oitolados.cache.v1`: último placar, odds, resultados, quedas, estatísticas e as últimas lutas de cada lutador já buscadas (`form`), para abrir instantâneo e offline.
 
 `oitolados.fx.v1`: última cotação lida, `{ date, rates: { BRL: 1, USD, EUR }, ts }`.
+
+`oitolados.usage.v1`: as chamadas à ESPN contadas neste aparelho, `{ v: 1, days: { 'AAAA-MM-DD': { peak, k: { board|odds|result|td|astats|form: { n, err, ms, bytes, max } } } } }` (seção "Uso da ESPN"). Não faz parte do backup, e "Zerar simulação" não mexe nele.
 
 ### Chaves de seleção
 
@@ -481,6 +486,32 @@ Pedido do Lucas em 11/10/2026 (D81): baixar um arquivo que possa ser mandado pel
 - **O que volta:** depósitos, apostas, conversões de moeda e as configurações (`settingsOf`). `seen` vai para agora. O cache da ESPN não faz parte do backup.
 - **Limite conhecido:** o Telegram entrega o arquivo de volta como um anexo; para restaurar é preciso salvá-lo nos Arquivos do aparelho e escolher de lá. O app não recebe o arquivo direto do Telegram.
 
+## Uso da ESPN (contagem no aparelho)
+
+Pedido do Lucas em 11/10/2026 (D92): saber como está o uso da API da ESPN, com número na mão, antes de otimizar qualquer coisa. Sem backend, a contagem fica no aparelho e só sai dele quando a pessoa exporta.
+
+- **O que é contado:** toda chamada à ESPN passa por `getJSON` (`src/app/api.ts`), que diz para que ela é. São seis tipos (`Core.USAGE_KINDS`):
+
+  | Tipo | No cartão | Chamadas |
+  |---|---|---|
+  | `board` | Placar | o placar |
+  | `odds` | Odds | as odds de uma luta e a linha de "vai até a decisão" dela |
+  | `result` | Resultado | o resultado de uma luta encerrada |
+  | `td` | Quedas da luta | as quedas de cada lutador numa luta |
+  | `astats` | Média de quedas | a média de quedas de um lutador |
+  | `form` | Últimas lutas | a lista de lutas de um lutador, cada luta passada e o resultado dela |
+
+  A chamada ao serviço de câmbio não é da ESPN e não é contada (`getJSON` com tipo `null`).
+- **O que fica de cada chamada:** por dia e por tipo, o número de chamadas (`n`), as que falharam (`err`: erro de rede, resposta que não é 200, tempo esgotado), o tempo somado (`ms`), a mais lenta (`max`) e o tamanho somado das respostas (`bytes`). E, por dia, o pico (`peak`): o maior número de chamadas dentro de um mesmo minuto do relógio.
+- **O tamanho é o do texto da resposta**, em caracteres, depois de aberta. Quanto trafegou comprimido a página não vê.
+- **O dia** é o do relógio do aparelho. Ficam guardados os 30 dias mais recentes (`USAGE_DAYS`).
+- **Guardado** em `oitolados.usage.v1`, 2 s depois da última chamada (`USAGE_SAVE`) e ao sair da página. O que foi contado desde que o app abriu ("a sessão") fica só na memória.
+- **Na Carteira:** o cartão "Uso da ESPN" diz as chamadas de hoje, o tamanho, as falhas, o pico por minuto e as chamadas da sessão; uma tabela traz, por tipo e no total, as chamadas de hoje e dos últimos 7 dias, o tempo médio, a mais lenta e o tamanho médio de uma resposta.
+- **Exportar:** "Exportar em arquivo" gera `oito-lados-uso-espn-AAAA-MM-DD-HHMM.json`, pela folha de compartilhamento ou baixado, como o backup (`handFile`). "Copiar como texto" copia o mesmo conteúdo; onde a página não pode copiar, o texto aparece para ser copiado à mão. O arquivo traz `days` (como está guardado), `session`, `today`, `version` (o commit da página) e a legenda dos campos. **Só contagens: nada de apostas, saldo ou depósitos.**
+- **Zerar contagem** apaga tudo o que foi contado neste aparelho e recomeça a sessão.
+- **Ninguém mais vê:** as contagens não são enviadas a lugar nenhum. Para alguém analisar, é preciso mandar o arquivo ou o texto.
+- **Limite conhecido:** conta o que a página pediu, não o que a ESPN recebeu. Um app aberto em dois aparelhos tem duas contagens.
+
 ## Sincronização
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 30 dias à frente (`BOARD_AHEAD`): o bastante para ter os três cards seguintes ao que acabou, mesmo com uma semana sem evento no meio.
@@ -554,7 +585,7 @@ Os casos são JavaScript, não TypeScript: muitos passam de propósito dados tor
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%). `cov.stop` para a medição e solta a página: com o medidor ainda preso, uma página fechada continuava contando como aberta para o service worker.
 
-`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive uma imagem que só está na área de transferência, e quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), confere a bandeira de cada lutador no card, confere que as últimas lutas de quem está no card da semana são buscadas sozinhas e o que os detalhes da luta mostram delas (com o nome da submission; quantas chamadas faz, o que guarda, o que busca de novo e o que faz quando a fonte falha), salva o backup em arquivo (baixado e pela folha de compartilhamento simulada) e restaura dele, mostra uma parte do card só, busca luta pelo nome (com um segundo evento no placar, e com o toque que não tira o foco do campo) e filtra as lutas do card por país (o botão dos brasileiros, os dos outros países, junto com a busca, de um card para o outro, e as cores dos botões no tema escolhido), confere os cards no alto (o da semana e os dois seguintes antes de ele acabar, inclusive com todas as lutas encerradas e o evento ainda não marcado; só os três seguintes depois que a ESPN o marca como encerrado; o card distante com aposta aberta; o placar pedido um mês à frente), confere as fileiras de eventos e de países com o dedo (uma linha que rola para o lado) e com o mouse (quebram em linhas, sem botão cortado, na largura do celular e numa janela larga), e, no fim, abre o Chromium de novo sem a fonte de emoji da máquina, para fazer as vezes de um computador sem bandeira: a fonte das bandeiras é pedida e a bandeira sai em cores; sem ela, só letras; e com a fonte de emoji no lugar, o app não pede nada), confere a etiqueta de tipster em cada aposta e a comparação com as próprias (os dois quadros frente a frente e a tabela), confere o extrato em unidades (as janelas de 7, 15 e 30 dias e o geral, os eventos, o ponto de quem está na frente, e que ele não segue o período), renomeia tipster, filtra as apostas por quem é, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
+`e2e.py` simula um card de 3 lutas em 4 fases, aposta pela interface (simples, múltipla, combinada, combinação impossível), copia apostas de texto e de prints (inclusive uma imagem que só está na área de transferência, e quatro fotos de uma vez: um cupom de múltipla completado pela lista de seleções, à mão e por outro item, seleção trocada e tirada, valor e tipo mudados na lista, aposta repetida na lista, odd mínima, três apostas feitas juntas com a origem e a odd do print guardadas, a fonte fora do ar, uma odd que muda no meio, e as mesmas fotos mandadas de novo com as apostas já abertas), confere a bandeira de cada lutador no card, confere que as últimas lutas de quem está no card da semana são buscadas sozinhas e o que os detalhes da luta mostram delas (com o nome da submission; quantas chamadas faz, o que guarda, o que busca de novo e o que faz quando a fonte falha), salva o backup em arquivo (baixado e pela folha de compartilhamento simulada) e restaura dele, mostra uma parte do card só, busca luta pelo nome (com um segundo evento no placar, e com o toque que não tira o foco do campo) e filtra as lutas do card por país (o botão dos brasileiros, os dos outros países, junto com a busca, de um card para o outro, e as cores dos botões no tema escolhido), confere os cards no alto (o da semana e os dois seguintes antes de ele acabar, inclusive com todas as lutas encerradas e o evento ainda não marcado; só os três seguintes depois que a ESPN o marca como encerrado; o card distante com aposta aberta; o placar pedido um mês à frente), confere as fileiras de eventos e de países com o dedo (uma linha que rola para o lado) e com o mouse (quebram em linhas, sem botão cortado, na largura do celular e numa janela larga), e, no fim, abre o Chromium de novo sem a fonte de emoji da máquina, para fazer as vezes de um computador sem bandeira: a fonte das bandeiras é pedida e a bandeira sai em cores; sem ela, só letras; e com a fonte de emoji no lugar, o app não pede nada), confere o cartão do uso da ESPN (todo tipo de chamada contado, a contagem zerada, o que é contado dali em diante contra o que a fonte simulada viu, a chamada que falha, o arquivo exportado, a folha de compartilhamento, o texto copiado e o que fica guardado; e, numa página só dela, tipo por tipo contra a fonte e de novo depois de recarregar), confere a etiqueta de tipster em cada aposta e a comparação com as próprias (os dois quadros frente a frente e a tabela), confere o extrato em unidades (as janelas de 7, 15 e 30 dias e o geral, os eventos, o ponto de quem está na frente, e que ele não segue o período), renomeia tipster, filtra as apostas por quem é, confere a faixa do que fechou desde a última vez e o período da Carteira, faz cashout nos dois regimes (devolução antes do card e valor de mercado com uma perna da múltipla já batida) e confere quando ele congela, troca a moeda da banca com e sem depósito e confere a conversão (cotação simulada, com números redondos e data antiga para não passar por cotação real), imprime preços e liquidações e confere o saldo final esperado de R$ 1.609,59. Capturas em `tests/shots/`. O erro de rede no fim da saída é a fonte do Google bloqueada de propósito.
 
 `settle.py` aposta pela interface na primeira luta do card (vencedor, o outro lado, método, quedas e uma múltipla) e confere a etiqueta de cada seleção pelo caminho. Faz a ESPN simulada segurar respostas: primeiro a luta acaba com o vencedor marcado e sem resultado (as duas de vencedor fecham, o resto espera, e a fonte é consultada de novo em menos de 10 s); depois o resultado vem com um nome inventado (nada anula, o nome aparece); depois vem certo (método e quedas fecham). Confere também a volta ao app e a múltipla perdida na luta principal. Numa segunda sessão, limpa, a primeira luta acaba em empate: a simples no vencedor é devolvida, e a múltipla segue aberta com a seleção marcada como anulada, a odd reduzida e os totais acompanhando, até ganhar na luta que restou. Nessa sessão, em que nada foi copiado, confere também o extrato em unidades com uma coluna só. Numa terceira, aberta com o card pela metade, confere que o adiantamento das últimas lutas só busca quem ainda tem luta por fazer. O `e2e.py` liquida com tudo chegando de uma vez; este é o que cobre a noite em que não chega.
 

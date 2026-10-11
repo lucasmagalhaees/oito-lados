@@ -10,6 +10,7 @@ import { doCashout, repeatBet } from './repeat';
 import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
+import { copyUsage, resetUsage, saveUsageFile } from './usage';
 import type { Currency, Period } from '../core';
 import type { Slip, Ui } from './state';
 
@@ -162,6 +163,9 @@ document.addEventListener('click', e => {
   else if (a === 'deposit') deposit();
   else if (a === 'convonly') convertOnly();
   else if (a === 'bksave') saveBackupFile();
+  else if (a === 'usagesave') saveUsageFile();
+  else if (a === 'usagecopy') copyUsage();
+  else if (a === 'usagereset') resetUsage();
   else if (a === 'bkapply') { if (!ui.restoreFile || !restoreFrom(ui.restoreFile.text)) toast('Esse arquivo não é um backup do Oito Lados.'); }
   else if (a === 'bkcancel') { ui.restoreFile = null; render(); }
   else if (a === 'backup') {

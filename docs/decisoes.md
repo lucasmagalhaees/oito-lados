@@ -56,6 +56,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 25. PR #27 (D87, D88) mesclado às 14:34 de 11/10/2026; o workflow `Produção` passou no commit `9e09f7a`. Às 14:39, uma captura do PC: as bandeiras aparecem, e o botão da Bélgica está cortado na ponta da fileira (D89). Às 14:43: só no PC; no Safari do iOS está funcionando perfeito.
 26. PR #28 (D89) mesclado às 15:07 de 11/10/2026. Às 15:12: com um card encerrado, mostrar os três próximos (D90).
 27. PR #29 (D90) mesclado às 16:10 de 11/10/2026. Às 16:16: o card encerrado ainda aparecia, e não devia (D91).
+28. PR #30 (D91) mesclado às 16:40 de 11/10/2026. Entre 16:23 e 16:41: como está o uso da API da ESPN, e como medir (D92).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -970,6 +971,21 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **O que deixa de dar para ver:** as lutas e os resultados de um card encerrado, na tela de Lutas. Com um card só no placar e ele encerrado, a tela diz "Nenhum evento do UFC nos próximos dias."
 - **Não sei:** quanto tempo depois da última luta a ESPN marca o evento como encerrado. Se for na hora, o card some assim que a luta principal acaba.
 
+## D92. O uso da ESPN é contado no aparelho
+
+- **Contexto (11/10/2026, 16:23 a 16:41):** "como estou de performance no uso da API da ESPN? estamos num caminho bem otimizado?", depois "como fazer uma telemetria, observabilidade disso?", "mas como você vai ter acesso ao que rodou no meu local storage?" e, à proposta de um cartão com botão de exportar, "faz".
+- **O que respondi antes de fazer:** pelo código o uso é enxuto, mas nunca foi medido. E eu não tenho acesso ao que fica no aparelho dele: só vejo o que ele mandar.
+- **Decisão do Lucas:** contar as chamadas no próprio app e poder exportar.
+- **Como ficou:** toda chamada à ESPN é contada por dia e por tipo (placar, odds, resultado, quedas da luta, média de quedas, últimas lutas): quantas, quantas falharam, o tempo, a mais lenta e o tamanho das respostas, mais o pico de chamadas num minuto. Fica em `oitolados.usage.v1` por 30 dias. A Carteira ganhou o cartão "Uso da ESPN", com exportar em arquivo, copiar como texto e zerar.
+- **Por que no aparelho:** ver de fora pede um servidor para receber os números, que é backend, fora do MVP. Um serviço de analytics pronto foi citado como meio-termo e não foi avaliado.
+- **Interpretações que precisaram ser feitas:**
+  - **Só a ESPN é contada.** A chamada ao câmbio fica de fora; fontes e leitor de imagem também.
+  - **O arquivo só leva contagens**, nada de apostas, saldo ou depósitos: é para ser mandado a outra pessoa sem pensar duas vezes.
+  - **Não entra no backup** e "Zerar simulação" não o apaga: é sobre o aparelho, não sobre a banca. Tem o seu próprio "Zerar contagem".
+  - **O tamanho é o do texto da resposta.** O que trafegou comprimido a página não tem como ver.
+  - **O cartão fica sempre à vista**, no fim da Carteira, e não escondido atrás de uma opção.
+- **O que isto não é:** otimização. Nada mudou em quantas chamadas o app faz. A ideia é usar numa noite de card, mandar o arquivo e decidir com número.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -985,6 +1001,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar: o card da semana contar como um dos três (antes de ele acabar aparecem ele e mais dois) (D90) | Lucas |
 | Confirmar: o card encerrado sair mesmo com aposta ainda esperando o resultado dele (D91) | Lucas |
 | Reparar numa noite de card: quanto tempo depois da luta principal o card some (D91) | Lucas |
+| Usar o app na noite do card de 17/10 e mandar o arquivo do "Uso da ESPN", para decidir o que otimizar (D92) | Lucas |
 | Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
 | Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |

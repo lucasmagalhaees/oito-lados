@@ -7,11 +7,13 @@ import type { AppState, Currency } from '../core';
 /* ================= backup: the person's data as a text or as a file ================= */
 /** The backup as text: everything that is saved about the person, stamped with when it was taken. */
 export const backupText = (now: number): string => JSON.stringify({ ...S, app: 'oito-lados', savedAt: now });
-/** The name of a backup file, with the day and the hour it was taken: files sent around are told apart by it. */
-export function backupName(now: number): string {
+/** The day and the hour, as they go in the name of a file: files sent around are told apart by it. */
+export function fileStamp(now: number): string {
   const d = new Date(now), p = (n: number): string => String(n).padStart(2, '0');
-  return `oito-lados-backup-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
+/** The name of a backup file, with the day and the hour it was taken. */
+export const backupName = (now: number): string => `oito-lados-backup-${fileStamp(now)}.json`;
 /** What a backup holds, to be shown before it replaces anything. Null when the text is not a backup. */
 export interface BackupInfo { bets: number; open: number; deposited: number; cur: Currency; savedAt: number | null }
 export function peekBackup(text: string): { state: AppState; info: BackupInfo } | null {
@@ -30,20 +32,25 @@ export function restoreFrom(text: string): boolean {
   ui.restore = false; ui.restoreFile = null; blurField(); render(); toast('Backup restaurado.'); sync(true);
   return true;
 }
-/** Hands the backup over as a file. On a phone it goes through the share sheet, straight to a chat or to the files of
- *  the device; where a page cannot share a file, it is downloaded. Giving up on the share sheet does nothing. */
-export async function saveBackupFile(): Promise<void> {
-  const now = Date.now(), name = backupName(now), text = backupText(now);
+/** Hands a text over as a file. On a phone it goes through the share sheet, straight to a chat or to the files of the
+ *  device; where a page cannot share a file, it is downloaded. Says how it went: shared, saved (downloaded), or closed
+ *  (the person gave up on the share sheet, and nothing was done). */
+export async function handFile(name: string, text: string, title: string): Promise<'shared' | 'saved' | 'closed'> {
   let file: File | null = null;
   try { file = new File([text], name, { type: 'application/json' }); } catch (err) { /* a browser that cannot make a file downloads it below */ }
   if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: 'Backup do Oito Lados' }); toast('Backup salvo em arquivo.'); return; }
-    catch (err) { if (err && (err as { name?: string }).name === 'AbortError') return; }      // the person closed the sheet; any other failure falls back to a download
+    try { await navigator.share({ files: [file], title }); return 'shared'; }
+    catch (err) { if (err && (err as { name?: string }).name === 'AbortError') return 'closed'; }      // the person closed the sheet; any other failure falls back to a download
   }
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = document.createElement('a');
   a.href = url; a.download = name; a.hidden = true; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
-  toast(`Backup baixado: ${name}`);
+  return 'saved';
+}
+/** Hands the backup over as a file. */
+export async function saveBackupFile(): Promise<void> {
+  const now = Date.now(), name = backupName(now), how = await handFile(name, backupText(now), 'Backup do Oito Lados');
+  if (how === 'shared') toast('Backup salvo em arquivo.'); else if (how === 'saved') toast(`Backup baixado: ${name}`);
 }
 /** Reads a backup file that was picked and shows what it holds; nothing is replaced until the person confirms. */
 export async function pickBackupFile(file: File | undefined): Promise<void> {

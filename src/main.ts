@@ -8,9 +8,11 @@ import { settle } from './app/settle';
 import { D, S, imp, slip, ui } from './app/state';
 import { initSync, pickEvent, settling, sync } from './app/sync';
 import { initUpdates } from './app/update';
+import { initUsage } from './app/usage';
 
 initSync();
 initEvents();
+initUsage();
 window.__OL = { Core, D, ui, slip, imp, sync, settle, settling, get S() { return S; }, get FX() { return FX; } };
 pickEvent(); render(); sync(false);
 initUpdates();
