@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.21.1] - 2026-10-11
+
+### Alterado
+- O filtro por país olha só o card escolhido no alto, e continua ligado ao trocar de card.
+
+### Corrigido
+- As bandeiras não apareciam no navegador do computador: o Windows não tem emoji de bandeira. Onde o sistema não tem, o app busca uma fonte só de bandeiras; o iPhone continua com as dele.
+- A lista de países aparecia branca no tema escuro. Os países passaram a ser botões do app, com as cores do tema, no lugar do seletor do sistema.
+
 ## [0.21.0] - 2026-10-11
 
 ### Adicionado

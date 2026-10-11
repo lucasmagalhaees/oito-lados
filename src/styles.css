@@ -219,12 +219,11 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .field.search input{font-size:17px}
 .field.search .x{flex:none;margin-right:-8px}
 #parts{margin-top:10px}
-/* the filter by country: the shortcut of Brazil and the list of every country on the cards */
-.lands{display:flex;gap:8px;margin-top:10px;align-items:stretch}
-.lands > button{flex:none;border:1px solid var(--line);border-radius:8px;padding:0 12px;min-height:44px;font-weight:600;white-space:nowrap}
+/* the filter by country: the shortcut of Brazil and a button for each other country on the card, in a row that scrolls sideways */
+.lands{display:flex;gap:8px;margin:10px -16px 0;padding:0 16px 2px;overflow-x:auto;scrollbar-width:none}
+.lands::-webkit-scrollbar{display:none}
+.lands > button{flex:none;border:1px solid var(--line);border-radius:8px;padding:0 12px;min-height:44px;font-weight:600;font-size:14px;white-space:nowrap;background:var(--surface);color:var(--fg)}
 .lands > button.on{border-color:var(--gold-bg);background:var(--gold-bg);color:var(--on-gold)}
-.lands .field{flex:1 1 0;min-width:0;margin:0}
-.lands select{width:100%;min-width:0;min-height:44px;font-size:16px;background:transparent;color:var(--fg);border:0;text-overflow:ellipsis}
 #qinfo{margin-top:6px}
 button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .field .step{flex:none;width:40px;height:40px;border-radius:8px;border:1px solid var(--line);font-size:22px;font-weight:600;line-height:1;color:var(--fg);display:flex;align-items:center;justify-content:center;padding:0}
@@ -277,8 +276,12 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .duel span{display:block;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 .segm.per{grid-template-columns:repeat(6,1fr)}
 .segm.per button{grid-column:span 2}.segm.per button:nth-child(n+4){grid-column:span 3}
-/* the flag of a fighter's country, before the name */
-.flag{margin-right:5px;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;font-weight:400}
+/* the flag of a fighter's country, before the name. A flag is an emoji, and Windows has none: there the browser draws
+   the two letters of the country. So the flags have a font of their own for the systems that lack them, fetched only
+   when a flag has to be drawn and the fonts of the system named before it have none (an iPhone never asks for it). */
+@font-face{font-family:"Twemoji Country Flags";src:url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.10/dist/TwemojiCountryFlags.woff2") format("woff2");unicode-range:U+1F1E6-1F1FF,U+1F3F4,U+E0062-E0063,U+E0065,U+E0067,U+E006C,U+E006E,U+E0073-E0074,U+E0077,U+E007F;font-display:swap}
+.flag{margin-right:5px;font-family:"Apple Color Emoji","Noto Color Emoji","Twemoji Country Flags","Segoe UI Emoji",sans-serif;font-weight:400;font-style:normal}
+.lands .flag,#qinfo .flag{margin-right:0}
 .bench{font-size:13px;color:var(--fg)}
 .bench.own{color:var(--win)}.bench.tipster{color:var(--loss)}
 #origins tr.own td:first-child,#origins tr.tipall td:first-child{font-weight:700}

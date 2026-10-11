@@ -52,6 +52,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 21. PR #23 (D80, D81) aberto às 10:07 de 11/10/2026 e mesclado às 10:11; o workflow `Produção` passou no commit `dd6efa8`. Às 09:34, com ele quase pronto, o pedido do extrato em unidades e de melhorar a comparação com o tipster (D82, D83), feito em seguida, num PR à parte.
 22. PR #24 (D82, D83) aberto às 10:44 e mesclado às 10:49 de 11/10/2026. Às 10:34 e 10:35, com ele na verificação final: a bandeira do país de cada lutador (D84) e "submission" no lugar de "finalização", dizendo qual foi (D85). Os dois campos já eram lidos e estavam nas amostras gravadas; a conferência ao vivo foi disparada no branch para ver os nomes de verdade antes de fechar.
 23. PR #25 (D84, D85) mesclado às 11:21 de 11/10/2026; o workflow `Produção` passou no commit `ad6fab5`. Às 12:32, o filtro por país com atalho para os brasileiros (D86).
+24. PR #26 (D86) mesclado às 12:49 de 11/10/2026. Às 12:52 e 12:53, com ele no ar: o seletor de países branco no tema escuro, e o filtro devendo olhar só o card escolhido (D87). Às 12:58: no navegador do PC as bandeiras não aparecem (D88).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -902,6 +903,34 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **A lista só tem os países que estão nos cards carregados**, não todos os do mundo: um país sem lutador não teria luta para mostrar.
 - **Não verificado:** a lista de países no iPhone (o seletor do iOS e o nome que o aparelho dá a cada país).
 
+## D87. O filtro por país olha só o card escolhido, e os países são botões do app
+
+- **Contexto (11/10/2026, 12:52 e 12:53, com o PR #26 já no ar):** "o combo de seleção ficou branco mesmo no tema escuro" e "o filtro deve considerar apenas o card selecionado acima".
+- **Decisão do Lucas, que revê a D86:** o filtro vale para o card escolhido no alto, não para todos os eventos carregados. Era a interpretação que a D86 tinha deixado para ele confirmar.
+- **Como ficou:**
+  - Os países da fileira e o número ao lado de cada um são os do card na tela.
+  - Com um nome digitado junto, a busca também fica nesse card.
+  - No lugar do seletor do sistema, um botão por país, numa fileira que rola para o lado, com as cores do tema do app.
+- **Interpretações que precisaram ser feitas:**
+  - **O filtro continua ligado ao trocar de card.** Antes, escolher um evento no alto soltava o filtro, porque ele valia para todos. Agora que vale por card, ligar "Brasileiros" e ir passando os cards é o uso que faz sentido. Lida de outro jeito, a troca de card soltaria.
+  - **O país escolhido que não tem ninguém no card novo fica na fileira com "(0)"**, para dar para soltar. "Brasileiros" fica sempre, mesmo com zero.
+  - **Um botão por país em vez de uma lista que abre:** num card, os países são poucos. Num card com muitos países a fileira rola para o lado.
+- **O que eu não sei:** qual parte ficou branca no iPhone, a caixa ou a lista que abre. No Chromium dos testes as duas estavam com as cores do tema (a caixa transparente, o texto claro, `color-scheme` escuro), inclusive com o aparelho no claro e o app no escuro. A lista que abre de um seletor é desenhada pelo sistema, e acredito que no iPhone ela siga o modo do aparelho e não o do app; não conferi. Em vez de tentar acertar o seletor sem ver o aparelho, ele saiu.
+- **Fica valendo da D86:** a luta entra se um dos dois é do país; o nome do país em português; a escolha não é guardada.
+
+## D88. Bandeiras no computador: uma fonte só de bandeiras para quem não tem
+
+- **Contexto (11/10/2026, 12:58):** "testei no navegador do PC e não aparecia a bandeira dos países".
+- **Causa:** a bandeira é um emoji (D84), e o Windows não tem emoji de bandeira: o navegador desenha as duas letras do país. Reproduzi tirando a fonte de emoji do Chromium dos testes: aparece "BR" dentro de quadrinhos no lugar da bandeira.
+- **Decisão:** as bandeiras passam a ter uma fonte própria para os sistemas que não as têm, a "Twemoji Country Flags", buscada na jsDelivr só quando falta.
+- **Interpretações que precisaram ser feitas:**
+  - **Buscar na jsDelivr em vez de embutir na página:** embutida, a fonte somaria uns 100 kB a uma página de 240 kB, para todo mundo, e o iPhone, que é onde o app é usado, não precisa dela. A jsDelivr já é de onde vem o leitor de imagem, e o service worker já guarda o que vem de lá.
+  - **O iPhone continua com as bandeiras dele:** as fontes do sistema vêm antes na lista. No computador as bandeiras têm o desenho do Twemoji.
+  - **Fonte em vez de imagem:** não muda o que o app lê da ESPN, e a bandeira continua sendo texto (entra em botão, em frase, em qualquer tamanho).
+- **Fato de terceiro, conferido em 11/10/2026:** a jsDelivr serve `country-flag-emoji-polyfill@0.1.10` com `/dist/TwemojiCountryFlags.woff2` de 78.292 bytes, o mesmo tamanho do arquivo do pacote no npm. Conferi pela ferramenta de leitura de páginas (o `package.json` e a lista de arquivos), não baixando a fonte de lá.
+- **O "combo branco" da D87 também era no computador**, pelo que entendi depois: no navegador do PC a lista que abre de um seletor é do sistema. Continua valendo a troca por botões.
+- **Não verificado:** um Windows de verdade. O que rodei foi o Chromium no Linux sem a fonte de emoji, que mostra o mesmo sintoma. Não sei qual é o sistema do PC do Lucas; num Mac as bandeiras já apareceriam.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -914,7 +943,9 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
-| Confirmar: o filtro por país valendo para todos os eventos carregados (e não só o card na tela), e sem ficar guardado entre uma abertura e outra (D86) | Lucas |
+| Abrir a produção no navegador do PC depois deste PR e ver se as bandeiras aparecem; dizer qual é o sistema do PC (D88) | Lucas |
+| Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
+| Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
 | Confirmar: o nome da submission em inglês, como a ESPN escreve, e só a submission com nome, não o nocaute (D85) | Lucas |
 | Confirmar o extrato em unidades: "a todo momento" como um cartão fixo na Carteira (e não em todas as telas), o cartel sem anulada e cashout, as três colunas, e a tabela por evento antiga ter saído (D82) | Lucas |
