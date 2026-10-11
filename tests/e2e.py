@@ -393,6 +393,10 @@ with sync_playwright() as p:
     # with a card of five fights, a multiple of five read from a text is a long shot: a fraction of a unit is suggested, a tap away
     ESPN['extra'] = True; sync()
     assert lands() == [BR + ' Brasileiros (4)', EN + ' Inglaterra (2)', 'Atlantis (1)', CN + ' China (1)'], ('after Brazil, the country with the most fights on the card comes first', lands())
+    # this browser has a mouse, which cannot swipe a row sideways: the buttons that do not fit go to the next line, and none is cut
+    inside = lambda box, items: pg.evaluate('''([box, items]) => { const b = document.querySelector(box), r = b.getBoundingClientRect(), xs = [...document.querySelectorAll(items)].map(e => e.getBoundingClientRect());
+        return [xs.every(x => x.left >= r.left - 0.5 && x.right <= r.right + 0.5), b.scrollWidth <= b.clientWidth, new Set(xs.map(x => Math.round(x.top))).size, xs.length]; }''', [box, items])
+    assert inside('#lands', '#lands button') == [True, True, 2, 4], ('with a mouse every country button is whole, on as many lines as it takes', inside('#lands', '#lands button'))
     pg.fill('#imptext', 'QUÍNTUPLA\nTeles + Brandt + Almeida + Sampaio + Kovac - para vencer a luta\nR$ 100,00'); pg.click('[data-act=impread]'); pg.wait_for_selector('#impres')
     assert txt('.impkind') == 'Múltipla de 5 seleções' and pg.locator('.impsug button').all_inner_texts() == ['0,2u', '0,3u', '0,4u'] and 'Múltipla de 5 seleções: stake sugerida de 0,2u a 0,4u' in txt('#panel'), txt('#panel')
     pg.click('.impsug [data-u="0.3"]'); assert txt('#impvalue') == 'R$ 30,00 · 0,3u' and 'valor que você escreveu' in txt('#panel'), txt('#impvalue')
@@ -1031,6 +1035,28 @@ with sync_playwright() as p:
     assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 4] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
+    # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
+    # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone
+    was_phase = PHASE['n']; PHASE['n'] = 0; ESPN['extra'] = True; ESPN['next'] = True          # the card of the walk-through, before any fight, is the one on screen
+    ROWS = '''() => ['.events', '#lands'].map(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(), xs = [...b.children].map(e => e.getBoundingClientRect());
+        const col = document.querySelector('.field.search').getBoundingClientRect();          // the column the rest of the screen is in
+        return [getComputedStyle(b).flexWrap, b.scrollWidth > b.clientWidth, xs.every(x => x.left >= r.left - 0.5 && x.right <= r.right + 0.5), new Set(xs.map(x => Math.round(x.top))).size, xs.length, Math.abs(r.left - col.left) < 1 && Math.abs(r.right - col.right) < 1]; })
+        .concat([document.documentElement.scrollWidth - document.documentElement.clientWidth])'''
+    def rows_on(width, **kw):
+        c3 = b.new_context(viewport=dict(width=width, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo', **kw)
+        c3.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c3.route('https://cdn.jsdelivr.net/**', local_cdn)
+        p3 = c3.new_page(); p3.goto((ROOT / 'dist' / 'index.html').as_uri()); p3.wait_for_selector('#lands button'); p3.wait_for_function('document.querySelectorAll(".events .ev").length === 2 && document.querySelectorAll("#lands button").length === 4')
+        got = p3.evaluate(ROWS)
+        if kw: got.append(p3.evaluate('(() => { const b = document.querySelector("#lands"); b.scrollLeft = 9999; const r = b.lastElementChild.getBoundingClientRect(); return b.scrollLeft > 0 && r.right <= innerWidth + 0.5; })()'))          # swiped to its end, the last button is whole
+        else: p3.screenshot(path=str(SHOTS / f's51-fileiras-com-mouse-{width}.png'))
+        c3.close(); return got
+    finger = rows_on(393, has_touch=True, is_mobile=True)
+    assert finger == [['nowrap', True, False, 1, 2, False], ['nowrap', True, False, 1, 4, False], 0, True], ('under a finger each row is one line that scrolls sideways from edge to edge of the screen, and the page itself does not', finger)
+    mouse = rows_on(393)
+    assert mouse == [['wrap', False, True, 2, 2, True], ['wrap', False, True, 2, 4, True], 0], ('with a mouse, at the width of a phone, nothing is cut: the rows break into lines, inside the column', mouse)
+    wide = rows_on(1280)
+    assert [m[:3] + m[5:] for m in wide[:2]] == [['wrap', False, True, True], ['wrap', False, True, True]] and wide[2] == 0, ('and on a wide window too', wide)
+    ESPN['extra'] = False; ESPN['next'] = False; PHASE['n'] = was_phase
     b.close()
     # a computer with no flag emoji of its own (Windows) draws the two letters of the country where the flag should be. There the
     # flags come from a font fetched for them, and a system that has flags never asks for it. Chromium is started again, with the

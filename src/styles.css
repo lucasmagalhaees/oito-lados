@@ -224,6 +224,11 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .lands::-webkit-scrollbar{display:none}
 .lands > button{flex:none;border:1px solid var(--line);border-radius:8px;padding:0 12px;min-height:44px;font-weight:600;font-size:14px;white-space:nowrap;background:var(--surface);color:var(--fg)}
 .lands > button.on{border-color:var(--gold-bg);background:var(--gold-bg);color:var(--on-gold)}
+/* a row that scrolls sideways is for a finger. With a mouse there is no swiping it, and what does not fit is cut and out
+   of reach: there the rows of events and of countries break into lines instead */
+@media (hover:hover) and (pointer:fine){
+  .events,.lands{flex-wrap:wrap;overflow-x:visible;margin-inline:0;padding-inline:0}
+}
 #qinfo{margin-top:6px}
 button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .field .step{flex:none;width:40px;height:40px;border-radius:8px;border:1px solid var(--line);font-size:22px;font-weight:600;line-height:1;color:var(--fg);display:flex;align-items:center;justify-content:center;padding:0}
