@@ -543,6 +543,15 @@ export default function cases(Core) {
   const SEEN = ['Albania', 'Argentina', 'Armenia', 'Aruba', 'Australia', 'Azerbaijan', 'Bahrain', 'Belgium', 'Brazil', 'Cameroon', 'Canada', 'Chile', 'China', 'Croatia', 'Cuba', 'Democratic Republic of Congo', 'Dominican Republic', 'Ecuador', 'England', 'France', 'Georgia', 'Germany', 'Haiti', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Italy', 'Jamaica', 'Japan', 'Kyrgyzstan', 'Lebanon', 'Lithuania', 'Mexico', 'Moldova', 'Mongolia', 'Morocco', 'Myanmar', 'Netherlands', 'New Zealand', 'Nigeria', 'Peru', 'Poland', 'Portugal', 'Russia', 'Scotland', 'Senegal', 'Slovakia', 'South Korea', 'Spain', 'Sweden', 'Tajikistan', 'Türkiye', 'USA', 'Ukraine', 'Uzbekistan', 'Venezuela', 'Wales'];
   eq('flag: every country name seen on the real boards has one, and no two countries share a flag', [SEEN.length, SEEN.filter(c => !Core.flagOf(c)), new Set(SEEN.map(Core.flagOf)).size], [58, [], 58]);
   eq('flag: what ESPN writes for a fighter with no country is not a country', Core.flagOf('default'), '');
+  /* the events on screen: the cards that just ended, and the next three still to come */
+  const DAYC = 24 * 3600e3, NOWC = 1000 * DAYC, cev = (id, days, completed, name) => ({ id, name: name || 'UFC ' + id, date: NOWC + days * DAYC, completed: !!completed });
+  const cids = es => es.map(e => e.id);
+  const line = [cev('old', -9, true), cev('done', -1, true), cev('cs', 2, false, "Dana White's Contender Series: Season 9, Week 1"), cev('a', 6), cev('b', 13), cev('c', 20), cev('d', 27)];
+  eq('cards: the one that just ended and the three after it; an older one and Contender Series are left out', cids(Core.cardsToShow(line, NOWC)), ['done', 'a', 'b', 'c']);
+  eq('cards: a card under way is one of the three', cids(Core.cardsToShow([cev('done', -3, true), cev('tonight', -0.1), cev('a', 7), cev('b', 14), cev('c', 21)], NOWC)), ['done', 'tonight', 'a', 'b']);
+  eq('cards: when that card ends, the three after it are there', cids(Core.cardsToShow([cev('done', -3, true), cev('tonight', -0.1, true), cev('a', 7), cev('b', 14), cev('c', 21)], NOWC)), ['done', 'tonight', 'a', 'b', 'c']);
+  eq('cards: a card with a bet still open on it is shown whatever its place in the line', [cids(Core.cardsToShow(line, NOWC, new Set(['d']))), cids(Core.cardsToShow(line, NOWC, new Set(['b', 'old', 'cs'])))], [['done', 'a', 'b', 'c', 'd'], ['done', 'a', 'b', 'c']]);
+  eq('cards: fewer than three to come, none, and how many and for how long', [cids(Core.cardsToShow([cev('a', 6), cev('b', 13)], NOWC)), Core.cardsToShow([], NOWC), Core.NEXT_CARDS, Core.RECENT_CARD / DAYC], [['a', 'b'], [], 3, 5]);
   /* the filter by country: the fights with a fighter from one, and the countries there are to choose from */
   const lf = (id, ca, cb) => ({ id, a: { name: 'A' + id, country: ca }, b: { name: 'B' + id, country: cb } });
   const LF = [lf('1', 'Brazil', 'England'), lf('2', 'China', 'default'), lf('3', 'Brazil', 'Brazil'), lf('4', '', 'USA'), lf('5', ' brazil ', 'Atlantis')];

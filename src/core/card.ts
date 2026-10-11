@@ -17,6 +17,17 @@ export function cardSections(fights: Fight[]): CardSection[] {
   }));
 }
 
+/** For how long a card that is over stays among the events on screen, and how many cards still to come are shown. */
+export const RECENT_CARD = 5 * 24 * 3600e3, NEXT_CARDS = 3;
+/** The events the fights screen offers, of the ones the source lists (given in the order of their dates): the cards
+ *  that ended in the last days, and the next three still to come, a card under way being one of the three. So when a
+ *  card ends, the three after it are there. An event with a bet still open on it is shown whatever its place in the
+ *  line (`keep` has the ids). Contender Series is left out: it has no odds. */
+export function cardsToShow<E extends { id: string; name: string; date: number; completed: boolean }>(events: E[], now: number, keep?: Set<string>): E[] {
+  let ahead = 0;
+  return events.filter(e => e.date > now - RECENT_CARD && !/Contender Series/i.test(e.name)).filter(e => e.completed || ++ahead <= NEXT_CARDS || !!(keep && keep.has(e.id)));
+}
+
 /** What the source writes for a fighter with no country: not a country to filter by. */
 const NO_COUNTRY = 'default';
 const landKey = (c: unknown): string => { const k = plain(c).trim(); return k === NO_COUNTRY ? '' : k; };

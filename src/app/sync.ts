@@ -1,5 +1,6 @@
+import { Core } from '../core';
 import { formFresh, loadBoard, loadForm, loadOdds, loadResults, openBets, openLegs } from './api';
-import { DAY, H } from './format';
+import { H } from './format';
 import { render } from './render';
 import { settle } from './settle';
 import { D, saveCache, slip, ui } from './state';
@@ -72,4 +73,5 @@ export function preloadForm(): void {
   formAt = now;
   loadForm(ids).then(() => { saveCache(); render(); });
 }
-export const shownEvents = (): FightEvent[] => D.events.filter(e => e.date > Date.now() - 5 * DAY && !/Contender Series/i.test(e.name));
+/** The events on screen: the cards that just ended and the next three (`Core.cardsToShow`), and any card with a bet still open on it. */
+export const shownEvents = (): FightEvent[] => Core.cardsToShow(D.events, Date.now(), new Set(openLegs().map(l => l.eid)));

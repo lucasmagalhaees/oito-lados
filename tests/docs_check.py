@@ -59,7 +59,7 @@ CONSTANTS = [
     (r'live \? 15e3 : night \? 30e3 : 120e3', '15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto'),
     (r'D\.oddsAt\[eid\] \|\| 0\) < 5 \* 60e3', 'no máximo a cada 5 min'),
     (r'now - 4 \* DAY', 'placar de 4 dias atrás'),
-    (r'now \+ 16 \* DAY', 'até 16 dias à frente'),
+    (r'BOARD_AHEAD = 30 \* DAY', 'até 30 dias à frente (`BOARD_AHEAD`)'),
     (r'export const TD_FREEZE = 120e3;', '2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário)'),
     (r'D\.finalSeen\[f\.id\] > TD_FREEZE \|\| now - f\.date > 6 \* H', '2 min depois de a luta aparecer como encerrada (ou 6 h depois do horário)'),
     (r'settling\(now\) \? 8e3 : live', '8 s enquanto uma aposta aberta espera por uma luta que já acabou'),
@@ -270,6 +270,8 @@ check('the fonts of the system come before the font of the flags, so a phone tha
 check('every flag the page writes is in an element of its own, which has that font', rend_src.count('Core.flagOf(') == 1 and 'const flagHtml = (country: string): string => { const f = Core.flagOf(country); return f ? `<span class="flag"' in rend_src)
 check('the service worker keeps what comes from the CDN the font of the flags is on', 'cdn.jsdelivr.net' in read('src/sw.js') and 'Twemoji' in read('README.md') and 'CC-BY' in read('README.md'))
 check('with a mouse the rows of events and of countries break into lines, and under a finger they scroll sideways', '@media (hover:hover) and (pointer:fine){\n  .events,.lands{flex-wrap:wrap;overflow-x:visible;margin-inline:0;padding-inline:0}\n}' in css_src and '.lands{display:flex;gap:8px;margin:10px -16px 0;padding:0 16px 2px;overflow-x:auto;' in css_src and '(`hover: hover` e `pointer: fine`)' in spec)
+check('the cards on screen are the ones that just ended and the next three, as the spec says', 'export const RECENT_CARD = 5 * 24 * 3600e3, NEXT_CARDS = 3;' in card_src and 'há menos de 5 dias (`RECENT_CARD`)' in spec and 'os 3 próximos que ainda não acabaram (`NEXT_CARDS`)' in spec)
+check('the events on screen come from one place, and a card with an open bet is kept', 'Core.cardsToShow(D.events, Date.now(), new Set(openLegs().map(l => l.eid)))' in sync_src and 'Contender Series' in card_src and 'Contender Series' not in sync_src and 'now + BOARD_AHEAD' in api_src2)
 bk_src = read('src/app/backup.ts')
 check('the backup file is shared where a page can share a file, and downloaded otherwise', "navigator.canShare({ files: [file] })" in bk_src and "name === 'AbortError') return;" in bk_src and 'a.download = name' in bk_src and '`navigator.canShare`' in spec)
 check('a backup file is shown before it replaces anything', 'ui.restoreFile = { name: file.name, text, ...got.info }' in bk_src and "data-act=\"bkapply\"" in rend_src and 'mostrado antes' in spec)

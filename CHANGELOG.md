@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.22.0] - 2026-10-11
+
+### Alterado
+- Quando um card acaba, os três seguintes já aparecem no alto da tela de Lutas (antes, dois). O placar passa a ser lido 30 dias à frente.
+
 ## [0.21.2] - 2026-10-11
 
 ### Corrigido

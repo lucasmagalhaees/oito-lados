@@ -38,6 +38,12 @@ TD = {'f1': [None,(1,0),(2,1),(2,1)], 'f2': [None,None,(0,0),(0,0)], 'f3': [None
 # one more event, a week ahead and with no line published yet, on the board only while a test asks for it (ESPN['next'])
 EV2 = '600000002'
 NEXT = {'g1': dict(a=('701','Hugo Teles','H. Teles','11-3-0'), b=('702','Otto Farias','O. Farias','9-2-0'), rounds=5, w='Featherweight')}
+# three more cards further ahead, and a Contender Series night among them, on the board only while a test asks for them (ESPN['later']):
+# (event id, name, days from now, fight id, the two athletes)
+LATER = [('600000009', "Dana White's Contender Series: Season 99, Week 1", 10, 'c1', ('851','Ivo Paz','I. Paz','5-0-0'), ('852','Luan Serra','L. Serra','6-1-0')),
+         ('600000003', 'UFC Fight Night: Lobo vs. Arantes', 14, 'h1', ('801','Davi Lobo','D. Lobo','8-2-0'), ('802','Enzo Arantes','E. Arantes','7-1-0')),
+         ('600000004', 'UFC 1000: Furtado vs. Maia', 21, 'i1', ('811','Beto Furtado','B. Furtado','14-3-0'), ('812','Gil Maia','G. Maia','12-2-0')),
+         ('600000005', 'UFC Fight Night: Nogueira vs. Pires', 28, 'j1', ('821','Raul Nogueira','R. Nogueira','9-4-0'), ('822','Tom Pires','T. Pires','10-1-0'))]
 # what each athlete did before this card: invented fights, in the shape of the recorded answers (tests/fixtures/espn/
 # athlete_eventlog.json, past_competitions.json, past_statuses.json). Each: (fight id, days ago, won, result, round, clock).
 KO = dict(id=356, name='kotko', displayName='KO/TKO', shortDisplayName='KO/TKO'); SUBM = dict(id=284, name='submission', displayName='Submission', shortDisplayName='Sub')
@@ -80,17 +86,21 @@ def comp(fid, f, st, when):
         competitors=[mk(f['b'],2,'b'), mk(f['a'],1,'a')],
         status=dict(clock=st[3], displayClock=st[4], period=st[2], type=dict(name=st[1], state=st[0], completed=st[0]=='post')),
         format=dict(regulation=dict(periods=f['rounds'])))
-def scoreboard():
+def scoreboard(url=''):
     # a fight that ends in a draw is over with no winner marked on either side
     state = lambda fid: (lambda st: st[:5] + (None,) if fid == ESPN['draw'] else st)(ST[fid][PHASE['n']] if fid in ST else PRE)
     comps = [comp(fid, f, state(fid), NOW-7*3600e3 + (3*3600e3 if fid=='f3' else 0)) for fid, f in (ALL if ESPN['extra'] else F).items()]
     evs = [dict(id=EV, name=EVENT_NAME, date=iso(NOW-7*3600e3), status=dict(type=dict(completed=PHASE['n']==3)), competitions=comps)]
     if ESPN['next']: evs.append(dict(id=EV2, name='UFC 999: Teles vs. Farias', date=iso(NOW+7*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, f, PRE, NOW+7*86400e3) for fid, f in NEXT.items()]))
+    if ESPN['later']: evs += [dict(id=eid, name=name, date=iso(NOW+days*86400e3), status=dict(type=dict(completed=False)), competitions=[comp(fid, dict(a=a, b=b, rounds=3, w='Lightweight'), PRE, NOW+days*86400e3)]) for eid, name, days, fid, a, b in LATER]
+    # like the source, only the events inside the dates asked for come back
+    asked = re.search(r'dates=(\d{8})-(\d{8})', url)
+    if asked: evs = [e for e in evs if asked.group(1) <= e['date'][:10].replace('-', '') <= asked.group(2)]
     return dict(events=evs)
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
 # knobs for the tests: the latest fights of the athletes unreachable (formdown), a second event on the board (next), a fight that ends in a draw (draw: its id), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
 # is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False}
+ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False, 'later': False}
 def odds(fid):
     if fid not in ALL: return dict(count=0, items=[])          # a fight with no line published, as the source answers it
     f = ALL[fid]
@@ -118,7 +128,7 @@ def handle(route):
     if 'api.frankfurter.dev' in u:
         FX['calls'] += 1
         return route.abort() if FX['down'] else ok(FX['body'])
-    if '/scoreboard' in u: return ok(scoreboard())
+    if '/scoreboard' in u: return ok(scoreboard(u))
     m = re.search(r'/competitions/(\w+)/odds/100/propBets', u)
     if m: return ok(props(m.group(1)))
     m = re.search(r'/competitions/(\w+)/odds', u)

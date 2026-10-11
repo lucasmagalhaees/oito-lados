@@ -1035,6 +1035,35 @@ with sync_playwright() as p:
     assert bal().replace('\xa0', ' ') == 'US$ 421,92' and usd == [15, 20, 33.4, 20, 4] and pg.inner_text('#pnlu').startswith('+6,1u'), (bal(), usd)   # 1.609,59 x 0,20 = 321,92, plus the 100 deposited
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
     cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
+    # the cards on screen: the ones that just ended and the next three still to come. The board is read a month ahead, so that when a
+    # card ends the third one after it is already there. Five cards and a Contender Series night are on the board for this
+    import datetime
+    was_phase = PHASE['n']; ESPN['next'] = True; ESPN['later'] = True
+    def cards_on(phase, state=None):
+        PHASE['n'] = phase; first = len(calls)
+        c4 = b.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo')
+        c4.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c4.route('https://cdn.jsdelivr.net/**', local_cdn)
+        p4 = c4.new_page()
+        if state: p4.add_init_script('localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(state)))
+        p4.goto((ROOT / 'dist' / 'index.html').as_uri()); p4.wait_for_selector('.events .ev'); p4.wait_for_timeout(700)
+        names = [t.upper() for t in p4.locator('.events .ev b').all_inner_texts()]
+        on = p4.locator('.events .ev.on b').inner_text().upper(); ended = ['ENCERRADO' in t.upper() for t in p4.locator('.events .ev').all_inner_texts()]
+        if state is None and phase == 3: p4.screenshot(path=str(SHOTS / 's52-tres-proximos-cards.png'))
+        asked = re.search(r'dates=\d{8}-(\d{8})', [u for u in calls[first:] if '/scoreboard' in u][0]).group(1)
+        ahead = (datetime.datetime.strptime(asked, '%Y%m%d').date() - datetime.datetime.now(datetime.timezone.utc).date()).days
+        c4.close(); return names, on, ended, ahead
+    CARD, NEXT3 = 'ALMEIDA VS. DUNNE <B>X</B>', ['TELES VS. FARIAS', 'LOBO VS. ARANTES', 'FURTADO VS. MAIA']
+    names, on, ended, ahead = cards_on(0)
+    assert names == [CARD] + NEXT3[:2] and on == CARD and ended == [False] * 3 and ahead in (30, 31), ('before it ends, the card of the week is one of the three to come', names, on, ahead)
+    names, on, ended, ahead = cards_on(3)
+    assert names == [CARD] + NEXT3 and ended == [True, False, False, False] and on == NEXT3[0], ('once it has ended, it stays and the three after it are there, the next one on screen', names, on, ended)
+    assert not any('CONTENDER' in n or 'NOGUEIRA' in n for n in names), 'a Contender Series night is never offered, nor a fourth card to come'
+    now_ms = int(datetime.datetime.now().timestamp() * 1000)
+    far = dict(v=1, cur='BRL', deposits=[dict(t=now_ms, v=100)], seen=now_ms, bets=[dict(id='far1', t=now_ms, type='single', stake=10, unit=10, odd=2, sgp={}, status='open', payout=0,
+        legs=[dict(fid='j1', eid='600000005', key='ml:a', market='Vencedor', sel='Nogueira vence', cat='Vencedor', weight='Lightweight', fight='Nogueira x Pires', event='UFC Fight Night: Nogueira vs. Pires', date=now_ms + 28 * 86400000, odd=2, src='real')])])
+    names, on, ended, ahead = cards_on(3, far)
+    assert names == [CARD] + NEXT3 + ['NOGUEIRA VS. PIRES'], ('a card further ahead with a bet still open on it is shown too', names)
+    ESPN['next'] = False; ESPN['later'] = False; PHASE['n'] = was_phase
     # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
     # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone
     was_phase = PHASE['n']; PHASE['n'] = 0; ESPN['extra'] = True; ESPN['next'] = True          # the card of the walk-through, before any fight, is the one on screen

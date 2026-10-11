@@ -54,6 +54,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 23. PR #25 (D84, D85) mesclado às 11:21 de 11/10/2026; o workflow `Produção` passou no commit `ad6fab5`. Às 12:32, o filtro por país com atalho para os brasileiros (D86).
 24. PR #26 (D86) mesclado às 12:49 de 11/10/2026. Às 12:52 e 12:53, com ele no ar: o seletor de países branco no tema escuro, e o filtro devendo olhar só o card escolhido (D87). Às 12:58: no navegador do PC as bandeiras não aparecem (D88).
 25. PR #27 (D87, D88) mesclado às 14:34 de 11/10/2026; o workflow `Produção` passou no commit `9e09f7a`. Às 14:39, uma captura do PC: as bandeiras aparecem, e o botão da Bélgica está cortado na ponta da fileira (D89). Às 14:43: só no PC; no Safari do iOS está funcionando perfeito.
+26. PR #28 (D89) mesclado às 15:07 de 11/10/2026. Às 15:12: com um card encerrado, mostrar os três próximos (D90).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -940,6 +941,20 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Interpretação:** a fileira de eventos, no alto da tela, é feita do mesmo jeito e teria o mesmo defeito com um evento a mais no placar (na captura dele cabem os três). Ele não pediu; entrou junto por ser o mesmo erro. Se ele preferir a de eventos como estava, é uma linha de estilo.
 - **O que a captura dele também mostrou:** as bandeiras desenhadas no navegador do PC (Brasil, Rússia, Austrália, Estados Unidos, Alemanha). Era o que a D88 deixava para conferir.
 
+## D90. Quando um card acaba, os três seguintes já aparecem
+
+- **Contexto (11/10/2026, 15:12):** uma captura com o card de sábado encerrado e só os dois seguintes ao lado, e "se já encerrou um card, já mostra os 3 próximos depois dele".
+- **Causa:** o app lia o placar até 16 dias à frente. No domingo depois do card cabiam dois sábados; o terceiro ficava a 20 dias.
+- **Decisão do Lucas:** com um card encerrado, os três próximos aparecem.
+- **Como ficou:** o placar passa a ser lido 30 dias à frente, e a tela mostra os cards que acabaram há menos de 5 dias (como já mostrava) e os três próximos.
+- **Interpretações que precisaram ser feitas:**
+  - **O card encerrado continua ali**, antes dos três ("depois dele"). É onde se vê o resultado das lutas.
+  - **Sempre três por vir, não mais.** O card em andamento, ou o da semana, é um dos três: antes de ele acabar aparecem ele e os dois seguintes; depois, ele encerrado e os três seguintes. Lido de outro jeito, seriam sempre o da semana e mais três.
+  - **30 dias à frente:** cobre três sábados e uma semana sem evento. Com duas semanas seguidas sem evento apareceriam só dois.
+  - **O card distante com aposta aberta aparece mesmo fora dos três**, para a aposta não ficar num card que não está na tela (pode acontecer com uma aposta copiada de um print, que procura a luta em tudo o que foi lido).
+- **Custo:** cada sincronização traz um placar maior, uns cinco eventos em vez de três.
+- **Fato de terceiro, visto em 11/10/2026** pelo resumo de uma ferramenta de leitura de páginas, sem amostra gravada: o placar da ESPN de 07/10 a 25/11 traz, depois do card de 10/10, um Contender Series em 13/10, Buckley vs. Malott em 17/10, UFC 333 em 24/10 e Moicano vs. Nolan em 31/10. O terceiro está a 20 dias: dentro dos 30, fora dos 16.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -952,6 +967,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
 | Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
+| Confirmar: o card da semana contar como um dos três (antes de ele acabar aparecem ele e mais dois) (D90) | Lucas |
 | Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
 | Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
