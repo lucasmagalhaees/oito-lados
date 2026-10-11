@@ -457,8 +457,10 @@ function vCarteira(w: Wallet): string {
     <span class="label">Odd mínima</span>
     <div class="segm four" role="group" aria-label="Quanto a odd pode ter caído em relação ao print">${[0, 3, 5, 10].map(v => `<button class="${cd === v ? 'on' : ''}" data-act="copydrop" data-m="${v}" aria-pressed="${cd === v}">${v ? '−' + v + '%' : 'Desligada'}</button>`).join('')}</div>
     <p class="hint" id="drophow">${cd ? `Se a odd de agora estiver mais de ${cd}% abaixo da odd do print, a aposta fica de fora do "apostar todas" até você mandar apostar mesmo assim.` : 'Desligada: a aposta entra no "apostar todas" com a odd de agora, qualquer que seja a do print.'}</p>`;
+  // the tipster to rename is picked among buttons of the app: a select of the system opens a list drawn by the device
+  const orgs = [...(unnamed ? [''] : []), ...froms], org = ui.orgFrom != null && orgs.includes(ui.orgFrom) ? ui.orgFrom : orgs[0];
   if (froms.length || unnamed) h += `<span class="label">Tipsters</span>
-    <div class="field"><select id="orgfrom" aria-label="Tipster a renomear">${unnamed ? `<option value="">Tipster (${unnamed})</option>` : ''}${froms.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select></div>
+    <div class="quick froms" id="orgfrom" role="group" aria-label="Tipster a renomear">${orgs.map(k => `<button class="${k === org ? 'on' : ''}" data-act="orgpick" data-k="${esc(k)}" aria-pressed="${k === org}">${k ? esc(k) : `Tipster (${unnamed})`}</button>`).join('')}</div>
     <div class="field"><input id="orgto" maxlength="40" autocomplete="off" placeholder="novo nome" aria-label="Novo nome do tipster"></div>
     <button class="btn ghost block" data-act="orgrename">${froms.length ? 'Renomear' : 'Dar nome'}</button>
     <p class="hint">Toda aposta que entra pelo "Copiar aposta" é do tipster; as que você monta no card são suas. Dar a um tipster o nome de outro junta os dois.</p>`;

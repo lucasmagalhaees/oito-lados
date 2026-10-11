@@ -85,7 +85,7 @@ export function saveCache(): void { LS.set('oitolados.cache.v1', { events: D.eve
 /** What is on screen: nothing here is saved. */
 export interface Ui {
   tab: 'lutas' | 'apostas' | 'carteira'; eventId: string | null; open: Set<string>; filter: 'open' | 'done'; sheet: boolean;
-  reset: boolean; restore: boolean; backup: string | null; usage: string | null; usageHours: boolean; dep: string; placing: boolean; msg: string;
+  reset: boolean; restore: boolean; backup: string | null; usage: string | null; usageHours: boolean; orgFrom: string | null; dep: string; placing: boolean; msg: string;
   cash: string | null; cashing: boolean; cashMsg: string; depCur: string | null; fxBusy: boolean; fxMsg: string; fxRate: number | null;
   /** The bets list shows one origin only ('' is the bets with none); null shows all. */
   origin: string | null;
@@ -100,7 +100,7 @@ export interface Ui {
   /** What is typed in the search of the fights screen, and the part of the card it shows (null shows all of it). */
   q: string; part: CardPart | null;
 }
-export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, usage: null, usageHours: false, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null, stmtAll: false, land: null };
+export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, usage: null, usageHours: false, orgFrom: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null, stmtAll: false, land: null };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */
@@ -119,6 +119,8 @@ export interface ImportOp {
   /** Corrections to what was read, by the position of the selection in `res.items`: another selection of that fight,
    *  or null for one taken out. `swap` is the selection whose choices are open on screen. */
   edits: Record<number, string | null>; swap: number | null;
+  /** The fight, named in the original without a bet, whose markets are open on screen to choose one by hand. */
+  picking: string | null;
   /** "Bet it anyway": the person saw the warning (already bet, or the odd fell) and wants it in the batch. */
   force: boolean;
   /** In a list of several, whether the item is unfolded. Null until it is first shown: then the ones that need a look

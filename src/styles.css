@@ -256,7 +256,6 @@ button.seg.qev{display:block;width:100%;text-align:left;color:var(--gold)}
 .quick.units button{border-style:dashed}
 .quick.froms button{flex:0 1 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .quick.froms button.on{background:var(--gold-bg);color:var(--on-gold);border-color:transparent}
-.field select{flex:1;min-width:0;border:0;background:none;color:var(--fg);height:48px;font:inherit;font-size:16px;font-weight:600;outline:none}
 .pill.cashed{color:var(--gold)}
 .pill.open{color:var(--muted)}.pill.won{color:var(--win)}.pill.lost{color:var(--loss)}.pill.void{color:var(--muted)}.pill.live{color:var(--live)}
 /* whose the bet is: the person's own pick, or a copy of a tipster's */
@@ -397,7 +396,10 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .impraw summary{cursor:pointer;padding:4px 0}
 .impraw pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.4 ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;margin:6px 0;max-height:180px;overflow:auto}
 .impmiss{display:flex;flex-direction:column;gap:6px}
-.imppick,.impedit{width:100%;min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;font-size:16px;padding:0 10px}
+.mkpick{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:10px}
+.mkpick .label{margin-top:4px}
+.mkpick .mkopts button{flex:0 1 auto;min-height:40px;text-align:left;background:var(--surface)}
+.mkpick .mkopts button b{margin-left:6px;color:var(--gold)}
 .opedit{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
 .opedit .field{flex:1 1 150px}
 .opedit .segm{flex:1 1 150px}

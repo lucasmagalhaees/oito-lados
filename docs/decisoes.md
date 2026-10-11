@@ -58,6 +58,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 27. PR #29 (D90) mesclado às 16:10 de 11/10/2026. Às 16:16: o card encerrado ainda aparecia, e não devia (D91).
 28. PR #30 (D91) mesclado às 16:40 de 11/10/2026. Entre 16:23 e 16:41: como está o uso da API da ESPN, e como medir (D92).
 29. PR #31 (D92) mesclado às 17:15 de 11/10/2026. Às 17:43: "quero que proponha melhorias"; oito propostas, três recomendadas, e "pode fazer" (D93, D94, D95). As outras cinco ficaram propostas: odds em ritmo mais lento longe da luta e placar longo só de vez em quando (as duas depois de medir), trocar os três seletores do sistema que sobraram, os resultados do último card, e fechar as pendências de confirmação numa lista.
+30. PR #32 (D93 a D95) mesclado antes das 18:16 de 11/10/2026. Às 18:16 e 18:17: o que faz sentido fazer agora, e "me manda o fazer agora": os três seletores (D96) e a lista de pendências. Às 18:19, à lista de 23 linhas: "por mim tá tudo ok" (D97).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -1015,48 +1016,66 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **Atrás de um botão,** para o cartão não dobrar de tamanho.
   - **Por hora não fica o tempo de resposta,** só no total do dia por tipo.
 
+## D96. Nenhum seletor do sistema no app
+
+- **Contexto (11/10/2026, 18:16 e 18:17):** "o que ficou faltando e faz sentido fazer agora?" e, à resposta (trocar os três seletores que sobraram e fechar as pendências), "me manda o fazer agora".
+- **Por quê:** o seletor de países apareceu branco no tema escuro no PC dele (D87). A folha de estilo já pede a lista escura ao navegador (`color-scheme`), e mesmo assim apareceu: a lista de um seletor do sistema é desenhada pelo aparelho. Sobravam três do mesmo tipo.
+- **Decisão:** os três viraram botões do app.
+  - **Tipster a renomear** (Carteira): uma fileira de botões, o primeiro já marcado.
+  - **Trocar uma seleção lida** e **escolher a aposta de uma luta** (copiar aposta): os mercados da luta como botões, embaixo do nome de cada mercado, com a odd de agora.
+- **Interpretações que precisaram ser feitas:**
+  - **Os mercados da luta sem aposta ficam atrás de um botão** ("Escolher a aposta nessa luta"). São dezenas de opções; abertas sempre, encheriam a tela de quem vai completar pela foto da lista.
+  - **Escolhido um, a lista fecha.**
+- **Não conferi** se os três apareciam mesmo brancos: ele não mandou captura, e no Chromium dos testes o de países também não aparecia. A troca tira a dúvida.
+
+## D97. Interpretações confirmadas em 11/10/2026
+
+- **Contexto (18:19):** mandei uma lista de 23 linhas, cada uma dizendo como o app está hoje, pedindo só os números que ele quisesse diferentes. Resposta: "por mim tá tudo ok".
+- **Confirmado, como está:**
+  1. Antes de o card da semana acabar, ele conta como um dos três (D90).
+  2. O card encerrado sai mesmo com aposta esperando o resultado dele (D91).
+  3. O filtro por país continua ligado ao trocar de card, e desliga ao fechar o app (D86, D87).
+  4. A busca procura em todos os cards da tela; as partes do card são vistas uma por vez (D71, D72).
+  5. Luta ao vivo em azul (D78).
+  6. Nome da submission em inglês, como a ESPN escreve; o nocaute não diz o golpe (D85).
+  7. "Como acabaram" conta o método de quem quer que tenha vencido, e o quadro não traz o nome do adversário (D79).
+  8. Quem está na frente, você ou o tipster, é decidido pelo ROI, não pelas unidades (D77, D83).
+  9. O extrato em unidades é um cartão fixo na Carteira; o cartel não conta anulada nem cashout (D82).
+  10. Repetir uma aposta de tipster continua sendo do tipster (D77).
+  11. O quadro "se todas perderem" e o valor da unidade no topo da Carteira (D75).
+  12. "Ganho" é o retorno menos a stake; o retorno aparece só em dinheiro (D70).
+  13. O período "Último evento", e o resumo "desde a última vez" sem cashout (D55, D56).
+  14. As palavras de cada seleção, e "Bateu" e "Perdeu" já com a luta rolando quando está decidido no papel (D74).
+  15. Abertas agrupadas por evento, na ordem da primeira luta; a marca no card conta a múltipla inteira (D59, D60).
+  16. Cashout a valor de mercado com margem de 5% (D27).
+  17. Várias seleções sem tipo dito viram uma múltipla; "simples" com várias vira várias simples (D43).
+  18. No lote só entra aposta com valor dito no print ou digitado; o 1u presumido fica de fora (D44, D46).
+  19. Odd mínima ao copiar desligada de início; "vai contra" é só aviso (D50, D54).
+  20. Múltipla de cinco seleções ou mais: sugestão de 0,2u a 0,4u sem preencher sozinha; setas de meia em meia unidade (D66, D67).
+  21. Trocar de moeda converte a banca inteira pela cotação do dia (D28).
+  22. Tema "Automático" como padrão (D38).
+  23. As cores dos cantos, com a cor quente no lutador de cima, e + e − em tons neutros (D40, D41).
+- **O que a lista não trazia** continua sem confirmação, e está numa linha só das pendências.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
-| Confirmar a margem de 5% e as outras interpretações do cashout dinâmico (D27) | Lucas |
-| Confirmar as interpretações da conversão de moeda (D28) | Lucas |
+| Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
+| Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |
-| Confirmar as interpretações do leitor (várias seleções sem tipo dito viram múltipla; "simples" com várias vira várias simples) e do lote (D43, D44) | Lucas |
-| Confirmar as interpretações de completar o acumulador, do lote só com valor dito ou digitado, da origem e da média da odd contra o print (D45 a D48) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |
-| Confirmar as interpretações da segunda leva: o que conta como aposta repetida, odd mínima desligada de início, o "contra" como aviso, "Último evento" e o resumo sem cashout (D49 a D56) | Lucas |
-| Confirmar: o card da semana contar como um dos três (antes de ele acabar aparecem ele e mais dois) (D90) | Lucas |
-| Confirmar: o card encerrado sair mesmo com aposta ainda esperando o resultado dele (D91) | Lucas |
 | Reparar numa noite de card: quanto tempo depois da luta principal o card some (D91) | Lucas |
 | Usar o app na noite do card de 17/10 e mandar o arquivo do "Uso da ESPN", para decidir o que otimizar (D92) | Lucas |
-| Confirmar: "pode fazer" era para as três propostas recomendadas, e não para as oito (D93) | Lucas |
 | Decidir, com o arquivo do card de 17/10: odds em ritmo mais lento longe da luta, e placar longo só de vez em quando | Lucas |
-| Confirmar: o filtro por país continuar ligado ao trocar de card, e não ficar guardado entre uma abertura do app e outra (D86, D87) | Lucas |
-| Os outros seletores do app (o de tipster a renomear, na Carteira, e os de mercado na tela de copiar aposta) são do mesmo tipo que ficou branco: dizer se também aparecem brancos no tema escuro (D87) | Lucas |
 | Ver as bandeiras no iPhone, inclusive Inglaterra, Escócia e País de Gales (D84) | Lucas |
-| Confirmar: o nome da submission em inglês, como a ESPN escreve, e só a submission com nome, não o nocaute (D85) | Lucas |
-| Confirmar o extrato em unidades: "a todo momento" como um cartão fixo na Carteira (e não em todas as telas), o cartel sem anulada e cashout, as três colunas, e a tabela por evento antiga ter saído (D82) | Lucas |
-| Dizer se quem está na frente deve ser decidido pelo ROI, como hoje, ou pelas unidades (D77, D83) | Lucas |
 | Salvar o backup em arquivo no iPhone, mandar pelo Telegram e restaurar dele (D81) | Lucas |
 | Ver, no card da semana, se o cartel de todo mundo aparece ao abrir os mercados sem esperar, e se alguma coluna diz "Não deu pra buscar agora" (D80) | Lucas |
 | Abrir os mercados de uma luta de verdade e ver se as últimas lutas aparecem e batem com o cartel do lutador (D79) | Lucas |
-| Confirmar: "como acabaram" contando o método de quem quer que tenha vencido, e o quadro sem o nome do adversário (D79) | Lucas |
-| Confirmar o azul de "ao vivo" (D78) | Lucas |
 | Testar o "Colar" com um print copiado no iPhone, sem salvar na galeria (D76) | Lucas |
-| Confirmar: quem está na frente pelo ROI, a repetição de aposta de tipster continuar do tipster, e a palavra "Tipster" (D77) | Lucas |
-| Confirmar o quadro "se todas perderem" e a unidade no topo da Carteira (D75) | Lucas |
-| Confirmar as palavras de cada estado da seleção, e "Bateu" e "Perdeu" já com a luta rolando quando está decidido no papel (D74) | Lucas |
 | Gravar como amostra a resposta real de uma luta em "STATUS_PRE_FIGHT" (D74). A do empate já foi gravada (D79) | Quem disparar o workflow `ESPN contract` com `capture` durante um card |
-| Confirmar: a busca em todos os eventos carregados e sem chamada à ESPN, e "separar o card" como ver uma parte por vez (D71, D72) | Lucas |
 | Ver num card de verdade se as partes do card saem certas das horas das lutas (D72) | Lucas, no próximo card |
-| Confirmar: "ganhos potenciais" como lucro (retorno menos a stake), o retorno sem unidades e as telas escolhidas (D70) | Lucas |
-| Confirmar: "mais de quatro" como cinco ou mais, sugestão sem preencher sozinha, seta indo à meia unidade mais próxima, e a hora da aposta como a hora da luta (D66, D67, D69) | Lucas |
-| Confirmar as interpretações da terceira leva: item pronto recolhido de início, a aposta nova fora do topo das abertas, a ordem pela primeira luta e a marca do card contando a múltipla inteira (D58 a D60) | Lucas |
-| Confirmar as interpretações do valor em unidades (D30) e o sinal − tipográfico (D31) | Lucas |
-| Confirmar o padrão Automático do tema (D38) | Lucas |
-| Confirmar os tons dos três pares de canto, a cor quente no lutador de cima e os tons neutros de + e − (D40, D41) | Lucas |
 | Ver como a ESPN escreve um peso casado feminino, para a cor do canto (D40) | Quem vir um no card |
 | Abrir o app no iPhone depois deste PR: ver se abre sem internet (modo avião) e se o aviso de versão nova aparece no merge seguinte (D37) | Lucas |
 | Testar num evento ao vivo de verdade: reparar quanto tempo passa entre o fim da luta e a aposta fechar, e se alguma aposta mostra "ainda não reconhecido pelo app" (D64) | Lucas, no card de 10/10/2026 |

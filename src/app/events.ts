@@ -4,7 +4,7 @@ import { backupText, pickBackupFile, restoreFrom, saveBackupFile } from './backu
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
 import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
-import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
+import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, pickOpen, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
 import { paintList, place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
 import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui } from './state';
@@ -120,6 +120,9 @@ document.addEventListener('click', e => {
   else if (a === 'impunpick') unpickFor(Number(d.op), d.fid as string);
   else if (a === 'impmode') modeFor(Number(d.op), d.m);
   else if (a === 'impswap') swapFor(Number(d.op), Number(d.i));
+  else if (a === 'impeditkey') editFor(Number(d.op), Number(d.i), d.key as string);
+  else if (a === 'imppickopen') pickOpen(Number(d.op), d.fid as string);
+  else if (a === 'imppickkey') pickFor(Number(d.op), d.fid as string, d.key as string);
   else if (a === 'impopen') openFor(Number(d.op));
   else if (a === 'impstep') stepFor(Number(d.op), Number(d.d));
   else if (a === 'impstu') unitsFor(Number(d.op), Number(d.u));
@@ -146,10 +149,15 @@ document.addEventListener('click', e => {
   else if (a === 'stmtall') { ui.stmtAll = !ui.stmtAll; render(); }
   else if (a === 'sinceok' || a === 'sinceview') { S.seen = Date.now(); saveS(); if (a === 'sinceview') { ui.tab = 'apostas'; ui.filter = 'done'; ui.origin = null; ui.sheet = false; renderSheet(); window.scrollTo(0, 0); } render(); }
   else if (a === 'copydrop') { const v = Number(d.m); if (isDrop(v)) S.copyDrop = v; else delete S.copyDrop; saveS(); render(); }
+  else if (a === 'orgpick') {
+    // marked on the spot: with the name being typed, the field holds the screen as it is and nothing is repainted
+    ui.orgFrom = d.k || '';
+    for (const x of document.querySelectorAll<HTMLElement>('#orgfrom button')) { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }
+  }
   else if (a === 'orgrename') {
-    const from = valOf('#orgfrom'), r = Core.renameOrigin(S.bets, from, valOf('#orgto'));
+    const on = $<HTMLElement>('#orgfrom button.on'), from = (on && on.dataset.k) || '', r = Core.renameOrigin(S.bets, from, valOf('#orgto'));
     if (!r.n) { toast('Escolhe a origem e escreve o nome novo.'); return; }
-    S.bets = r.bets; saveS(); blurField(); render(); toast(`${r.n} ${r.n > 1 ? 'apostas mudaram' : 'aposta mudou'} de origem.`);
+    S.bets = r.bets; ui.orgFrom = null; saveS(); blurField(); render(); toast(`${r.n} ${r.n > 1 ? 'apostas mudaram' : 'aposta mudou'} de origem.`);
   }
   else if (a === 'cash') { ui.cash = d.id || null; ui.cashMsg = ''; render(); }
   else if (a === 'docash') doCashout(d.id);
@@ -194,8 +202,6 @@ document.addEventListener('change', e => {
   const t = e.target as HTMLInputElement;
   if (t.id === 'impfile') importImages([...(t.files || [])]);
   else if (t.id === 'bkfile') pickBackupFile((t.files || [])[0]);
-  else if (t.classList.contains('imppick')) pickFor(Number(t.dataset.op), t.dataset.fid as string, t.value);
-  else if (t.classList.contains('impedit')) editFor(Number(t.dataset.op), Number(t.dataset.i), t.value);
   else if (t.classList.contains('opstake')) stakeFor(Number(t.dataset.op), t.value);
 });
 document.addEventListener('paste', e => {

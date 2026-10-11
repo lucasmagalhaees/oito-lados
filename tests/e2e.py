@@ -467,14 +467,21 @@ with sync_playwright() as p:
     # what was read can be corrected in the list: a selection swapped for another of the same fight, or taken out
     assert opn(0).locator('.impedit').count() == 0; opn(0).locator('[data-act=impswap]').click()
     assert opn(0).locator('[data-act=impswap]').inner_text() == 'cancelar' and 'Tirar esta seleção' in opn(0).locator('.impedit').inner_text()
-    opn(0).locator('.impedit').select_option('mov:b:ko')
+    # the choices are buttons of the app, under the name of each market and with the odd of now: no list drawn by the device, so they
+    # have the colours of the theme
+    opts = opn(0).locator('.impedit .mkopts button'); labels = opn(0).locator('.impedit .label').all_inner_texts()
+    assert pg.locator('select').count() == 0 and opts.count() > 20 and labels[0].upper() == 'VENCEDOR' and len(labels) >= 6 and re.fullmatch(r'Rafael Almeida vence\s+1\.80', opts.first.inner_text()), (opts.count(), labels, opts.first.inner_text())
+    bg = [int(v) for v in re.findall(r'\d+', opts.first.evaluate('e => getComputedStyle(e).backgroundColor'))[:3]]; ink = [int(v) for v in re.findall(r'\d+', opts.first.evaluate('e => getComputedStyle(e).color'))[:3]]
+    assert (max(bg) < 70 and min(ink) > 180) if (sys.argv[1] if len(sys.argv) > 1 else 'dark') == 'dark' else (min(bg) > 220 and max(ink) < 90), ('the choices are drawn in the colours of the theme', bg, ink)
+    assert pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth') == 0; opn(0).locator('.impedit').scroll_into_view_if_needed(); shot('s55-trocar-selecao.png')
+    opn(0).locator('.impedit [data-key="mov:b:ko"]').click()
     assert 'Dunne por KO/TKO' in ot(0, '.impres') and 'Trocada por você' in ot(0, '.fixed') and 'Odd do print' not in ot(0, '.impres') and opn(0).locator('.impedit').count() == 0, ot(0, '.impres')
     assert pg.evaluate('window.__OL.imp.ops[0].edits') == {'0': 'mov:b:ko'}, 'the print odd was of the selection that was read, not of this one'
     opn(0).locator('[data-act=impunedit]').click(); assert 'Connor Lee Dunne vence' in ot(0, '.impres') and 'Odd do print 2.05' in ot(0, '.impres') and opn(0).locator('.fixed').count() == 0
-    opn(0).locator('[data-act=impswap]').click(); opn(0).locator('.impedit').select_option('ml:b')                      # the one it already has: nothing changes
+    opn(0).locator('[data-act=impswap]').click(); opn(0).locator('.impedit [data-key="ml:b"]').click()                      # the one it already has: nothing changes
     assert pg.evaluate('window.__OL.imp.ops[0].edits') == {} and opn(0).locator('.impedit').count() == 0
     # taken out of the list of selections, that selection no longer completes the accumulator; put back, it does again
-    opn(3).locator('[data-act=impswap] >> nth=1').click(); opn(3).locator('.impedit').select_option('__drop')
+    opn(3).locator('[data-act=impswap] >> nth=1').click(); opn(3).locator('.impedit [data-key=__drop]').click()
     assert 'Tirada por você: Connor Lee Dunne vence' in ot(3, '.impgone') and ot(3, '.impkind') == 'Simples' and opn(2).locator('.impmiss').count() == 1 and opn(2).locator('.via').count() == 0, ot(3, '.impgone')
     opn(3).locator('[data-act=impunedit]').click(); assert opn(3).locator('.impgone').count() == 0 and 'Completada com a foto 4' in ot(2, '.via') and txt('#imptotal') == 'R$ 430,00'
     # the text the reader got out of each picture can be seen
@@ -484,9 +491,14 @@ with sync_playwright() as p:
     assert 'Achei Almeida x Dunne, mas a aposta nela não está nessa imagem' in ot(2, '.impmiss') and 'costuma mostrar só a primeira seleção' in ot(2, '.hint') and ot(2, '.impkind') == 'Múltipla (só uma seleção lida)', ot(2, '.impmiss')
     assert [t.replace('\xa0', ' ') for t in opn(2).locator('[data-act=impuse]').all_inner_texts()] == ['Usar da foto 1: Connor Lee Dunne vence · 2.05', 'Usar da foto 4: Connor Lee Dunne vence · 2.05'], opn(2).locator('[data-act=impuse]').all_inner_texts()
     assert opn(3).locator('.impref').count() == 0 and 'O original não diz o valor' in ot(3, '.impnoval') and txt('[data-act=impall]') == 'Apostar as 2 de uma vez', 'a list with no value does not go in the batch by itself'
-    opn(2).locator('select.imppick').select_option('mov:a:ko')
+    # the markets of that fight open at a tap, and close again once one is chosen
+    assert opn(2).locator('.imppick').count() == 0 and opn(2).locator('[data-act=imppickopen]').inner_text() == 'Escolher a aposta nessa luta'
+    opn(2).locator('[data-act=imppickopen]').click(); assert opn(2).locator('.imppick .mkopts button').count() > 20 and opn(2).locator('[data-act=imppickopen]').inner_text() == 'Fechar as opções' and 'Tirar esta seleção' not in ot(2, '.imppick')
+    opn(2).locator('[data-act=imppickopen]').click(); assert opn(2).locator('.imppick').count() == 0; opn(2).locator('[data-act=imppickopen]').click()
+    opn(2).locator('.imppick [data-key="mov:a:ko"]').click(); assert opn(2).locator('.imppick').count() == 0 and pg.locator('select').count() == 0
     assert 'Almeida por KO/TKO' in ot(2, '.impres') and 'Escolhida por você' in ot(2, '.via') and ot(2, '.impkind') == 'Múltipla de 2 seleções' and opn(2).locator('.impcheck').count() == 0, ot(2, '.impres')
-    opn(2).locator('[data-act=impunpick]').click(); opn(2).locator('[data-act=impuse] >> nth=1').click()
+    opn(2).locator('[data-act=impunpick]').click(); assert opn(2).locator('.imppick').count() == 0 and opn(2).locator('[data-act=imppickopen]').inner_text() == 'Escolher a aposta nessa luta', 'undone, the fight is open again with its markets closed: choosing one had closed them'
+    opn(2).locator('[data-act=impuse] >> nth=1').click()
     assert 'Completada com a foto 4' in ot(2, '.via') and 'bate com o cupom' in ot(2, '.impcheck') and opn(3).locator('.impref').count() == 1, ot(2, '.impres')
     # the value and the kind of each item can be changed in the list
     opn(1).locator('.opstake').fill('1500'); assert opn(1).locator('.opstake').input_value() == '1.500', 'the field has the thousands mask'
@@ -597,16 +609,22 @@ with sync_playwright() as p:
     assert pg.evaluate('(e => e.scrollWidth - e.clientWidth)(document.getElementById("origins"))') == 0, 'the table by origin fits the phone, with no column hidden to the side'
     # an origin can be given another name; without a new name nothing changes
     froms = lambda: pg.evaluate('[...new Set(window.__OL.S.bets.map(b => b.from).filter(Boolean))]')
-    assert pg.locator('#orgfrom option').all_inner_texts() == ['Canal do Zé']
+    assert pg.locator('#orgfrom button').all_inner_texts() == ['Canal do Zé'] and pg.locator('#orgfrom button.on').count() == 1 and pg.locator('select').count() == 0, 'the tipster to rename is picked among buttons of the app'
     pg.click('[data-act=orgrename]'); assert 'Escolhe a origem' in pg.inner_text('#toast') and froms() == ['Canal do Zé'], 'an empty name must not strip the origin'
     pg.fill('#orgto', 'Zé'); pg.click('[data-act=orgrename]'); assert '3 apostas mudaram de origem' in pg.inner_text('#toast') and froms() == ['Zé'], (pg.inner_text('#toast'), froms())
     assert cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Zé | 1 aposta')
     pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]'); assert froms() == ['Canal do Zé']
     # a copy that came with no name is still the tipster's, and can be given a name later
     pg.evaluate(f'delete window.__OL.S.bets.find(b => b.id === "{cid}").from'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]')
-    assert pg.locator('#orgfrom option').all_inner_texts() == ['Tipster (1)', 'Canal do Zé'] and cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Tipster | 1 aposta'), pg.locator('#origins').inner_text()
-    pg.select_option('#orgfrom', ''); pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]')
-    assert '1 aposta mudou de origem' in pg.inner_text('#toast') and pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{cid}").from') == 'Canal do Zé' and pg.locator('#orgfrom option').all_inner_texts() == ['Canal do Zé'], pg.inner_text('#toast')
+    assert pg.locator('#orgfrom button').all_inner_texts() == ['Tipster (1)', 'Canal do Zé'] and pg.locator('#orgfrom button.on').inner_text() == 'Tipster (1)' and cells(pg.locator('#origins tbody tr.tipster').first)[0].startswith('Tipster | 1 aposta'), pg.locator('#origins').inner_text()
+    # picked with the name already being typed: the field holds the screen as it is, and the button is marked all the same; and the
+    # choice stays when the screen is painted again
+    pg.fill('#orgto', 'Canal do Zé'); pg.click('#orgfrom [data-k="Canal do Zé"]')
+    assert pg.locator('#orgfrom button.on').all_inner_texts() == ['Canal do Zé'] and pg.input_value('#orgto') == 'Canal do Zé' and pg.locator('#orgfrom [data-k=""]').get_attribute('aria-pressed') == 'false'
+    pg.evaluate('document.activeElement.blur()'); pg.click('.tabbar [data-tab=apostas]'); pg.click('.tabbar [data-tab=carteira]'); assert pg.locator('#orgfrom button.on').all_inner_texts() == ['Canal do Zé'], 'the one picked is still the one picked'
+    pg.click('#orgfrom [data-k=""]'); assert pg.locator('#orgfrom button.on').all_inner_texts() == ['Tipster (1)']
+    pg.fill('#orgto', 'Canal do Zé'); pg.click('[data-act=orgrename]')
+    assert '1 aposta mudou de origem' in pg.inner_text('#toast') and pg.evaluate(f'window.__OL.S.bets.find(b => b.id === "{cid}").from') == 'Canal do Zé' and pg.locator('#orgfrom button').all_inner_texts() == ['Canal do Zé'], pg.inner_text('#toast')
     # the list of bets can show one origin at a time
     pg.click('.tabbar [data-tab=apostas]'); plain = pg.evaluate('window.__OL.S.bets.some(b => !b.from)')
     assert pg.locator('#byorigin button').all_inner_texts() == ['Todas', 'Minhas', 'Tipster', 'Canal do Zé'] and plain is False, pg.locator('#byorigin button').all_inner_texts()
