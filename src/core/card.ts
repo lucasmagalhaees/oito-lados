@@ -17,6 +17,26 @@ export function cardSections(fights: Fight[]): CardSection[] {
   }));
 }
 
+/** What the source writes for a fighter with no country: not a country to filter by. */
+const NO_COUNTRY = 'default';
+const landKey = (c: unknown): string => { const k = plain(c).trim(); return k === NO_COUNTRY ? '' : k; };
+/** The fights with a fighter from a country, by the name of the country as the source writes it, whatever the case
+ *  and the accents. No country given finds nothing. */
+export function fromCountry(fights: Fight[], country: unknown): Fight[] {
+  const k = landKey(country);
+  return k ? fights.filter(f => landKey(f.a.country) === k || landKey(f.b.country) === k) : [];
+}
+/** The countries of the fighters of these fights, as the source writes them, and in how many of the fights each one
+ *  has a fighter. A fight between two of the same country counts once. */
+export function countries(fights: Fight[]): { name: string; fights: number }[] {
+  const m = new Map<string, { name: string; fights: number }>();
+  for (const f of fights) for (const k of new Set([f.a.country, f.b.country].map(landKey).filter(Boolean))) {
+    const r = m.get(k) || { name: landKey(f.a.country) === k ? f.a.country.trim() : f.b.country.trim(), fights: 0 };
+    r.fights++; m.set(k, r);
+  }
+  return [...m.values()];
+}
+
 /** The fights with what was typed in the names of their fighters: every word typed has to be there, in either name,
  *  whatever the accents and the case ("jose ald" finds José Aldo). Nothing typed finds nothing. */
 export function findFights(fights: Fight[], query: unknown): Fight[] {

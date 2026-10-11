@@ -7,6 +7,17 @@ export const $ = <T extends HTMLElement = HTMLElement>(s: string): T | null => d
 /** What is typed in a field right now, or '' when the field is not on screen. */
 export const valOf = (sel: string): string => { const el = $<HTMLInputElement>(sel); return el ? el.value : ''; };
 /** Takes the focus off whatever field has it. On iOS a tapped button does not, and a focused field blocks the repaint. */
+/** The name of a country in Portuguese, from the name the source writes in English: the home nations of the United
+ *  Kingdom by hand, the rest as the device names the country of that code. A name the app does not know stays as it came. */
+const HOME_NATIONS: Record<string, string> = { gbeng: 'Inglaterra', gbsct: 'Escócia', gbwls: 'País de Gales' };
+let regions: Intl.DisplayNames | null | undefined;
+export function landName(country: string, code: string): string {
+  if (Object.prototype.hasOwnProperty.call(HOME_NATIONS, code)) return HOME_NATIONS[code];
+  if (code.length !== 2) return country;
+  if (regions === undefined) { try { regions = new Intl.DisplayNames(['pt-BR'], { type: 'region' }); } catch (err) { regions = null; } }
+  let name: string | undefined; try { name = regions ? regions.of(code) : undefined; } catch (err) { /* a code the device does not know */ }
+  return name && name !== code ? name : country;
+}
 export const blurField = (): void => { const a = document.activeElement; if (a instanceof HTMLElement) a.blur(); };
 /** One of the fixed parts of the page skeleton in index.html. */
 export const part = (id: string): HTMLElement => document.getElementById(id)!;

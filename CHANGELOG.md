@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.21.0] - 2026-10-11
+
+### Adicionado
+- Filtro por país na tela de Lutas: o atalho "Brasileiros" e uma lista com todo país que tem lutador nos eventos carregados, pelo nome em português.
+
 ## [0.20.0] - 2026-10-11
 
 ### Adicionado
