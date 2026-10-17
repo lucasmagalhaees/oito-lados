@@ -2,6 +2,14 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.26.0] - 2026-10-17
+
+### Adicionado
+- As últimas lutas de cada lutador, lidas da ESPN num aparelho, ficam também no servidor, e o outro aparelho da mesma pessoa as pega de lá, sem refazer as chamadas à ESPN.
+
+### Alterado
+- O que está guardado das últimas lutas no aparelho passa pela mesma conferência do que vem do servidor; o que não for uma lista válida é descartado.
+
 ## [0.25.0] - 2026-10-17
 
 ### Adicionado

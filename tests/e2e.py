@@ -4,7 +4,7 @@ Usage: python3 tests/e2e.py [dark|light]   (needs: pip install -r tests/requirem
 Walks one fictional card through pre-fight -> live -> final, places singles, parlays and same-fight combos through the UI,
 and prints prices, settlements and the final balance (expected: R$ 1.609,59).
 """
-import json, re, sys, pathlib
+import json, re, sys, pathlib, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mock_espn import PHASE, FX, ESPN, CLOUD, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, SLIP_HTML, ACCA_HTML, LIST_HTML, TIP_TEXT
 import base64
@@ -1330,6 +1330,43 @@ with sync_playwright() as p:
     assert S_(other)['deposits'] == [] and set(CLOUD['rows']) == {'u1', 'u2'}, 'a new person gets an empty history of their own'
     assert not ph_errs and not pc_errs and not ox, (ph_errs, pc_errs, ox)
     for c in (cph, cpc, cx): c.close()
+    # the latest fights kept on the server too (D103): the device that reads them from ESPN keeps them there, the other device
+    # of the same person takes them from there with no call to ESPN, and with the server out of reach it reads ESPN as always
+    formc = lambda: sum(1 for u in calls if '/eventlog' in u or re.search(r'/competitions/p\w+', u))
+    CLOUD.update(down=False, formdown=False, forms={}); CLOUD['users']['u9'] = 'cache@exemplo.com'; CLOUD['passwords']['u9'] = 'senha-boa-123'
+    def signed_in(n):
+        acc, ref = f'acc-u9-k{n}', f'ref-u9-k{n}'; CLOUD['tokens'][acc] = ('u9', time.time() + 3600); CLOUD['refresh'][ref] = 'u9'
+        auth = dict(email='cache@exemplo.com', uid='u9', access=acc, refresh=ref, exp=int(time.time() * 1000) + 3600e3, linked=True)
+        c = served(cloud=True); pg_ = c.new_page(); errs_ = []; pg_.on('pageerror', lambda e: errs_.append(str(e)))
+        pg_.add_init_script('if (!sessionStorage.getItem("seeded")) { sessionStorage.setItem("seeded", "1"); localStorage.setItem("oitolados.auth.v1", %s); }' % json.dumps(json.dumps(auth)))
+        pg_.goto(SITE); pg_.wait_for_selector('.fight')
+        return c, pg_, errs_
+    def until(cond, ms=15000):
+        for _ in range(ms // 250):
+            if cond(): return True
+            phone_.wait_for_timeout(250)
+        return cond()
+    before = formc(); c1, phone_, e1 = signed_in(1)
+    assert until(lambda: len(CLOUD['forms'].get('u9', {})) == 6), ('the first device reads the card of the week from ESPN and keeps it on the server', CLOUD['forms'].get('u9', {}).keys())
+    first = formc() - before; assert first > 6, ('the event log of each of the 6 athletes, and their fights', first)
+    kept = CLOUD['forms']['u9']['101']; assert len(kept['data']['fights']) == 3 and kept['fetched_at'].endswith('Z'), kept
+    assert ('GET', '/rest/v1/form_cache') in CLOUD['log'] and ('POST', '/rest/v1/form_cache') in CLOUD['log']
+    before = formc(); c2, pc_, e2 = signed_in(2); phone_ = pc_
+    assert until(lambda: pc_.evaluate('Object.keys(window.__OL.D.form).length') == 6), 'the second device has the latest fights of the card'
+    pc_.wait_for_timeout(1500); assert formc() == before, ('and asked ESPN for none of them', formc() - before)
+    pc_.click('.tabbar [data-tab=lutas]'); pc_.click('[data-act=more][data-fid="f1"]'); pc_.wait_for_selector('.form[data-fid=f1]')
+    assert pc_.locator('.form[data-fid=f1] .fname').count() == 2 and pc_.locator('.form[data-fid=f1] .fsum').count() == 2, pc_.inner_text('.form[data-fid=f1]')
+    assert formc() == before and 'Não deu' not in pc_.inner_text('.form[data-fid=f1]'), 'opening the details asks ESPN for nothing either'
+    pc_.wait_for_timeout(2600)          # the counts are saved 2 s after the last call
+    counted = pc_.evaluate('(() => { const u = JSON.parse(localStorage.getItem("oitolados.usage.v1") || "{}"); return Object.values(u.days || {}).map(d => Object.keys(d.k || {})); })()')
+    assert counted and all('form' not in k for k in counted), ('what came from the server is not counted as calls to ESPN', counted)
+    # a third device with the server's cache out of reach reads ESPN, as always
+    CLOUD['formdown'] = True; before = formc(); c3, p3_, e3 = signed_in(3); phone_ = p3_
+    assert until(lambda: p3_.evaluate('Object.keys(window.__OL.D.form).length') == 6), 'with the cache of the server out of reach, the latest fights still come'
+    assert formc() - before == first, ('read from ESPN, as the first device did', formc() - before, first)
+    CLOUD['formdown'] = False
+    assert not e1 and not e2 and not e3, (e1, e2, e3)
+    for c in (c1, c2, c3): c.close()
     PHASE['n'] = was_phase
     # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
     # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone

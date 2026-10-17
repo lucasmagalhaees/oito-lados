@@ -3,7 +3,7 @@ import { blurField, dTime, esc } from './format';
 import { render, toast } from './render';
 import { LS, S, adoptS, onSave, saveS, settingsOf, validState } from './state';
 import { isCurrency } from './format';
-import type { AppState, Json } from '../core';
+import type { AppState, FormEntry, Json } from '../core';
 
 /* ================= the same bankroll on two devices =================
    A copy of the state goes to the server (Supabase: an account with e-mail and password, and one row per person, which only
@@ -39,8 +39,8 @@ export const cloud: { email: string; busy: boolean; msg: string; at: number; err
 let pass = '';
 
 class CloudError extends Error { constructor(public status: number, message: string, public code = '') { super(message); } }
-async function call(path: string, init: { method?: string; body?: unknown; token?: string | null; prefer?: string }): Promise<Json> {
-  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), CLOUD_TIMEOUT);
+async function call(path: string, init: { method?: string; body?: unknown; token?: string | null; prefer?: string; ms?: number }): Promise<Json> {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), init.ms || CLOUD_TIMEOUT);
   const headers = Core.cloudHeaders(KEY, init.token || null);
   if (init.prefer) headers.Prefer = init.prefer;
   try {
@@ -108,7 +108,7 @@ export async function signOut(): Promise<void> {
 /* ---- the copy on the server ---- */
 /** A call with the person's token. A 401 from the database (a token it no longer takes, a device clock running late)
  *  renews the token once and tries again. */
-async function authed(path: string, init: { method?: string; body?: unknown; prefer?: string } = {}): Promise<Json> {
+async function authed(path: string, init: { method?: string; body?: unknown; prefer?: string; ms?: number } = {}): Promise<Json> {
   const t = await token(); if (!t) throw new CloudError(401, 'sem sessão');
   try { return await call(path, { ...init, token: t }); }
   catch (e) {
@@ -144,6 +144,41 @@ async function push(state: AppState): Promise<void> {
 async function settle(j: AppState, remote: AppState | null): Promise<void> {
   if (!Core.sameState(j, S)) { adoptS(j); render(); }
   if (!remote || !Core.sameState(j, remote)) await push(j);
+}
+
+/* ---- the latest fights of each athlete, kept on the server too (D103) ----
+   So that the second device does not read from ESPN what the first one already read. Each person has their own rows
+   (table form_cache): nobody reads what somebody else wrote. Neither of these ever holds back the reading from ESPN:
+   the server out of reach, slow, or no login, and the app reads from ESPN as it always did. */
+/** How long the server may take to say what it has, before the fights are read from ESPN instead. */
+export const FORM_CLOUD_WAIT = 5000;
+/** How many athletes go in one call, so the address stays short. */
+const FORM_CLOUD_BATCH = 40;
+/** The latest fights the server has of these athletes, read within `ttl`, checked by `Core.formRows`. Empty when there is
+ *  no login or the server does not answer. */
+export async function cloudForms(ids: string[], now: number, ttl: number, max: number): Promise<Record<string, FormEntry>> {
+  const asked = ids.filter(Core.isAthleteId);
+  if (!cloudOn() || !sess() || !asked.length) return {};
+  const out: Record<string, FormEntry> = {};
+  try {
+    const since = encodeURIComponent(new Date(now - ttl).toISOString());
+    for (let i = 0; i < asked.length; i += FORM_CLOUD_BATCH) {
+      const part = asked.slice(i, i + FORM_CLOUD_BATCH);
+      Object.assign(out, Core.formRows(await authed(`/rest/v1/form_cache?select=athlete,data,fetched_at&athlete=in.(${part.join(',')})&fetched_at=gte.${since}`, { ms: FORM_CLOUD_WAIT }), part, now, ttl, max));
+    }
+  } catch (e) { /* the server out of reach: ESPN, as always */ }
+  return out;
+}
+/** Keeps on the server the latest fights just read from ESPN, in one call. Nothing waits for it, and a failure only
+ *  means the other device reads them from ESPN too. */
+export function keepForms(entries: [string, FormEntry][]): void {
+  const rows = entries.filter(([id, g]) => Core.isAthleteId(id) && Core.readForm(g));
+  if (!cloudOn() || !sess() || !rows.length) return;
+  (async () => {
+    if (!session) return;
+    const uid = session.uid;
+    await authed('/rest/v1/form_cache?on_conflict=user_id,athlete', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', ms: FORM_CLOUD_WAIT * 2, body: rows.map(([athlete, g]) => ({ user_id: uid, athlete, data: { fights: g.fights }, fetched_at: new Date(g.ts).toISOString() })) });
+  })().catch(() => { /* the other device reads them from ESPN */ });
 }
 
 let timer: ReturnType<typeof setTimeout> | undefined, running: Promise<void> | null = null, again = false, quiet = false;

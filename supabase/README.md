@@ -2,7 +2,7 @@
 
 O banco e o login da sincronização entre aparelhos (D98, D99 em `docs/decisoes.md`). O app funciona sem ele. O endereço e a chave publicável do projeto ficam em `src/core/cloud.ts` (`CLOUD_URL`, `CLOUD_KEY`); vazios, o cartão "Sincronizar aparelhos" não aparece e nada é chamado.
 
-- `schema.sql`: a tabela `states` (uma linha por pessoa, com o estado inteiro do app), as regras de quem lê e escreve o quê, e a função `keepalive` que a rotina diária chama. Rodar de novo não muda nada.
+- `schema.sql`: a tabela `states` (uma linha por pessoa, com o estado inteiro do app), a `form_cache` (as últimas lutas de cada lutador já lidas por algum aparelho da pessoa, D103), as regras de quem lê e escreve o quê, e a função `keepalive` que a rotina diária chama. Rodar de novo não muda nada.
 - `tests/schema_check.sh` roda o `schema.sql` num Postgres local, imitando o que ele usa do Supabase, e confere as regras. Imitação não é o Supabase: o que foi conferido no projeto de verdade está em `docs/verificacao.md`.
 
 ## Montar o projeto (uma vez)

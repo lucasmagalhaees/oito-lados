@@ -2,6 +2,7 @@ import { Core } from '../core';
 import { DAY, H } from './format';
 import { D, S, index, ui } from './state';
 import { shownEvents } from './sync';
+import { cloudForms, keepForms } from './cloud';
 import { record } from './usage';
 import type { Bet, Fight, Json, Leg, PastFight, UsageKind } from '../core';
 
@@ -32,7 +33,8 @@ export const formBusy = new Set<string>(), formFailed = new Set<string>();
 /** Reads the latest fights of these athletes: the event log of each, then each fight and its status, a few athletes at
  *  a time and one call after the other for each of them. A fight already read is not asked for again, since a past
  *  fight does not change; what was read stands for a week. Either all the fights of an athlete are read or none is
- *  kept, so that a list is never one fight short without saying so. */
+ *  kept, so that a list is never one fight short without saying so. With a login, what the server already has (read
+ *  on the other device within the week) is taken from there first, and what is read from ESPN is kept there (D103). */
 /** Whether what is kept of an athlete still stands: read within the week, and with all that is read of a fight today
  *  (the fights kept by a version that did not read how each one ended are read again). */
 export const formFresh = (id: string, now: number): boolean => { const g = D.form[id]; return !!g && now - g.ts < FORM_TTL && g.fights.every(x => typeof x.desc === 'string'); };
@@ -41,7 +43,12 @@ export async function loadForm(ids: string[]): Promise<void> {
   for (const k of Object.keys(D.form)) if (now - D.form[k].ts > FORM_KEEP && !todo.includes(k)) delete D.form[k];
   if (!todo.length) return;
   for (const id of todo) { formBusy.add(id); formFailed.delete(id); }
-  await pool(todo.map(id => async () => {
+  // what the other device already read and kept on the server is taken from there (D103)
+  const kept = await cloudForms(todo, now, FORM_TTL, FORM_FIGHTS);
+  const usable = Object.entries(kept).filter(([, g]) => g.fights.every(x => typeof x.desc === 'string'));     // as `formFresh` asks of what is kept here
+  for (const [id, g] of usable) { D.form[id] = g; formBusy.delete(id); }
+  const took = new Set(usable.map(([id]) => id)), rest = todo.filter(id => !took.has(id)), read: string[] = [];
+  await pool(rest.map(id => async () => {
     try {
       const had = (D.form[id] && D.form[id].fights) || [], fights: PastFight[] = [];
       const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`, 'form')).filter(x => x.played).slice(0, FORM_FIGHTS);
@@ -52,10 +59,11 @@ export async function loadForm(ids: string[]): Promise<void> {
         if (!f) throw new Error('not a fight');
         fights.push(f);
       }
-      D.form[id] = { ts: now, fights };
+      D.form[id] = { ts: now, fights }; read.push(id);
     } catch (e) { formFailed.add(id); }
     finally { formBusy.delete(id); }
   }), FORM_AT_ONCE);
+  keepForms(read.map(id => [id, D.form[id]]));
 }
 export const ymd = (t: number): string => { const d = new Date(t); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0'); };
 export const openBets = (): Bet[] => S.bets.filter(b => b.status === 'open');

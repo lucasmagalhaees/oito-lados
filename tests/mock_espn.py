@@ -123,7 +123,7 @@ FX = {'down': False, 'calls': 0, 'body': dict(amount=1.0, base='BRL', date='2026
 # The server copy (Supabase), simulated: accounts with e-mail and password, tokens, and one row per person that only that person
 # can read or write, as the policies of supabase/schema.sql say. Shapes as in the Supabase Auth OpenAPI and the official JS
 # client (see src/core/cloud.ts). CLOUD['down'] cuts it off; CLOUD['log'] keeps (method, path) of every call.
-CLOUD = {'down': False, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
+CLOUD = {'down': False, 'formdown': False, 'forms': {}, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
 def cloud(route):
     req, u = route.request, route.request.url
     path = re.sub(r'^https://[^/]+', '', u); CLOUD['log'].append((req.method, path.split('?')[0]))
@@ -179,6 +179,25 @@ def cloud(route):
             if body.get('user_id') != uid: return send(403, {'message': 'new row violates row-level security policy'})
             if 'resolution=merge-duplicates' not in hdr.get('prefer', '') or 'on_conflict=user_id' not in u: return send(409, {'message': 'duplicate key value'})
             CLOUD['rows'][uid] = body['data']
+            return route.fulfill(status=201, headers=cors)
+    if path.startswith('/rest/v1/form_cache'):
+        # the latest fights each person keeps (D103): without login, permission denied; logged in, only one's own rows
+        tok = CLOUD['tokens'].get(hdr.get('authorization', '')[len('Bearer '):])
+        if not tok: return send(401, {'code': '42501', 'message': 'permission denied for table form_cache'})
+        if tok[1] < time.time(): return send(401, {'message': 'JWT expired'})
+        uid = tok[0]; mine = CLOUD['forms'].setdefault(uid, {})
+        if CLOUD['formdown']: return route.abort()
+        if req.method == 'GET':
+            m, since = re.search(r'athlete=in\.\(([^)]*)\)', u), re.search(r'fetched_at=gte\.([^&]+)', u)
+            asked = m.group(1).split(',') if m else []
+            from urllib.parse import unquote
+            cut = unquote(since.group(1)) if since else ''
+            return send(200, [dict(athlete=a, data=r['data'], fetched_at=r['fetched_at']) for a, r in mine.items() if a in asked and r['fetched_at'] >= cut])
+        if req.method == 'POST':
+            rows = body if isinstance(body, list) else [body]
+            if any(r.get('user_id') != uid for r in rows): return send(403, {'message': 'new row violates row-level security policy'})
+            if 'resolution=merge-duplicates' not in hdr.get('prefer', '') or 'on_conflict=user_id,athlete' not in u: return send(409, {'message': 'duplicate key value'})
+            for r in rows: mine[r['athlete']] = dict(data=r['data'], fetched_at=r['fetched_at'])
             return route.fulfill(status=201, headers=cors)
     return send(404, {'message': 'not found'})
 

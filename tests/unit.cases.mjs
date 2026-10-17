@@ -640,6 +640,25 @@ export default function cases(Core) {
   eq('cloud: an old-format key (a token itself) stands in for the token while there is none; a secret key never goes as a token', [Core.cloudHeaders('eyJold', null).Authorization, Core.cloudHeaders('eyJold', 'tok').Authorization, Core.cloudHeaders('sb_secret_x', null).Authorization], ['Bearer eyJold', 'Bearer tok', undefined]);
   eq('cloud: a project is an address of Supabase and a publishable key', [Core.cloudSet('https://abcdefghijkl.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://PROJETO.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://abcdefghijkl.supabase.co', 'sb_secret_abcdefghijkl'), Core.cloudSet('http://abcdefghijkl.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://evil.com', 'sb_publishable_abcdefghij')], [true, false, false, false, false]);
   eq('cloud: a password of 8 to 72 bytes, and an e-mail', [Core.isPassword('1234567'), Core.isPassword('12345678'), Core.isPassword('x'.repeat(72)), Core.isPassword('x'.repeat(73)), Core.isPassword('é'.repeat(36)), Core.isPassword('é'.repeat(37)), Core.isPassword(undefined), Core.isEmail(' lucas@x.com '), Core.isEmail('lucas@x'), Core.isEmail('a b@x.com'), Core.MIN_PASSWORD, Core.TOKEN_MARGIN], [false, true, true, false, true, false, false, true, false, false, 8, 60000]);
+  // the latest fights read back from storage or from the server (D103): only what the app itself would have written
+  const fcF = (x) => ({ id: '401', date: 1760000000000, weight: 'Lightweight', rounds: 3, won: true, method: 'sub', label: 'Submission', desc: 'Rear Naked Choke', round: 2, clock: '3:10', time: 490, ...x });
+  eq('cache: a past fight is read back field by field, and what else came along is dropped', Core.readPastFight({ ...fcF(), extra: '<img onerror=x>' }), fcF());
+  eq('cache: a past fight with a field of the wrong kind, an unknown way to end, or too long a text is not one', [Core.readPastFight(fcF({ date: '2026' })), Core.readPastFight(fcF({ method: 'magic' })), Core.readPastFight(fcF({ label: 'x'.repeat(81) })), Core.readPastFight(fcF({ won: 'yes' })), Core.readPastFight(fcF({ id: '' })), Core.readPastFight(null), Core.readPastFight(fcF({ time: null, desc: undefined }))], [null, null, null, null, null, null, fcF({ time: null, desc: undefined })]);
+  eq('cache: one bad fight drops the athlete, as a list one fight short would pass for a whole one', [Core.readForm({ ts: 5, fights: [fcF(), fcF({ round: 'x' })] }), Core.readForm({ ts: 5, fights: [fcF()] }), Core.readForm({ ts: 0, fights: [] }), Core.readForm({ ts: 5, fights: Array(11).fill(fcF()) }), Core.readForm({ ts: 5, fights: [] })], [null, { ts: 5, fights: [fcF()] }, null, null, { ts: 5, fights: [] }]);
+  eq('cache: an athlete id is safe in an address', [Core.isAthleteId('3022677'), Core.isAthleteId('4,5)'), Core.isAthleteId('a b'), Core.isAthleteId(''), Core.isAthleteId('x'.repeat(41)), Core.isAthleteId(7)], [true, false, false, false, false, false]);
+  eq('cache: what is kept on the device is read back the same way, and what is not valid is dropped', Core.readForms({ '10': { ts: 5, fights: [fcF()] }, '20': { ts: 5, fights: [{}] }, 'a,b': { ts: 5, fights: [] } }), { '10': { ts: 5, fights: [fcF()] } });
+  eq('cache: an old cache with no latest fights reads as none', [Core.readForms(undefined), Core.readForms('x')], [{}, {}]);
+  const fcNow = Date.parse('2026-10-17T12:00:00Z'), fcTtl = 7 * 864e5, fcRow = (athlete, iso, fights) => ({ athlete, fetched_at: iso, data: { fights } });
+  eq('cache: the rows of the server that can be used now', Core.formRows([
+    fcRow('10', '2026-10-16T12:00:00Z', [fcF()]),                    // read yesterday on the other device
+    fcRow('20', '2026-10-01T12:00:00Z', [fcF()]),                    // older than a week
+    fcRow('30', '2026-10-17T12:00:00Z', [fcF({ method: 'x' })]),     // not a valid fight
+    fcRow('40', '2026-10-17T12:00:00Z', [fcF()]),                    // not asked for
+    fcRow('50', '2026-10-18T12:00:00Z', [fcF()]),                    // a clock a day ahead
+    fcRow('60', '2026-10-17T12:03:00Z', [fcF()]),                    // a clock three minutes ahead: let through
+    fcRow('70', 'ontem', [fcF()]), { athlete: '80' }, null
+  ], ['10', '20', '30', '50', '60', '70', '80'], fcNow, fcTtl), { '10': { ts: Date.parse('2026-10-16T12:00:00Z'), fights: [fcF()] }, '60': { ts: Date.parse('2026-10-17T12:03:00Z'), fights: [fcF()] } });
+  eq('cache: two rows of the same athlete keep the later reading, and an answer that is not a list gives nothing', [Core.formRows([fcRow('10', '2026-10-15T00:00:00Z', []), fcRow('10', '2026-10-16T00:00:00Z', [fcF()])], ['10'], fcNow, fcTtl)['10'].fights.length, Core.formRows({ message: 'JWT expired' }, ['10'], fcNow, fcTtl)], [1, {}]);
   /* the filter by country: the fights with a fighter from one, and the countries there are to choose from */
   const lf = (id, ca, cb) => ({ id, a: { name: 'A' + id, country: ca }, b: { name: 'B' + id, country: cb } });
   const LF = [lf('1', 'Brazil', 'England'), lf('2', 'China', 'default'), lf('3', 'Brazil', 'Brazil'), lf('4', '', 'USA'), lf('5', ' brazil ', 'Atlantis')];

@@ -49,6 +49,12 @@ def run(base):
     ok('not logged in, no row is seen', st == 200 and j == [] and cors(acao), f'HTTP {st}: {raw}')
     st, acao, j, raw = call(base, '/rest/v1/states', 'POST', {'user_id': '00000000-0000-0000-0000-000000000000', 'data': {}}, {'Prefer': 'return=minimal'})
     ok('not logged in, nothing is written', st in (401, 403), f'HTTP {st}: {raw}')
+    # the latest fights each person keeps (D103): not logged in, the table refuses both reading and writing
+    st, acao, j, raw = call(base, '/rest/v1/form_cache?select=athlete&limit=1')
+    ok('the table of the latest fights exists (the form_cache part of supabase/schema.sql was run)', not (st == 404 or (isinstance(j, dict) and j.get('code') in ('PGRST205', '42P01'))), f'HTTP {st}: {raw}')
+    ok('not logged in, no latest fights are seen', st in (401, 403) or (st == 200 and j == []), f'HTTP {st}: {raw}')
+    st, acao, j, raw = call(base, '/rest/v1/form_cache', 'POST', {'user_id': '00000000-0000-0000-0000-000000000000', 'athlete': '1', 'data': {}, 'fetched_at': '2026-01-01T00:00:00Z'}, {'Prefer': 'return=minimal'})
+    ok('not logged in, no latest fights are written', st in (401, 403), f'HTTP {st}: {raw}')
     st, acao, j, raw = call(base, '/rest/v1/rpc/keepalive', 'POST', {})
     ok('the routine of the daily cron answers, and as anon it counts no row', st == 200 and j == 0, f'HTTP {st}: {raw}')
     return checks, None
@@ -64,11 +70,12 @@ class Imitation(http.server.BaseHTTPRequestHandler):
         if self.headers.get('apikey') != KEY: return self.send(401, {'message': 'no key'})
         if self.path == '/auth/v1/settings': return self.send(200, {'external': {'email': True}, 'disable_signup': False, 'mailer_autoconfirm': True})
         if self.path.startswith('/rest/v1/states'): return self.send(200, [])
+        if self.path.startswith('/rest/v1/form_cache'): return self.send(401, {'code': '42501', 'message': 'permission denied'})
         self.send(404, {})
     def do_OPTIONS(self): self.send(204)
     def do_POST(self):
         self.rfile.read(int(self.headers.get('Content-Length') or 0))
-        if self.path == '/rest/v1/states': return self.send(401, {'code': '42501', 'message': 'permission denied'})
+        if self.path in ('/rest/v1/states', '/rest/v1/form_cache'): return self.send(401, {'code': '42501', 'message': 'permission denied'})
         if self.path == '/rest/v1/rpc/keepalive': return self.send(200, 0)
         self.send(404, {})
 
@@ -78,11 +85,11 @@ def main():
         srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Imitation); threading.Thread(target=srv.serve_forever, daemon=True).start()
         checks, _ = run(f'http://127.0.0.1:{srv.server_address[1]}')
         Imitation.do_GET_real = Imitation.do_GET
-        Imitation.do_GET = lambda self: self.send(404, {'code': 'PGRST205', 'message': 'no table'}) if self.path.startswith('/rest/v1/states') else Imitation.do_GET_real(self)
+        Imitation.do_GET = lambda self: self.send(404, {'code': 'PGRST205', 'message': 'no table'}) if self.path.startswith('/rest/v1/states') or self.path.startswith('/rest/v1/form_cache') else Imitation.do_GET_real(self)
         before, _ = run(f'http://127.0.0.1:{srv.server_address[1]}')
         bad = [c for c in checks if not c[1]]
         caught = [c[0] for c in before if not c[1]]
-        ok = not bad and 'the table exists (supabase/schema.sql was run)' in caught
+        ok = not bad and 'the table exists (supabase/schema.sql was run)' in caught and any('form_cache' in c for c in caught)
         _, unreachable = run('http://127.0.0.1:9')
         ok = ok and unreachable is not None
         print(f"self-test: {len(checks) - len(bad)}/{len(checks)} against the imitation, a missing table caught ({', '.join(caught)}), an unreachable project inconclusive")

@@ -288,7 +288,7 @@ check('the backup file is shared where a page can share a file, and downloaded o
 check('a backup file is shown before it replaces anything', 'ui.restoreFile = { name: file.name, text, ...got.info }' in bk_src and "data-act=\"bkapply\"" in rend_src and 'mostrado antes' in spec)
 check('text and file are the same backup, read by the same function', bk_src.count('peekBackup(') == 3 and "restoreFrom(valOf('#rs') || '')" in read('src/app/events.ts') and 'restoreFrom(ui.restoreFile.text)' in read('src/app/events.ts'))
 check('an athlete whose fights could not all be read keeps none', "} catch (e) { formFailed.add(id); }" in api_src2 and 'D.form[id] = { ts: now, fights };' in api_src2 and 'Tudo ou nada' in spec)
-check('what was read is kept with the rest of the cache', 'form: D.form }); }' in read('src/app/state.ts') and 'form: c.form || {}' in read('src/app/state.ts') and '(`form`)' in spec)
+check('what was read is kept with the rest of the cache', 'form: D.form }); }' in read('src/app/state.ts') and 'form: Core.readForms(c.form)' in read('src/app/state.ts') and '(`form`)' in spec)
 check('the capture runs with the honest agent, never on main, and commits to the branch', "AGENT = 'oito-lados-contract-check/1.0" in read('scripts/capture_espn.py') and "github.ref_name != 'main'" in flow and 'python scripts/capture_espn.py' in flow and 'nunca na `main`' in spec)
 
 # 5d2. corner colours: the pairs the settings offer are the ones the stylesheet draws and the spec names
@@ -402,17 +402,19 @@ check('the address is empty or a Supabase project, set together with the key', b
 check('with no project set the card does not show and nothing syncs', "if (!cloudOn()) return '';" in csync_src and "if (!cloudOn()) return;" in csync_src and 'nada é chamado' in spec)
 schema = read('supabase/schema.sql')
 grants = [l for l in schema.splitlines() if l.startswith('grant ')]
-check('the table keeps row level security, its owner\'s row only, and nobody deletes', 'enable row level security' in schema and schema.count('(select auth.uid()) = user_id') == 4 and 'for delete' not in schema and 'revoke all on table public.states from anon, authenticated;' in schema and not any('delete' in g or ' all ' in g for g in grants), grants)
+check('the table keeps row level security, its owner\'s row only, and nobody deletes', 'enable row level security' in schema and schema.count('(select auth.uid()) = user_id') == 8 and schema.count('enable row level security') == 2 and 'for delete' not in schema and 'revoke all on table public.states from anon, authenticated;' in schema and 'revoke all on table public.form_cache from anon, authenticated;' in schema and not any('delete' in g or ' all ' in g for g in grants), grants)
 check('the schema is checked on a local Postgres in the verify', 'run schema   tests/schema_check.sh' in verify_sh and 'run keepalive node tests/keepalive.mjs' in verify_sh)
 crons = json.loads(read('vercel.json')).get('crons', [])
 check('the routine runs once a day, at the time the spec says', crons == [{'path': '/api/keepalive', 'schedule': '17 9 * * *'}] and '`17 9 * * *`' in spec and 'uma vez por dia' in spec, crons)
 check('only the cron gets into the routine', "request.headers.get('authorization') !== `Bearer ${secret}`" in read('api/keepalive.ts') and 'CRON_SECRET' in spec)
-for pattern, text in ((r'SYNC_AFTER = 2000;', '2 s depois da última gravação (`SYNC_AFTER`'), (r'CLOUD_TIMEOUT = 15000', 'no máximo 15 s (`CLOUD_TIMEOUT`)'), (r'export const TOKEN_MARGIN = 60e3;', 'renovada 1 min antes de vencer (`TOKEN_MARGIN`)'), (r'export const MIN_PASSWORD = 8, MAX_PASSWORD = 72;', 'A senha tem de 8 (`MIN_PASSWORD`')):
+for pattern, text in ((r'SYNC_AFTER = 2000;', '2 s depois da última gravação (`SYNC_AFTER`'), (r'CLOUD_TIMEOUT = 15000', 'no máximo 15 s (`CLOUD_TIMEOUT`)'), (r'export const TOKEN_MARGIN = 60e3;', 'renovada 1 min antes de vencer (`TOKEN_MARGIN`)'), (r'export const MIN_PASSWORD = 8, MAX_PASSWORD = 72;', 'A senha tem de 8 (`MIN_PASSWORD`'), (r'export const FORM_CLOUD_WAIT = 5000;', 'O servidor tem 5 s para responder (`FORM_CLOUD_WAIT`)')):
     check('code still has the documented constant', re.search(pattern, csync_src + cloud_src), pattern)
     check('spec still states the constant', text in spec, text)
 check('the join and the marks have tests and are in the spec', all(('Core.' + f) in unit_src for f in ('stamp', 'mergeStates', 'sameState', 'firstMeet', 'joinBoth', 'cloudHeaders', 'isPassword')) and '`Core.mergeStates`' in spec and '`Core.stamp`' in spec)
 check('the marks are put by the save itself, so no part of the app has to remember them', 'Core.stamp(written, S, Date.now())' in read('src/app/state.ts'))
 check('the password only travels: it is never written to storage', "LS.set('oitolados.auth.v1', session)" in csync_src and 'pass' not in csync_src.split('interface Session')[1].split('}')[0] and 'nunca é guardada' in spec)
+check('the latest fights on the server are per person, and every row is checked before use', schema.count('(select auth.uid()) = user_id') >= 4 and 'grant select, insert, update on table public.form_cache to authenticated;' in schema and 'to anon' not in schema.split('public.form_cache')[1].split('create or replace function')[0] and 'Core.formRows(' in csync_src and '`Core.formRows`' in spec and all(('Core.' + f) in unit_src for f in ('formRows', 'readForm', 'readPastFight', 'isAthleteId')))
+check('what comes from the server is not counted as calls to ESPN', 'getJSON' not in csync_src and "await authed(`/rest/v1/form_cache" in csync_src and 'não conta no "Uso da ESPN"' in spec)
 check('the session is not in the backup', 'oitolados.auth.v1' not in read('src/app/backup.ts') and '`oitolados.auth.v1`' in spec)
 
 # 9. the verification register keeps both halves, and the harness files it relies on are in place
