@@ -99,8 +99,8 @@ def scoreboard(url=''):
     return dict(events=evs)
 am = lambda v: dict(american=('+%d'%v if v>0 else str(v)))
 # knobs for the tests: the latest fights of the athletes unreachable (formdown), a second event on the board (next), a fight that ends in a draw (draw: its id), the source unreachable, the line of one fighter (Kessler, f2) moving, a finished fight whose result
-# is not published yet, and a result published under a name of our own making
-ESPN = {'down': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False, 'later': False, 'notover': False}
+# is not published yet, a result published under a name of our own making, and the source taking calls and never answering (hang)
+ESPN = {'down': False, 'hang': False, 'f2b': 170, 'noresult': False, 'resname': None, 'extra': False, 'next': False, 'draw': None, 'formdown': False, 'later': False, 'notover': False}
 def odds(fid):
     if fid not in ALL: return dict(count=0, items=[])          # a fight with no line published, as the source answers it
     f = ALL[fid]
@@ -118,12 +118,14 @@ def props(fid):
     else: return dict(count=0, items=[])
     return dict(count=2, items=[dict(type=dict(id='63', name='Fight To Go The Distance'), odds=dict(american=dict(value=x))) for x in v])
 calls = []
+HUNG = []           # calls taken and never answered (ESPN['hang'], CLOUD['hang'])
 # exchange rates: obviously invented round numbers (1 real = 0.20 dollar = 0.16 euro), so nobody takes them for a real quote
 FX = {'down': False, 'calls': 0, 'body': dict(amount=1.0, base='BRL', date='2026-01-02', rates=dict(EUR=0.16, USD=0.2))}
 # The server copy (Supabase), simulated: accounts with e-mail and password, tokens, and one row per person that only that person
 # can read or write, as the policies of supabase/schema.sql say. Shapes as in the Supabase Auth OpenAPI and the official JS
-# client (see src/core/cloud.ts). CLOUD['down'] cuts it off; CLOUD['log'] keeps (method, path) of every call.
-CLOUD = {'down': False, 'formdown': False, 'forms': {}, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
+# client (see src/core/cloud.ts). CLOUD['down'] cuts it off, CLOUD['hang'] takes calls and never answers them; CLOUD['log']
+# keeps (method, path) of every call.
+CLOUD = {'down': False, 'hang': False, 'formdown': False, 'forms': {}, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
 def cloud(route):
     req, u = route.request, route.request.url
     path = re.sub(r'^https://[^/]+', '', u); CLOUD['log'].append((req.method, path.split('?')[0]))
@@ -135,6 +137,8 @@ def cloud(route):
         return route.fulfill(status=204, headers={**cors, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
     if CLOUD['down']:
         return route.abort()
+    if CLOUD['hang']:
+        return HUNG.append(route)              # left unanswered: the page gives up on it by itself
     if not hdr.get('apikey', '').startswith('sb_publishable_'):
         return send(401, {'message': 'No API key found in request'})
     if hdr.get('authorization', '').startswith('Bearer sb_'):
@@ -207,6 +211,7 @@ def handle(route):
     def ok(o): route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps(o))
     if 'fonts.g' in u: return route.abort()
     if ESPN['down'] and 'espn.com' in u: return route.abort()
+    if ESPN['hang'] and 'espn.com' in u: return HUNG.append(route)
     if 'api.frankfurter.dev' in u:
         FX['calls'] += 1
         return route.abort() if FX['down'] else ok(FX['body'])

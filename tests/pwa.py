@@ -100,6 +100,10 @@ with sync_playwright() as p:
     # files from other addresses (fonts, the image reader): kept the first time the worker fetches them, then served from the device
     probe = f'fetch("{OTHER}/probe.css").then(r => r.text())'
     check('a file from a kept address arrives through the worker', pg.evaluate(probe) == PROBE and other['hits'] == 1, other['hits'])
+    # the worker answers first and writes the copy a moment later (src/sw.js does not wait for cache.put): read right after the
+    # answer, the cache was still empty in 2 of 3 tries, and this check failed now and then. So it waits, up to 5 s, for the copy
+    try: pg.wait_for_function('caches.open("oito-lados-assets-v1").then(c => c.keys()).then(ks => ks.length > 0)', timeout=5000)
+    except Exception: pass
     kept = pg.evaluate('caches.open("oito-lados-assets-v1").then(c => c.keys()).then(ks => ks.map(k => k.url))')
     check('and stays on the device', kept == [OTHER + '/probe.css'], kept)
     other['down'] = True
@@ -109,6 +113,10 @@ with sync_playwright() as p:
     pg.click('[data-act=tab][data-tab=carteira]'); pg.click('[data-act=checkupdate]')
     pg.wait_for_function('document.getElementById("toast").textContent.includes("Sem conexão")')
     check('asked by hand with no connection: says so, and offers nothing', pg.evaluate('document.getElementById("update").hidden') is True)
+    # coming back to the app is when it looks by itself (see below); with no connection that look fails quietly: no notice, no script error
+    had, sw_hits = len(errs), site['hits'].count('/sw.js')
+    pg.evaluate('document.dispatchEvent(new Event("visibilitychange"))'); pg.wait_for_timeout(1000)
+    check('coming back to the app with no connection: it looks, offers nothing, and throws nothing', site['hits'].count('/sw.js') > sw_hits and pg.evaluate('document.getElementById("update").hidden') is True and len(errs) == had, (site['hits'][-3:], errs[had:]))
 
     # a new version is published while the app is open
     site.update(down=False, page=page_b, sw=sw_b)
