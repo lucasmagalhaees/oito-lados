@@ -92,7 +92,7 @@ export interface Data {
   form: Record<string, { ts: number; fights: PastFight[] }>;
 }
 export const D: Data = { events: [], fights: new Map(), odds: {}, results: {}, td: {}, astats: {}, finalSeen: {}, oddsAt: {}, lastSync: 0, from: 0, err: null, unread: {}, form: {} };
-(() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events, odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0, form: c.form || {} }); index(); } })();
+(() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events, odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0, form: Core.readForms(c.form) }); index(); } })();
 /** The calls made to the source, counted on this device (`oitolados.usage.v1`), and the ones made since the page was opened. */
 export const U: UsageLog = Core.usageRead(LS.get('oitolados.usage.v1'));
 export const session: { since: number; log: UsageLog } = { since: Date.now(), log: Core.usageEmpty() };
