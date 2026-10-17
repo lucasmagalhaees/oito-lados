@@ -6,7 +6,7 @@ and prints prices, settlements and the final balance (expected: R$ 1.609,59).
 """
 import json, re, sys, pathlib, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from mock_espn import PHASE, FX, ESPN, CLOUD, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, SLIP_HTML, ACCA_HTML, LIST_HTML, TIP_TEXT
+from mock_espn import PHASE, FX, ESPN, CLOUD, HUNG, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, SLIP_HTML, ACCA_HTML, LIST_HTML, TIP_TEXT
 import base64
 import cov
 from playwright.sync_api import sync_playwright
@@ -1012,7 +1012,12 @@ with sync_playwright() as p:
     final = bal(); saved = pg.evaluate('JSON.stringify(window.__OL.S)')
     settings = lambda: pg.evaluate('(() => { const S = window.__OL.S; return [S.unitPct, S.stakeIn || "money", S.theme || "auto", S.corners, S.cur, S.copyDrop || 0]; })()')
     kept = settings(); assert kept[3] == {'women': 'green-pink'} and kept[5] == 3, kept
-    pg.click('[data-act=backup]'); pg.wait_for_timeout(300)                                             # copies to the clipboard, or shows the text when it cannot
+    # "Copiar como texto" copies to the clipboard, or shows the text to be copied by hand where it cannot. Both carry the whole state
+    pg.evaluate("() => { window.__clip = 'fail'; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: t => window.__clip === 'fail' ? Promise.reject(new Error('no')) : (window.__copied = t, Promise.resolve()) } }); }")
+    pg.click('[data-act=backup]'); pg.wait_for_selector('#bk')
+    shown = json.loads(pg.input_value('#bk')); assert shown['app'] == 'oito-lados' and len(shown['bets']) == 15 and json.dumps(shown['deposits']) == json.dumps(json.loads(saved)['deposits']), 'the text shown by hand is the backup'
+    pg.evaluate("window.__clip = 'ok'"); pg.click('[data-act=backup]'); pg.wait_for_function('document.getElementById("toast").textContent.includes("Backup copiado")')
+    copied = json.loads(pg.evaluate('window.__copied')); assert copied['app'] == 'oito-lados' and copied['bets'] == shown['bets'] and copied['savedAt'] >= shown['savedAt'], 'and the copied text is the same backup'
     pg.click('[data-act=reset]'); pg.click('[data-act=reset]')                                           # opening and backing out of the reset keeps everything
     assert bal() == final, bal()
     pg.click('[data-act=reset]'); pg.click('[data-act=doreset]'); assert bal().replace('\xa0', ' ') == 'R$ 0,00', bal()
@@ -1109,7 +1114,19 @@ with sync_playwright() as p:
     # the counts are written down a moment after the last call, and are not part of the backup
     pg.wait_for_timeout(2300); assert pg.evaluate('JSON.parse(localStorage.getItem("oitolados.usage.v1")).days')[took['today']]['k']['board'] == day['k']['board'] and 'usage' not in held and 'days' not in held
     print('h-overflow px', ow, '| requests', len(calls), '| errors', errs)
-    cov.stop(pg, 'e2e-' + (sys.argv[1] if len(sys.argv) > 1 else 'dark'))
+    THEME = sys.argv[1] if len(sys.argv) > 1 else 'dark'
+    cov.stop(pg, 'e2e-' + THEME)
+    # Every page of the app opened from here on is measured too, each under a name of its own: app_page() starts measuring a
+    # new page before it loads, and done() writes down what each page of a context ran before the context is closed. Before
+    # this, the blocks below (the two devices, the latest fights on the server) ran outside the measuring, and the functions
+    # of the sync showed up as never called.
+    measured = [0]
+    def app_page(c):
+        pg_ = c.new_page(); cov.start(pg_); return pg_
+    def done(c, close=True):
+        for pg_ in c.pages:
+            measured[0] += 1; cov.stop(pg_, f'e2e-{THEME}-{measured[0]:02d}')
+        if close: c.close()
     # the cards on screen: the next three that are not over. A card the source marks as over leaves, and the three after it are what
     # is there; the board is read a month ahead, so that the third one is. Five cards and a Contender Series night are on the board
     import datetime
@@ -1118,7 +1135,7 @@ with sync_playwright() as p:
         PHASE['n'] = phase; ESPN['notover'] = notover; first = len(calls)
         c4 = b.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo', has_touch=True, is_mobile=True)
         c4.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c4.route('https://cdn.jsdelivr.net/**', local_cdn)
-        p4 = c4.new_page()
+        p4 = app_page(c4)
         if state: p4.add_init_script('localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(state)))
         p4.goto((ROOT / 'dist' / 'index.html').as_uri()); p4.wait_for_selector('.events .ev'); p4.wait_for_timeout(700)
         names = [t.upper() for t in p4.locator('.events .ev b').all_inner_texts()]
@@ -1126,7 +1143,7 @@ with sync_playwright() as p:
         if state is None and phase == 3 and not notover: p4.screenshot(path=str(SHOTS / 's52-tres-proximos-cards.png'))
         asked = re.search(r'dates=\d{8}-(\d{8})', [u for u in calls[first:] if '/scoreboard' in u][0]).group(1)
         ahead = (datetime.datetime.strptime(asked, '%Y%m%d').date() - datetime.datetime.now(datetime.timezone.utc).date()).days
-        c4.close(); ESPN['notover'] = False; return names, on, row, ahead
+        done(c4); ESPN['notover'] = False; return names, on, row, ahead
     CARD, NEXT3 = 'ALMEIDA VS. DUNNE <B>X</B>', ['TELES VS. FARIAS', 'LOBO VS. ARANTES', 'FURTADO VS. MAIA']
     names, on, row, ahead = cards_on(0)
     assert names == [CARD] + NEXT3[:2] and on == CARD and ahead in (30, 31), ('before it ends, the card of the week is one of the three to come', names, on, ahead)
@@ -1141,6 +1158,50 @@ with sync_playwright() as p:
     names, on, row, ahead = cards_on(3, far)
     assert names == NEXT3 + ['NOGUEIRA VS. PIRES'], ('a card further ahead with a bet still open on it is shown too', names)
     ESPN['next'] = False; ESPN['later'] = False; PHASE['n'] = was_phase
+    # The odds of a card that is not on screen are read again only when something depends on them: a selection of it in the slip,
+    # or a bet still open on it whose other fight is already over (the cash-out offer is priced with them). Two events on the board,
+    # and a fighter's surname on both (Marina Teles on the first, Hugo Teles on the second)
+    was_phase = PHASE['n']; ESPN['next'] = True
+    oddsof = lambda since: sorted({m.group(1) for m in (re.search(r'/competitions/(\w+)/odds', u) for u in calls[since:]) if m})
+    def odds_page(phase, state=None):
+        PHASE['n'] = phase
+        c = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
+        c.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c.route('https://cdn.jsdelivr.net/**', local_cdn)
+        p_ = app_page(c)
+        if state: p_.add_init_script('localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(state)))
+        p_.goto((ROOT / 'dist' / 'index.html').as_uri()); p_.wait_for_selector('.fight'); p_.wait_for_timeout(1500)
+        def resync():
+            since = len(calls); p_.evaluate('window.__OL.sync(true)'); p_.wait_for_timeout(300); return oddsof(since)
+        return c, p_, resync
+    # who the copied bets were from comes back as buttons in the copy screen, in alphabetical order, accents and all
+    lost = lambda id_, who: dict(id=id_, t=now_ms - 90000000, type='single', stake=10, unit=10, odd=2, sgp={}, status='lost', payout=0, settledAt=now_ms - 80000000, copied=True, **{'from': who},
+        legs=[dict(fid='f2', eid='600000001', key='ml:a', market='Vencedor', sel='Brandt vence', cat='Vencedor', weight='Lightweight', fight='Brandt x Kessler', event='UFC Fight Night', date=now_ms - 86400000, odd=2, src='real', out='lost')])
+    tips3 = dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 99000000, v=100)], bets=[lost('z1', 'Zé'), lost('n1', 'Ana'), lost('l1', 'Álvaro')])
+    co, po, resync = odds_page(0, tips3)
+    assert resync() == ['f1', 'f2', 'f3'], 'the card on screen has its odds read again, and the one that is not, none'
+    po.click('[data-act=event][data-id="600000002"]'); po.wait_for_selector('.fight'); po.wait_for_timeout(500)
+    assert resync() == ['g1'], 'with the other card on screen, only its odds'
+    po.click('[data-act=event][data-id="600000001"]'); po.click('[data-act=pick][data-fid="f1"][data-key="ml:a"]'); po.click('[data-act=event][data-id="600000002"]'); po.wait_for_timeout(300)
+    assert po.evaluate('window.__OL.slip.sels.map(s => s.fid)') == ['f1'] and resync() == ['f1', 'f2', 'f3', 'g1'], 'a selection in the slip from the card not on screen: its odds are read again too, so the slip prices it right'
+    po.click('[data-act=imp]'); assert po.locator('#impfroms button').all_inner_texts() == ['Álvaro', 'Ana', 'Zé'], po.locator('#impfroms button').all_inner_texts()
+    # the surname alone could be either fighter: nothing is guessed. With the first name it is the one (Hugo Teles has no line yet)
+    po.fill('#imptext', 'Teles para vencer a luta'); po.click('[data-act=impread]'); po.wait_for_selector('#panel .msg')
+    assert 'Esse nome serve pra mais de um lutador do card' in po.inner_text('#panel .msg'), po.inner_text('#panel')
+    po.fill('#imptext', 'Marina Teles para vencer a luta'); po.click('[data-act=impread]'); po.wait_for_selector('#impres')
+    assert 'Marina Teles vence' in po.inner_text('#impres') and 'serve pra mais' not in po.inner_text('#panel'), po.inner_text('#panel')
+    done(co)
+    # a multiple between the two cards, with its fight on the first one already won: the second card's odds are read again, though
+    # it is not on screen. Without that bet they are not
+    multi = dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 99000000, v=100)], bets=[dict(id='x1', t=now_ms - 90000000, type='multi', stake=10, unit=10, odd=4, sgp={}, status='open', payout=0,
+        legs=[dict(fid='f1', eid='600000001', key='ml:a', market='Vencedor', sel='Teles vence', cat='Vencedor', weight='W Flyweight', fight='Teles x Prado Jr.', event='UFC Fight Night', date=now_ms - 7 * 3600000, odd=2, src='real'),
+              dict(fid='g1', eid='600000002', key='ml:a', market='Vencedor', sel='Teles vence', cat='Vencedor', weight='Featherweight', fight='Teles x Farias', event='UFC 999', date=now_ms + 7 * 86400000, odd=2, src='real')])])
+    co, po, resync = odds_page(2)
+    assert resync() == ['f3'], 'the first fight over and the second under way: the one to come on the card on screen, and nothing of the other card'
+    done(co)
+    co, po, resync = odds_page(2, multi)
+    assert resync() == ['f3', 'g1'] and po.evaluate('window.__OL.S.bets[0].status') == 'open', 'with a bet open between the two, whose first fight is won, the other card too'
+    done(co)
+    ESPN['next'] = False; PHASE['n'] = was_phase
     # Pages that are reloaded, or closed and opened again, are served over http from here on. Opened from the disk, the
     # browser of the tests sometimes hands the reloaded page an empty localStorage: in 20 tries of the same steps, 2 to 8
     # lost what was stored depending on the timing, and 0 of 20 over http. The service worker is kept out (tests/pwa.py covers it).
@@ -1154,13 +1215,26 @@ with sync_playwright() as p:
     # for nothing, as before a project existed (cloud='none'); those two constants are the only change made to it.
     # The build writes them into the Core object (`CLOUD_URL: "..."`) or keeps them as `var CLOUD_URL = "..."`.
     PAGE = (ROOT / 'dist' / 'index.html').read_text()
+    # The swapped page is measured like the others, and tests/cov.py matches what a page ran against dist/index.html by the
+    # position of each character. So the swap keeps every position: the simulated project has an address and a key of
+    # exactly the length of the real ones, and the empty constants are followed by as many spaces as the real ones had.
+    REAL = {}
+    for name in ('CLOUD_URL', 'CLOUD_KEY'):
+        got = re.findall(name + r'(?:: | = )"([^"]*)"', PAGE)
+        assert len(got) == 1, ('the page has the constant once', name, len(got)); REAL[name] = got[0]
+    fill = lambda word, n: (word * n)[:n]
+    host = re.fullmatch(r'https://([a-z0-9]+)\.supabase\.co', REAL['CLOUD_URL'])
+    assert host and REAL['CLOUD_KEY'].startswith('sb_publishable_'), ('a project is set in src/core/cloud.ts', REAL)
+    TEST_URL = 'https://' + fill('teste', len(host.group(1))) + '.supabase.co'
+    TEST_KEY = 'sb_publishable_' + fill('teste_', len(REAL['CLOUD_KEY']) - len('sb_publishable_'))
     def swap(url, key):
         out = PAGE
         for name, to in (('CLOUD_URL', url), ('CLOUD_KEY', key)):
-            assert len(re.findall(name + r'(?:: | = )"[^"]*"', PAGE)) == 1, ('the page has the constant once', name)
-            out = re.sub(name + r'(: | = )"[^"]*"', lambda m: f'{name}{m.group(1)}"{to}"', out)
+            pad = ' ' * (len(REAL[name]) - len(to))
+            out = re.sub(name + r'(: | = )"[^"]*"', lambda m: f'{name}{m.group(1)}"{to}"{pad}', out)
+        assert len(out) == len(PAGE), ('the swap keeps every character in its place', len(out), len(PAGE))
         return out
-    PAGES = {True: swap('https://testetestetest.supabase.co', 'sb_publishable_teste_teste_teste'), 'none': swap('', '')}
+    PAGES = {True: swap(TEST_URL, TEST_KEY), 'none': swap('', '')}
     def served(cloud=False, **kw):
         c = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo', service_workers='block', **kw)
         def own(r):
@@ -1176,16 +1250,16 @@ with sync_playwright() as p:
     tdbet = dict(v=1, cur='BRL', deposits=[dict(t=now_ms, v=100)], seen=now_ms, bets=[dict(id='td1', t=now_ms, type='single', stake=10, unit=10, odd=2, sgp={}, status='open', payout=0,
         legs=[dict(fid='f2', eid='600000001', key='td:o:2.5', market='Total de quedas', sel='+2.5 quedas', cat='Quedas', weight='Lightweight', fight='Brandt x Kessler', event='UFC Fight Night: Almeida vs. Dunne', date=now_ms - 7 * 3600000, odd=2, src='est')])])
     c5 = served(device_scale_factor=2, color_scheme='dark', has_touch=True, is_mobile=True)
-    p5 = c5.new_page(); p5.add_init_script('if (!localStorage.getItem("oitolados.v1")) localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(tdbet)))
+    p5 = app_page(c5); p5.add_init_script('if (!localStorage.getItem("oitolados.v1")) localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(tdbet)))
     since = len(calls); p5.goto(SITE); p5.wait_for_selector('.fight'); p5.wait_for_timeout(2500)
     p5.click('.tabbar [data-tab=carteira]'); first = counted(p5)
     assert first == asked(since) and sorted(first) == sorted(KINDS), ('every kind of call is counted under its own name, as many times as the source was asked', first, asked(since))
     said = re.search(r'Hoje: ([\d.]+) chamadas .* Desde que o app abriu \(\d+ min\): ([\d.]+) chamadas', p5.locator('#usagenow').inner_text()); assert said and said.group(1) == said.group(2) == str(sum(first.values())), p5.locator('#usagenow').inner_text()
     p5.evaluate('window.__OL.sync(true)'); p5.wait_for_timeout(500)          # calls made a moment before leaving: only leaving the page writes them down
-    mid = len(calls); p5.reload(); p5.wait_for_selector('.fight'); p5.wait_for_timeout(2500); p5.click('.tabbar [data-tab=carteira]'); again = counted(p5)
+    mid = len(calls); cov.reload(p5); p5.wait_for_selector('.fight'); p5.wait_for_timeout(2500); p5.click('.tabbar [data-tab=carteira]'); again = counted(p5)
     said = re.search(r'Hoje: ([\d.]+) chamadas .* Desde que o app abriu \(\d+ min\): ([\d.]+) chamadas', p5.locator('#usagenow').inner_text())
     assert again == asked(since) and sum(again.values()) > sum(first.values()) and int(said.group(1)) == sum(again.values()) and int(said.group(2)) == sum(asked(mid).values()) < sum(again.values()), ('loaded again, the page keeps what was counted, the calls made just before leaving too, and counts the session from nothing', first, again, asked(mid), said.groups())
-    c5.close(); ESPN['next'] = False; PHASE['n'] = was_phase
+    done(c5); ESPN['next'] = False; PHASE['n'] = was_phase
     # a result is asked for only where it is used. A card that is over is not on screen, so the result of its fights is asked for only
     # to close a bet; while the card is on screen, every fight that is over has its result asked for
     was_phase = PHASE['n']; PHASE['n'] = 3; ESPN['next'] = True
@@ -1193,11 +1267,11 @@ with sync_playwright() as p:
         ESPN['notover'] = notover; since = len(calls)
         c6 = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
         c6.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c6.route('https://cdn.jsdelivr.net/**', local_cdn)
-        p6 = c6.new_page()
+        p6 = app_page(c6)
         if state: p6.add_init_script('if (!localStorage.getItem("oitolados.v1")) localStorage.setItem("oitolados.v1", %s)' % json.dumps(json.dumps(state)))
         p6.goto((ROOT / 'dist' / 'index.html').as_uri()); p6.wait_for_selector('.fight'); p6.wait_for_timeout(1500); p6.evaluate('window.__OL.sync(true)'); p6.wait_for_timeout(600)
         got = sorted(re.search(r'/competitions/(\w+)/status', u).group(1) for u in calls[since:] if kind_of(u) == 'result'); open_left = p6.evaluate('window.__OL.S.bets.filter(b => b.status === "open").length')
-        c6.close(); ESPN['notover'] = False; return got, open_left
+        done(c6); ESPN['notover'] = False; return got, open_left
     got, _ = results_on()
     assert got == [], ('with the card over and no bet on it, no result is asked for', got)
     onf3 = dict(v=1, cur='BRL', deposits=[dict(t=now_ms, v=100)], seen=now_ms, bets=[dict(id='r1', t=now_ms, type='single', stake=10, unit=10, odd=2, sgp={}, status='open', payout=0,
@@ -1211,7 +1285,7 @@ with sync_playwright() as p:
     PHASE['n'] = 0; ESPN['next'] = False
     c7 = b.new_context(viewport=dict(width=393, height=852), locale='pt-BR', timezone_id='America/Sao_Paulo')
     c7.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c7.route('https://cdn.jsdelivr.net/**', local_cdn)
-    p7 = c7.new_page(); p7.add_init_script('window.__waits = []; const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => { if (ms >= 8000) window.__waits.push(ms); return st(f, ms, ...a); };')
+    p7 = app_page(c7); p7.add_init_script('window.__waits = []; const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => { if (ms >= 8000) window.__waits.push(ms); return st(f, ms, ...a); };')
     p7.goto((ROOT / 'dist' / 'index.html').as_uri()); p7.wait_for_selector('.fight'); p7.wait_for_timeout(1500)
     def round_(down):
         ESPN['down'] = down; p7.evaluate('window.__OL.sync(true)'); p7.wait_for_timeout(500); ESPN['down'] = False
@@ -1221,20 +1295,25 @@ with sync_playwright() as p:
     assert [w for w, _ in waits] == [60000, 120000, 240000, 300000, 300000], ('each round that fails doubles the wait, up to five minutes', [w for w, _ in waits])
     assert all('Sem conexão com a ESPN' in t for _, t in waits) and [re.search(r'nova tentativa em (\d+ \w+)', t).group(1) for _, t in waits] == ['1 min', '2 min', '4 min', '5 min', '5 min'], ('and the screen says when the next try is', [t for _, t in waits])
     back, said = round_(False); assert back == 30000 and 'Sem conexão' not in said and 'nova tentativa' not in said, ('one round that goes through and the pace is the usual one again', back, said)
-    c7.close(); PHASE['n'] = was_phase
+    done(c7); PHASE['n'] = was_phase
     # the same bankroll on two devices, through a simulated server: login with e-mail and password, the first meeting of two
     # histories, changes going both ways, the server out of reach, a reset that does not come back, a token renewed, leaving
     was_phase = PHASE['n']; PHASE['n'] = 0
     now_ms = int(datetime.datetime.now().timestamp() * 1000)
     # with no project set: no card and no call
-    CLOUD.update(log=[]); c0 = served('none'); p0 = c0.new_page(); p0.goto(SITE); p0.wait_for_function('window.__OL && window.__OL.S'); p0.click('.tabbar [data-tab=carteira]'); p0.wait_for_timeout(800)
+    CLOUD.update(log=[]); c0 = served('none'); p0 = app_page(c0); p0.goto(SITE); p0.wait_for_function('window.__OL && window.__OL.S'); p0.click('.tabbar [data-tab=carteira]'); p0.wait_for_timeout(800)
+    assert p0.evaluate('(({Core}) => [Core.CLOUD_URL, Core.CLOUD_KEY])(window.__OL)') == ['', ''], 'the page has no project set'
     assert p0.locator('#cloud').count() == 0 and 'só neste aparelho' in p0.inner_text('#view') and CLOUD['log'] == [], ('no server set: the card does not show and nothing is called', CLOUD['log'])
-    c0.close()
+    # and a save is a save on this device only: what is done is kept, and still nothing is sent, not even a moment later
+    p0.fill('#dep', '30'); p0.click('[data-act=deposit]'); p0.wait_for_timeout(2600)
+    assert p0.evaluate('JSON.parse(localStorage.getItem("oitolados.v1")).deposits.map(d => d.v)') == [30] and CLOUD['log'] == [], ('no server set: the deposit is saved here and goes nowhere', CLOUD['log'])
+    done(c0)
     def device(state):
         c = served(cloud=True)
-        pg_ = c.new_page(); errs_ = []; pg_.on('pageerror', lambda e: errs_.append(str(e)))
+        pg_ = app_page(c); errs_ = []; pg_.on('pageerror', lambda e: errs_.append(str(e)))
         if state is not None: pg_.add_init_script('if (!sessionStorage.getItem("seeded")) { sessionStorage.setItem("seeded", "1"); localStorage.setItem("oitolados.v1", %s); }' % json.dumps(json.dumps(state)))
         pg_.goto(SITE); pg_.wait_for_function('window.__OL && window.__OL.S'); pg_.click('.tabbar [data-tab=carteira]'); pg_.wait_for_selector('#cloud')
+        assert pg_.evaluate('(({Core}) => [Core.CLOUD_URL, Core.CLOUD_KEY, Core.cloudSet(Core.CLOUD_URL, Core.CLOUD_KEY)])(window.__OL)') == [TEST_URL, TEST_KEY, True], 'the page talks to the simulated project, never to the real one'
         return c, pg_, errs_
     S_ = lambda pg_: pg_.evaluate('window.__OL.S')
     money = lambda pg_: pg_.inner_text('#bal').replace('\xa0', ' ')
@@ -1295,7 +1374,7 @@ with sync_playwright() as p:
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [50, 250, 500, 1000], 'back: what was done meanwhile goes up'
     # a token about to expire is renewed, with the refresh token used once
     phone.evaluate('(() => { const a = JSON.parse(localStorage.getItem("oitolados.auth.v1")); a.exp = Date.now(); localStorage.setItem("oitolados.auth.v1", JSON.stringify(a)); })()')
-    phone.reload(); phone.wait_for_function('window.__OL && window.__OL.S'); phone.click('.tabbar [data-tab=carteira]'); phone.wait_for_selector('#cloudstatus')
+    cov.reload(phone); phone.wait_for_function('window.__OL && window.__OL.S'); phone.click('.tabbar [data-tab=carteira]'); phone.wait_for_selector('#cloudstatus')
     phone.wait_for_function('document.getElementById("cloudstatus").textContent.includes("Sincronizado às")')
     assert ('POST', '/auth/v1/token') in CLOUD['log'], 'renewed'
     # a reset on the phone does not come back from the computer
@@ -1306,7 +1385,11 @@ with sync_playwright() as p:
     assert money(pc) == 'R$ 0,00' and CLOUD['rows']['u1']['deposits'] == [], 'the reset reached the computer, and nothing came back'
     # leaving keeps what is on the device, and stops the syncing
     pc.fill('#dep', '10'); pc.click('[data-act=deposit]'); pc.wait_for_timeout(2600); assert money(pc) == 'R$ 10,00'
+    # leaving with the server out of reach: the token is dropped here all the same, and the failed call to end it there breaks nothing
+    CLOUD['down'] = True; before = len(CLOUD['log'])
     phone.click('[data-act=cloudout]'); assert phone.locator('#cloudemail').count() == 1 and 'continua aqui' in phone.inner_text('#toast')
+    phone.wait_for_timeout(300); CLOUD['down'] = False
+    assert ('POST', '/auth/v1/logout') in CLOUD['log'][before:] and phone.evaluate('localStorage.getItem("oitolados.auth.v1")') == 'null' and not ph_errs, ('left with the server down', CLOUD['log'][before:], ph_errs)
     before = len(CLOUD['log']); phone.fill('#dep', '5'); phone.click('[data-act=deposit]'); phone.wait_for_timeout(2600)
     assert money(phone) == 'R$ 5,00' and len(CLOUD['log']) == before, 'logged out: nothing is sent'
     # coming back to the same account on a device already joined with it: no question again, the two are simply joined
@@ -1324,12 +1407,22 @@ with sync_playwright() as p:
     fourth.click('[data-act=cloudfirst][data-c=there]'); synced(fourth)
     assert money(fourth) == 'R$ 15,00' and S_(fourth)['cur'] == 'BRL', ('kept the server history, in its currency', money(fourth))
     assert not t_errs and not f_errs, (t_errs, f_errs)
-    for c in (c3d, c4d): c.close()
+    for c in (c3d, c4d): done(c)
     # another person never sees this row
     cx, other, ox = device(dict(v=1, deposits=[], bets=[])); login(other, 'outra@pessoa.com', 'outra-senha-9', 'cloudup'); synced(other)
     assert S_(other)['deposits'] == [] and set(CLOUD['rows']) == {'u1', 'u2'}, 'a new person gets an empty history of their own'
     assert not ph_errs and not pc_errs and not ox, (ph_errs, pc_errs, ox)
-    for c in (cph, cpc, cx): c.close()
+    # a damaged row on the server is taken in with the same care as a backup: what is not a bet, a deposit or a conversion stays out
+    CLOUD['users']['u7'] = 'dano@exemplo.com'; CLOUD['passwords']['u7'] = 'senha-boa-123'
+    good_conv = {'t': now_ms - 8000, 'from': 'USD', 'to': 'BRL', 'rate': 5, 'date': '2026-01-02'}
+    CLOUD['rows']['u7'] = dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 7000, v=200), dict(t=0, v=50), None, dict(t=now_ms, v='muito')],
+        bets=[bet('ok1', now_ms - 6000, 20), dict(id='bad1', t=now_ms, stake=-5, legs=[]), dict(id=7, t=now_ms, stake=5, legs=[]), 'lixo'],
+        conv=[good_conv, {'t': now_ms, 'from': 'XYZ', 'to': 'BRL', 'rate': 5}, {'t': now_ms, 'from': 'USD', 'to': 'BRL', 'rate': 0}, None])
+    cdm, dmg, d_errs = device(dict(v=1, deposits=[], bets=[])); login(dmg, 'dano@exemplo.com'); synced(dmg)
+    got = S_(dmg)
+    assert [d['v'] for d in got['deposits']] == [200] and [x['id'] for x in got['bets']] == ['ok1'] and got['conv'] == [good_conv], ('only the sound items of the row come in', got)
+    assert money(dmg) == 'R$ 180,00' and not d_errs, (money(dmg), d_errs)
+    for c in (cph, cpc, cx, cdm): done(c)
     # the latest fights kept on the server too (D103): the device that reads them from ESPN keeps them there, the other device
     # of the same person takes them from there with no call to ESPN, and with the server out of reach it reads ESPN as always
     formc = lambda: sum(1 for u in calls if '/eventlog' in u or re.search(r'/competitions/p\w+', u))
@@ -1337,7 +1430,7 @@ with sync_playwright() as p:
     def signed_in(n):
         acc, ref = f'acc-u9-k{n}', f'ref-u9-k{n}'; CLOUD['tokens'][acc] = ('u9', time.time() + 3600); CLOUD['refresh'][ref] = 'u9'
         auth = dict(email='cache@exemplo.com', uid='u9', access=acc, refresh=ref, exp=int(time.time() * 1000) + 3600e3, linked=True)
-        c = served(cloud=True); pg_ = c.new_page(); errs_ = []; pg_.on('pageerror', lambda e: errs_.append(str(e)))
+        c = served(cloud=True); pg_ = app_page(c); errs_ = []; pg_.on('pageerror', lambda e: errs_.append(str(e)))
         pg_.add_init_script('if (!sessionStorage.getItem("seeded")) { sessionStorage.setItem("seeded", "1"); localStorage.setItem("oitolados.auth.v1", %s); }' % json.dumps(json.dumps(auth)))
         pg_.goto(SITE); pg_.wait_for_selector('.fight')
         return c, pg_, errs_
@@ -1366,7 +1459,28 @@ with sync_playwright() as p:
     assert formc() - before == first, ('read from ESPN, as the first device did', formc() - before, first)
     CLOUD['formdown'] = False
     assert not e1 and not e2 and not e3, (e1, e2, e3)
-    for c in (c1, c2, c3): c.close()
+    for c in (c1, c2, c3): done(c)
+    # a server and a source that take the call and never answer hold nothing up for good: the app gives up on ESPN after 12 s and
+    # on the server after 15 s (CLOUD_TIMEOUT), says so, and comes back as soon as they answer again
+    c4h, slow, e4 = signed_in(4); phone_ = slow
+    slow.click('.tabbar [data-tab=carteira]'); slow.wait_for_selector('#cloudstatus'); synced(slow); slow.wait_for_timeout(1000)
+    ESPN['hang'] = True; CLOUD['hang'] = True; del HUNG[:]; t0 = time.time()
+    slow.evaluate('() => { window.__OL.sync(true); }'); slow.click('[data-act=cloudsync]')
+    slow.wait_for_timeout(5000)
+    assert HUNG and 'Sincronizando' in slow.inner_text('#cloudstatus') and slow.locator('#clouderr').count() == 0 and not slow.evaluate('window.__OL.D.err'), ('5 s in, both are still being waited for', len(HUNG), slow.inner_text('#cloud'))
+    slow.wait_for_function('!!window.__OL.D.err', timeout=15000); espn_after = time.time() - t0
+    slow.wait_for_selector('#clouderr', timeout=15000); cloud_after = time.time() - t0
+    assert 11 <= espn_after < 17 and 14 <= cloud_after < 20, ('each call gives up at its own limit', round(espn_after, 1), round(cloud_after, 1))
+    assert 'Sem conexão com o servidor' in slow.inner_text('#clouderr'), slow.inner_text('#cloud')
+    slow.click('.tabbar [data-tab=lutas]'); assert 'Sem conexão com a ESPN' in slow.locator('.sync span').inner_text(), slow.locator('.sync span').inner_text()
+    ESPN['hang'] = False; CLOUD['hang'] = False
+    slow.evaluate('window.__OL.sync(true)'); slow.wait_for_function('!window.__OL.D.err')
+    slow.click('.tabbar [data-tab=carteira]'); slow.click('[data-act=cloudsync]'); synced(slow)
+    assert slow.locator('#clouderr').count() == 0 and not e4, ('answering again, both are back', e4)
+    for r in HUNG:                      # the calls the page gave up on: answered now, so that closing the page leaves no handler waiting
+        try: r.abort()
+        except Exception: pass
+    done(c4h)
     PHASE['n'] = was_phase
     # the rows of events and of countries, by what the device points with: a finger swipes them sideways, a mouse cannot, so there
     # they break into lines. Five fights and two events, to have more buttons than fit in the width of a phone
@@ -1378,11 +1492,11 @@ with sync_playwright() as p:
     def rows_on(width, **kw):
         c3 = b.new_context(viewport=dict(width=width, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo', **kw)
         c3.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c3.route('https://cdn.jsdelivr.net/**', local_cdn)
-        p3 = c3.new_page(); p3.goto((ROOT / 'dist' / 'index.html').as_uri()); p3.wait_for_selector('#lands button'); p3.wait_for_function('document.querySelectorAll(".events .ev").length === 2 && document.querySelectorAll("#lands button").length === 4')
+        p3 = app_page(c3); p3.goto((ROOT / 'dist' / 'index.html').as_uri()); p3.wait_for_selector('#lands button'); p3.wait_for_function('document.querySelectorAll(".events .ev").length === 2 && document.querySelectorAll("#lands button").length === 4')
         got = p3.evaluate(ROWS)
         if kw: got.append(p3.evaluate('(() => { const b = document.querySelector("#lands"); b.scrollLeft = 9999; const r = b.lastElementChild.getBoundingClientRect(); return b.scrollLeft > 0 && r.right <= innerWidth + 0.5; })()'))          # swiped to its end, the last button is whole
         else: p3.screenshot(path=str(SHOTS / f's51-fileiras-com-mouse-{width}.png'))
-        c3.close(); return got
+        done(c3); return got
     finger = rows_on(393, has_touch=True, is_mobile=True)
     assert finger == [['nowrap', True, False, 1, 2, False], ['nowrap', True, False, 1, 4, False], 0, True], ('under a finger each row is one line that scrolls sideways from edge to edge of the screen, and the page itself does not', finger)
     mouse = rows_on(393)
@@ -1409,10 +1523,10 @@ with sync_playwright() as p:
         try:
             c2 = b2.new_context(viewport=dict(width=393, height=852), device_scale_factor=2, color_scheme='dark', locale='pt-BR', timezone_id='America/Sao_Paulo')
             c2.route('**/*', lambda r: handle(r) if r.request.url.startswith('http') else r.continue_()); c2.route('https://cdn.jsdelivr.net/**', local_cdn)
-            p2 = c2.new_page(); p2.goto((ROOT / 'dist' / 'index.html').as_uri()); p2.wait_for_selector('.fight .flag'); p2.wait_for_timeout(1200)
+            p2 = app_page(c2); p2.goto((ROOT / 'dist' / 'index.html').as_uri()); p2.wait_for_selector('.fight .flag'); p2.wait_for_timeout(1200)
             asked = [u.split('/npm/')[1] for u in cdn_calls if 'country-flag' in u]          # what the page asked for by itself, before the measuring asks too
             if shot_as: p2.locator('#lands').scroll_into_view_if_needed(); p2.screenshot(path=str(SHOTS / shot_as))
-            return asked, p2.evaluate(COLOUR)
+            colour = p2.evaluate(COLOUR); done(c2); return asked, colour
         finally:
             CDN_DOWN['on'] = False; b2.close()
     PHASE['n'] = 0                                                                              # the card before any fight: once it is over it is not on screen
