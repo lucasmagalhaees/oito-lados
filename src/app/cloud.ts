@@ -1,7 +1,7 @@
 import { Core } from '../core';
 import { blurField, dTime, esc } from './format';
 import { render, toast } from './render';
-import { LS, S, adoptS, onSave, saveS, settingsOf, validState } from './state';
+import { LS, S, adoptS, onSave, saveS, settingsOf, soundBet, validState } from './state';
 import { isCurrency } from './format';
 import type { AppState, FormEntry, Json } from '../core';
 
@@ -127,7 +127,7 @@ function cleanRemote(d: unknown): AppState | null {
   const out: AppState = {
     v: 1, ...set, ...(isCurrency(d.cur) ? { cur: d.cur } : {}),
     deposits: d.deposits.filter(x => x && n(x.v) > 0 && n(x.t) > 0),
-    bets: d.bets.filter(x => x && typeof x.id === 'string' && Array.isArray(x.legs) && n(x.stake) > 0 && n(x.t) > 0)
+    bets: d.bets.filter(x => soundBet(x) && typeof x.id === 'string' && n(x.stake) > 0 && n(x.t) > 0)
   };
   if (Array.isArray(d.conv)) { const conv = d.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && n(c.rate) > 0 && n(c.t) > 0); if (conv.length) out.conv = conv.slice(-20); }
   for (const k of ['seen', 'epoch', 'setAt'] as const) if (n(d[k]) > 0) out[k] = n(d[k]);

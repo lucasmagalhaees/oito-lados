@@ -1,6 +1,6 @@
 import { blurField, isCurrency } from './format';
 import { render, toast } from './render';
-import { S, applyTheme, saveS, setCurrency, setS, settingsOf, ui, validState } from './state';
+import { S, applyTheme, saveS, setCurrency, setS, settingsOf, soundBet, soundDeposit, ui, validState } from './state';
 import { sync } from './sync';
 import type { AppState, Currency } from '../core';
 
@@ -19,14 +19,14 @@ export interface BackupInfo { bets: number; open: number; deposited: number; cur
 export function peekBackup(text: string): { state: AppState; info: BackupInfo } | null {
   let s: unknown = null; try { s = JSON.parse(text || ''); } catch (err) { /* not JSON: not a backup */ }
   if (!validState(s)) return null;
-  const bets = s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0), at = (s as { savedAt?: unknown }).savedAt;
-  return { state: s, info: { bets: bets.length, open: bets.filter(b => b.status === 'open').length, deposited: s.deposits.reduce((a, d) => a + (d && d.v > 0 ? d.v : 0), 0), cur: isCurrency(s.cur) ? s.cur : 'BRL', savedAt: typeof at === 'number' && at > 0 ? at : null } };
+  const bets = s.bets.filter(soundBet), at = (s as { savedAt?: unknown }).savedAt;
+  return { state: s, info: { bets: bets.length, open: bets.filter(b => b.status === 'open').length, deposited: s.deposits.filter(soundDeposit).reduce((a, d) => a + Number(d.v), 0), cur: isCurrency(s.cur) ? s.cur : 'BRL', savedAt: typeof at === 'number' && at > 0 ? at : null } };
 }
 /** Replaces everything with what a backup holds. False, and nothing changes, when the text is not a backup. */
 export function restoreFrom(text: string): boolean {
   const got = peekBackup(text); if (!got) return false;
   const s = got.state;
-  setS({ v: 1, deposits: s.deposits.filter(x => x && x.v > 0 && x.t), bets: s.bets.filter(x => x && Array.isArray(x.legs) && x.stake > 0), ...settingsOf(s), seen: Date.now() });
+  setS({ v: 1, deposits: s.deposits.filter(soundDeposit), bets: s.bets.filter(soundBet), ...settingsOf(s), seen: Date.now() });
   if (Array.isArray(s.conv)) S.conv = s.conv.filter(c => c && isCurrency(c.from) && isCurrency(c.to) && c.rate > 0 && c.t && typeof c.date === 'string').slice(-20);
   setCurrency(s.cur); applyTheme(); saveS();
   ui.restore = false; ui.restoreFile = null; blurField(); render(); toast('Backup restaurado.'); sync(true);
