@@ -62,6 +62,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 31. PR #33 (D96, D97) mesclado às 18:44 de 11/10/2026. Em 17/10/2026, entre 09:18 e 09:25: quanto custa um backend, e como ele seria quando vier (D98).
 32. Em 17/10/2026, a etapa 2: login por código e a cópia no servidor (D99).
 33. Em 17/10/2026, às 10:59, o login trocado para e-mail e senha (D100).
+34. Em 17/10/2026, entre 11:01 e 11:30, o que a revisão do PR #35 achou foi corrigido (D102).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -1099,7 +1100,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **Sem projeto, sem cartão.** Com o endereço e a chave vazios no código, a página não mostra o cartão e não chama nada. O Lucas mandou os dois às 10:28 de 17/10/2026, e eles entraram neste mesmo PR. O teste ponta a ponta põe um servidor simulado no lugar.
 - **Descartado:** função da Vercel entre a página e o banco (mais uma peça e mais chamadas, sem ganho para um usuário); guardar a chave secreta em qualquer lugar do código; sincronizar com o app fechado (exigiria o servidor ler a ESPN, que é a etapa 3).
 - **Fatos de terceiro, lidos em 17/10/2026** no código-fonte do Supabase Auth (`openapi.yaml`, commit `ce9a8ee` de 22/09/2026) e do cliente oficial (`supabase-js`, commit `bb56484` de 16/10/2026), e na documentação da Vercel: os caminhos e corpos de `/auth/v1/otp`, `/auth/v1/verify` e `/auth/v1/token`; a chave `sb_publishable_` vai em `apikey` e nunca em `Authorization`; o e-mail só manda código se o modelo tiver `{{ .Token }}`; o cron da Vercel chama o endereço de produção com `GET`, em UTC, uma vez por dia no Hobby, pode atrasar dentro da hora, e manda `CRON_SECRET` no cabeçalho. **Nada disso foi visto contra o projeto de verdade**, que ainda não existe.
-- **Falta, do lado do Lucas:** o `CRON_SECRET` na Vercel (`supabase/README.md`). O `schema.sql` foi rodado às 11:01 de 17/10/2026. Esta sessão não alcança o Supabase (a rede dela recusa o endereço), então nada foi conferido contra o projeto.
+- **Feito pelo Lucas:** o `schema.sql` rodado às 11:01 e o `CRON_SECRET` criado na Vercel às 11:20 de 17/10/2026. Esta sessão não alcança o Supabase (a rede dela recusa o endereço), então nada foi conferido contra o projeto.
 
 ## D100. Login com e-mail e senha, e não por código
 
@@ -1114,13 +1115,27 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - Com as contas do Lucas criadas, dá para desligar "Allow new users to sign up" no projeto.
 - **Fatos de terceiro:** a trava dos modelos foi lida em 17/10/2026 em [uma discussão no Supabase](https://supabase.com/contribute/t/860-66969-7729-gd_D_kwDODMpXOc4AnPCz) e num [artigo da Brevo de 08/10/2026](https://www.brevo.com/blog/supabase-email-templates/), e confirmada pela tela do projeto do Lucas. Os caminhos `/auth/v1/signup` e `/auth/v1/token?grant_type=password`, a sessão que o cadastro devolve com a confirmação desligada e os códigos de erro (`user_already_exists`, `invalid_credentials`, `weak_password`, no campo `error_code`) foram lidos no código-fonte do Supabase Auth (commit `ce9a8ee`).
 
+## D102. O que a revisão do PR #35 mudou na sincronização
+
+- **Contexto (17/10/2026, 11:01 a 11:30):** um revisor que não tinha visto o trabalho leu o PR #35 a pedido do Lucas ("pode fazer", às 10:47). Achou dois problemas graves, os dois confirmados rodando: (1) um aparelho zerado, ou que trocou de moeda, e que entrava na conta pela primeira vez apagava o servidor e, na sincronização seguinte, o outro aparelho; "Juntar os dois" também descartava o lado mais antigo quando os dois tinham uma reescrita; (2) a rotina diária não carregava na Vercel (`ERR_MODULE_NOT_FOUND`: o import sem `.js`), e o teste não pegava porque empacotava a função.
+- **O que mudou, sem decisão nova de produto:**
+  - O primeiro encontro de um aparelho com a conta segue `Core.firstMeet`: aparelho vazio fica com o do servidor; um lado contido no outro soma; cada um com algo só seu pergunta. "Juntar os dois" soma tudo (`Core.joinBoth`).
+  - A marca de "este aparelho já foi juntado com esta conta" foi para `oitolados.link.v1`, fora da sessão: sair e entrar de novo não pergunta outra vez.
+  - Aposta encerrada vence a mesma aposta aberta. Moedas diferentes nunca se somam. A reescrita nunca fica atrás da já conhecida.
+  - O import da rotina com `.js`; o teste compila arquivo por arquivo como a Vercel; a checagem de produção chama `/api/keepalive` e exige 401.
+  - Linha do banco com teto de 2 MB, contra o cadastro aberto encher o plano grátis. A cópia do servidor passa pela conferência de um backup. Um 401 do banco renova o token. O tema que vem do outro aparelho aparece na hora. O cashout confere a aposta como ela está depois das chamadas à ESPN.
+  - Uma sincronização sem nada novo regravava o servidor toda vez (a comparação dependia da ordem das chaves). Achado nos testes desta correção, não pela revisão.
+- **Decisão de produto embutida, a confirmar com o Lucas:** em moedas diferentes, o app não oferece "Juntar os dois", só ficar com um.
+- **Ficou como estava:** a senha fica no campo da tela depois de uma tentativa errada, até a página recarregar (risco só local); o "Sem conexão com o servidor" também aparece quando o servidor recusa a linha por tamanho.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Antes da Etapa 2: reconferir os planos grátis da Vercel e do Supabase e testar por duas semanas se a rotina diária segura o projeto do Supabase acordado (D98) | Quem fizer a Etapa 2 |
-| Criar `CRON_SECRET` na Vercel, seguindo `supabase/README.md` (D99) | Lucas |
+| Rodar no Supabase o trecho novo do `schema.sql`: o teto de 2 MB da linha (D102) | Lucas |
+| Dizer se, em moedas diferentes, ficar só com um dos dois históricos está bom (D102) | Lucas |
 | Criar a conta pelo app num aparelho, entrar no outro e ver a mesma banca (D99, D100). Depois, desligar "Allow new users to sign up" no Supabase | Lucas |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |

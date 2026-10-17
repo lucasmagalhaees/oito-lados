@@ -33,7 +33,7 @@ export function saveS(): boolean {
 }
 /** Takes a state that came from joining with the server copy, as it is: its marks are already right, and stamping it
  *  against this device's last save would make what came from the other device look new here. */
-export function adoptS(next: AppState): void { S = next; written = JSON.parse(JSON.stringify(next)); setCurrency(S.cur); LS.set('oitolados.v1', S); }
+export function adoptS(next: AppState): void { S = next; written = JSON.parse(JSON.stringify(next)); setCurrency(S.cur); applyTheme(); LS.set('oitolados.v1', S); }
 export function setS(next: AppState): void { S = next; }
 /** The currency of the bankroll. It is always set once the page has loaded; the fallback only satisfies the type. */
 export const curNow = (): Currency => S.cur || 'BRL';

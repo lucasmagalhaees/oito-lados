@@ -120,7 +120,7 @@ def props(fid):
 calls = []
 # exchange rates: obviously invented round numbers (1 real = 0.20 dollar = 0.16 euro), so nobody takes them for a real quote
 FX = {'down': False, 'calls': 0, 'body': dict(amount=1.0, base='BRL', date='2026-01-02', rates=dict(EUR=0.16, USD=0.2))}
-# The server copy (Supabase), simulated: login by a code sent by e-mail, tokens, and one row per person that only that person
+# The server copy (Supabase), simulated: accounts with e-mail and password, tokens, and one row per person that only that person
 # can read or write, as the policies of supabase/schema.sql say. Shapes as in the Supabase Auth OpenAPI and the official JS
 # client (see src/core/cloud.ts). CLOUD['down'] cuts it off; CLOUD['log'] keeps (method, path) of every call.
 CLOUD = {'down': False, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}

@@ -38,7 +38,8 @@ def run(base):
     except (urllib.error.URLError, OSError) as e: return None, f'sem resposta do projeto: {e}'
     ok('the project answers, and accepts calls from the production site', st == 200 and cors(acao), f'HTTP {st}, CORS {acao!r}: {raw}')
     ok('login by e-mail is on', isinstance(j, dict) and (j.get('external') or {}).get('email') is True, raw)
-    ok('new people can sign up ("Criar conta" in the app)', isinstance(j, dict) and j.get('disable_signup') is False, raw)
+    # sign-ups may be on (the accounts are being made) or off (they exist): either is right, so this is only told
+    if isinstance(j, dict): print('info: contas novas ' + ('aceitas' if j.get('disable_signup') is False else 'recusadas') + ' ("Allow new users to sign up")')
     ok('no e-mail confirmation is asked ("Confirm email" off): an account works as soon as it is created', isinstance(j, dict) and j.get('mailer_autoconfirm') is True, raw)
     st, acao, j, raw = call(base, '/auth/v1/token?grant_type=password', 'OPTIONS', extra={'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'apikey,content-type'})
     ok('the browser may log in from the page (CORS preflight)', st in (200, 204) and cors(acao), f'HTTP {st}, CORS {acao!r}')

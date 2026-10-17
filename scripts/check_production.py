@@ -16,7 +16,7 @@ arrive after the right one.
 Exit codes: 0 production is this commit (or --report); 1 it is not; 3 inconclusive (production could not be reached).
 Environment: OL_PROD_URL, OL_PROD_WAIT (seconds to wait for the first match), OL_PROD_HOLD (seconds it must stay matched).
 """
-import os, pathlib, re, subprocess, sys, time, urllib.error, urllib.request
+import json, os, pathlib, re, subprocess, sys, time, urllib.error, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 URL = os.environ.get('OL_PROD_URL', 'https://oito-lados.vercel.app/')
@@ -32,6 +32,24 @@ def fetch(url):
         with urllib.request.urlopen(req, timeout=20) as r:
             m = STAMP.search(r.read().decode('utf-8', 'replace'))
             return m.group(1) if m and m.group(1) else NO_STAMP
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def routine(base):
+    """How the daily routine (api/keepalive.ts) answers a call without the cron's secret: 'ok' when it refuses it (401
+    with {"ok": false}), as it must; otherwise what came back. None when the address cannot be reached at all."""
+    req = urllib.request.Request(base.rstrip('/') + '/api/keepalive', headers={'User-Agent': AGENT, 'Cache-Control': 'no-cache'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return f'HTTP {r.status} sem o segredo'
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', 'replace')[:200]
+        try:
+            ok = e.code == 401 and json.loads(body) == {'ok': False}
+        except ValueError:
+            ok = False
+        return 'ok' if ok else f'HTTP {e.code}: {body}'
     except (urllib.error.URLError, OSError, ValueError):
         return None
 
@@ -95,10 +113,12 @@ def strict(url, want, wait, hold, step, say=print):
 def selftest():
     import http.server, threading
     page = lambda commit: ('<!doctype html><meta name="ol-commit" content="%s"><title>x</title>' % commit).encode()
-    state = {'body': page('aaa'), 'down': False}
+    state = {'body': page('aaa'), 'down': False, 'api': (401, b'{"ok":false}')}
 
     class H(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path.startswith('/api/keepalive') and not state['down']:
+                code, body = state['api']; self.send_response(code); self.end_headers(); self.wfile.write(body); return
             if state['down']:
                 self.send_response(503); self.end_headers(); return
             self.send_response(200); self.send_header('Content-Length', str(len(state['body']))); self.end_headers(); self.wfile.write(state['body'])
@@ -138,6 +158,12 @@ def selftest():
     check('unreachable address reads as None', fetch(url), None)
     state.update(down=False, body=new); later(0.15, down=True); later(0.35, down=False)
     check('a blip while holding does not fail the check', strict(url, 'new1234', 1, 0.6, 0.05, quiet), 0)
+    check('the routine refusing a call without the secret is what is expected', routine(url), 'ok')
+    state.update(api=(500, b'FUNCTION_INVOCATION_FAILED'))
+    check('a routine that breaks when it loads is caught', routine(url), 'HTTP 500: FUNCTION_INVOCATION_FAILED')
+    state.update(api=(404, b'not found'))
+    check('a routine that was not shipped is caught', routine(url), 'HTTP 404: not found')
+    state.update(api=(401, b'{"ok":false}'))
     check('describing a commit outside the history does not crash', 'fora do histórico' in describe('0' * 40) or 'commit 0000000' in describe('0' * 40), True)
     srv.shutdown()
     for f in fails:
@@ -166,7 +192,16 @@ if __name__ == '__main__':
     if not want:
         say('inconclusivo: não sei qual é o commit daqui (sem GITHUB_SHA e sem git).'); sys.exit(3)
     code = strict(URL, want, float(os.environ.get('OL_PROD_WAIT', 420)), float(os.environ.get('OL_PROD_HOLD', 300)), 20, say)
-    if code == 1:
+    if code == 0:
+        # the daily routine ships with the page: it must load, and refuse whoever is not the cron
+        got = routine(URL)
+        if got == 'ok':
+            say('rotina diária no ar: /api/keepalive recusa quem não é o cron (401).')
+        elif got is not None:
+            say(f'rotina diária com problema: /api/keepalive respondeu {got}.')
+            annotate('error', f'A rotina diária (/api/keepalive) respondeu {got}, e não 401. Sem ela o Supabase pausa depois de uma semana.')
+            code = 1
+    elif code == 1:
         annotate('error', 'A produção não está servindo o commit mais recente da main. Na Vercel, promova o deploy desse commit (ou faça um novo merge). Veja "Publicação" no CLAUDE.md.')
     elif code == 3:
         annotate('warning', f'Inconclusivo: não consegui ler {URL} daqui.')

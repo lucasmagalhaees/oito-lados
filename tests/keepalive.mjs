@@ -31,6 +31,21 @@ const [pUrl, pKey] = ['CLOUD_URL', 'CLOUD_KEY'].map(n => shipped.match(new RegEx
 eq('as it ships: the project of src/core/cloud.ts is the one asked, with its publishable key', await (async () => { asked = []; const r = await mod.keepalive(req('Bearer segredo-de-teste-123456'), env, db(200)); return [r.status, asked]; })(),
   pUrl ? [200, [[pUrl + '/rest/v1/rpc/keepalive', 'POST', pKey, null]]] : [503, []]);
 eq('the handler Vercel calls', typeof mod.default.fetch, 'function');
+// As Vercel ships it: each file compiled by itself, its imports kept as written, and run by Node as an ES module. The
+// bundle above hides an import Node cannot resolve (one without its extension broke the function at load, found in
+// the review of PR #35); this does not.
+{
+  const { execFileSync } = await import('node:child_process'), fs = await import('node:fs');
+  const out = path.join(root, 'tests', '.build', 'vercel');
+  fs.rmSync(out, { recursive: true, force: true });
+  try { execFileSync(path.join(root, 'node_modules', '.bin', 'tsc'), ['--ignoreConfig', path.join(root, 'api', 'keepalive.ts'), '--outDir', out, '--rootDir', root, '--module', 'esnext', '--moduleResolution', 'bundler', '--target', 'es2022', '--skipLibCheck', '--lib', 'es2022,dom', '--noEmit', 'false'], { stdio: 'pipe' }); }
+  catch (e) { console.log(String(e.stdout || e.message)); process.exit(1); }
+  fs.writeFileSync(path.join(out, 'package.json'), '{"type":"module"}');
+  let loaded = null, why = '';
+  try { loaded = await import(pathToFileURL(path.join(out, 'api', 'keepalive.js')).href); } catch (e) { why = String(e.code || e.message); }
+  eq('as Vercel ships it, file by file, the function loads in Node', [!!loaded, why], [true, '']);
+  if (loaded) { const r = await loaded.default.fetch(req(null)); eq('and without the secret it answers 401, not 500', r.status, 401); }
+}
 for (const f of fails) console.log('FAIL', f);
 console.log(`${n - fails.length}/${n} keep-alive checks passed`);
 process.exit(fails.length ? 1 : 0);

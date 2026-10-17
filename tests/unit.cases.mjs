@@ -617,6 +617,22 @@ export default function cases(Core) {
   eq('join: after a rewrite on one side, what the other made before it is left out, and what it made after it is kept', [syJ3.state.bets.map(b => b.id), syJ3.state.deposits.map(d => d.v), syJ3.state.epoch, syJ3.dropped], [['n', 'late'], [500, 70], 2800, 2]);
   eq('join: in either order', Core.sameState(Core.mergeStates(syReset, syOld).state, syJ3.state), true);
   eq('join: after a change of currency, nothing from the other side in the old currency is mixed in', Core.mergeStates(syOld, { ...syReset, cur: 'USD' }).state.bets.map(b => b.id), ['n']);
+  // what the review of PR #35 found, each as it was found
+  const syServer = sys([syb('a', 100, { u: 100 }), syb('b', 200, { u: 200 })], [{ t: 50, v: 1000 }], { epoch: 0 });
+  const syWiped = sys([], [], { epoch: 9000 });
+  eq('first meeting: a device that was reset, with nothing on it, takes the server history and does not wipe it', [Core.firstMeet(syWiped, syServer).how, Core.firstMeet(syWiped, syServer).canJoin], ['adopt', true]);
+  eq('first meeting: nothing on the server yet, this device goes up', [Core.firstMeet(syServer, null).how, Core.firstMeet(syServer, sys([], [])).how], ['push', 'push']);
+  eq('first meeting: one side holds all the other has, in the same currency, so they are summed without asking', [Core.firstMeet(sys([syb('a', 100)], [{ t: 50, v: 1000 }], { epoch: 9000 }), syServer).how, Core.firstMeet(syServer, sys([syb('a', 100)])).how], ['union', 'union']);
+  eq('first meeting: each with something of its own, the person is asked; summing is offered only in the same currency', [Core.firstMeet(sys([syb('z', 300)]), syServer), Core.firstMeet(sys([syb('z', 300)], [], { cur: 'USD' }), syServer)], [{ how: 'ask', canJoin: true }, { how: 'ask', canJoin: false }]);
+  const syBoth = Core.joinBoth(sys([syb('z', 300, { u: 300 })], [{ t: 20, v: 5 }], { epoch: 9000 }), syServer);
+  eq('"Juntar os dois" sums both, even when one side had a rewrite', [syBoth.state.bets.map(b => b.id), syBoth.state.deposits.map(d => d.v), syBoth.dropped], [['a', 'b', 'z'], [5, 1000], 0]);
+  const syUsd = sys([syb('u1', 10, { u: 10 })], [{ t: 5, v: 200 }], { cur: 'USD' }), syBrl = sys([syb('r1', 20, { u: 20 })], [{ t: 6, v: 1000 }], { cur: 'BRL' });
+  const syCur1 = Core.mergeStates(syUsd, syBrl), syCur2 = Core.mergeStates(syBrl, syUsd);
+  eq('two currencies with no rewrite are never summed: the later activity is kept whole, the same in both orders', [syCur1.state.cur, syCur1.state.deposits.map(d => d.v), syCur1.dropped, Core.sameState(syCur1.state, syCur2.state)], ['BRL', [1000], 2, true]);
+  const syCashed = syb('c', 100, { status: 'cashed', payout: 15, settledAt: 500, u: 500 }), syRenamed = syb('c', 100, { from: 'Zé', u: 900 });
+  eq('a bet closed on one device is not opened again by a later change to the old open copy, in either order', [Core.mergeStates(sys([syCashed]), sys([syRenamed])).state.bets[0].status, Core.mergeStates(sys([syRenamed]), sys([syCashed])).state.bets[0].status], ['cashed', 'cashed']);
+  eq('two copies that differ only in the order of their keys are the same, so nothing is sent again', [Core.sameState({ v: 1, cur: 'BRL', deposits: [], bets: [syb('a', 1, { u: 1 })] }, { bets: [{ ...syb('a', 1), u: 1, payout: 0 }], deposits: [], cur: 'BRL', v: 1 }), Core.sameState(sys([syb('a', 1)]), sys([syb('a', 2)]))], [true, false]);
+  eq('a rewrite is never behind the one already known, even with the clock of the device running late', Core.stamp(sys([syb('a', 1)], [], { epoch: 5000 }), sys([], [], { epoch: 5000 }), 2000).epoch, 5001);
   eq('join: the conversions of the side that wins a rewrite; a union otherwise', [Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { conv: [{ t: 2 }] })).state.conv.map(c => c.t), Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { epoch: 5, conv: [{ t: 2 }] })).state.conv.map(c => c.t)], [[1, 2], [2]]);
   eq('state size: what each side holds', Core.stateSize(syPh), { bets: 2, deposits: 2 });
   /* the server copy: how a call is signed, and what is typed to log in */

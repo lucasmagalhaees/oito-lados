@@ -9,6 +9,12 @@ create table if not exists public.states (
   updated_at timestamptz not null default now()
 );
 
+-- a ceiling on the size of a row: with sign-ups open, nobody can fill the 500 MB of the free plan with one account.
+-- 2 MB is some thousands of bets; the app says when a sync is refused.
+do $$ begin
+  alter table public.states add constraint states_size check (octet_length(data::text) <= 2000000);
+exception when duplicate_object then null; end $$;
+
 alter table public.states enable row level security;
 -- Supabase grants everything on new tables to anon and authenticated by default: here only what is used is left.
 -- anon may select so the daily routine can count; with no policy for anon it sees no row. Nobody may delete.

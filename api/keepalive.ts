@@ -1,7 +1,7 @@
 // Runs once a day, called by the Vercel cron (vercel.json): one small query to the database, so the free Supabase
 // project does not pause for lack of use. The app does not depend on it: with the project paused, the data stays on each
 // device and only the syncing stops (D98). Only the cron may call it: Vercel sends CRON_SECRET in `Authorization`.
-import { CLOUD_KEY, CLOUD_URL, cloudHeaders, cloudSet } from '../src/core/cloud';
+import { CLOUD_KEY, CLOUD_URL, cloudHeaders, cloudSet } from '../src/core/cloud.js';
 
 declare const process: { env: Record<string, string | undefined> };
 

@@ -1222,7 +1222,7 @@ with sync_playwright() as p:
     assert all('Sem conexão com a ESPN' in t for _, t in waits) and [re.search(r'nova tentativa em (\d+ \w+)', t).group(1) for _, t in waits] == ['1 min', '2 min', '4 min', '5 min', '5 min'], ('and the screen says when the next try is', [t for _, t in waits])
     back, said = round_(False); assert back == 30000 and 'Sem conexão' not in said and 'nova tentativa' not in said, ('one round that goes through and the pace is the usual one again', back, said)
     c7.close(); PHASE['n'] = was_phase
-    # the same bankroll on two devices, through a simulated server: login by a code sent by e-mail, the first meeting of two
+    # the same bankroll on two devices, through a simulated server: login with e-mail and password, the first meeting of two
     # histories, changes going both ways, the server out of reach, a reset that does not come back, a token renewed, leaving
     was_phase = PHASE['n']; PHASE['n'] = 0
     now_ms = int(datetime.datetime.now().timestamp() * 1000)
@@ -1284,6 +1284,8 @@ with sync_playwright() as p:
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [250, 500, 1000], 'sent by itself, without a tap'
     phone.evaluate('document.dispatchEvent(new Event("visibilitychange"))'); phone.wait_for_function('window.__OL.S.deposits.length === 3')
     assert money(phone) == 'R$ 1.650,00', 'coming back to the app brings it'
+    before = len(CLOUD['log']); phone.click('[data-act=cloudsync]'); synced(phone)
+    assert [m for m, _ in CLOUD['log'][before:]] == ['GET'], ('a sync with nothing new reads and sends nothing back', CLOUD['log'][before:])
     # the server out of reach: the phone keeps working, says so, and catches up when it is back
     CLOUD['down'] = True
     phone.fill('#dep', '50'); phone.click('[data-act=deposit]'); assert money(phone) == 'R$ 1.700,00'
@@ -1307,6 +1309,22 @@ with sync_playwright() as p:
     phone.click('[data-act=cloudout]'); assert phone.locator('#cloudemail').count() == 1 and 'continua aqui' in phone.inner_text('#toast')
     before = len(CLOUD['log']); phone.fill('#dep', '5'); phone.click('[data-act=deposit]'); phone.wait_for_timeout(2600)
     assert money(phone) == 'R$ 5,00' and len(CLOUD['log']) == before, 'logged out: nothing is sent'
+    # coming back to the same account on a device already joined with it: no question again, the two are simply joined
+    login(phone, 'lucas@exemplo.com'); synced(phone)
+    assert phone.locator('#cloudask').count() == 0 and money(phone) == 'R$ 15,00' and sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [5, 10], (money(phone), CLOUD['rows']['u1'])
+    # a device reset before it ever logged in takes the server history, and never wipes it (found in the review of PR #35)
+    c3d, third, t_errs = device(dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 9000, v=77)], bets=[]))
+    third.click('[data-act=reset]'); third.click('[data-act=doreset]'); assert money(third) == 'R$ 0,00' and S_(third)['epoch'] > now_ms
+    login(third, 'lucas@exemplo.com'); synced(third)
+    assert third.locator('#cloudask').count() == 0 and money(third) == 'R$ 15,00' and sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [5, 10], ('the reset device takes the history; the server keeps it', money(third), CLOUD['rows']['u1'])
+    # another history in another currency cannot be summed: only "keep one" is offered
+    c4d, fourth, f_errs = device(dict(v=1, cur='USD', seen=now_ms, deposits=[dict(t=now_ms - 8000, v=40)], bets=[]))
+    login(fourth, 'lucas@exemplo.com'); fourth.wait_for_selector('#cloudask')
+    assert fourth.locator('[data-act=cloudfirst][data-c=join]').count() == 0 and 'aqui USD, no servidor BRL' in fourth.inner_text('#cloudcur'), fourth.inner_text('#cloud')
+    fourth.click('[data-act=cloudfirst][data-c=there]'); synced(fourth)
+    assert money(fourth) == 'R$ 15,00' and S_(fourth)['cur'] == 'BRL', ('kept the server history, in its currency', money(fourth))
+    assert not t_errs and not f_errs, (t_errs, f_errs)
+    for c in (c3d, c4d): c.close()
     # another person never sees this row
     cx, other, ox = device(dict(v=1, deposits=[], bets=[])); login(other, 'outra@pessoa.com', 'outra-senha-9', 'cloudup'); synced(other)
     assert S_(other)['deposits'] == [] and set(CLOUD['rows']) == {'u1', 'u2'}, 'a new person gets an empty history of their own'

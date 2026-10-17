@@ -49,6 +49,7 @@ expect 'without login nothing is seen' "$(as anon '' "select count(*) from publi
 denied 'without login nothing is written' anon '' "insert into public.states (user_id, data) values ('$A', '{}')"
 expect 'the routine of the cron runs as anon and sees no row' "$(as anon '' "select public.keepalive()")" '0'
 expect 'both rows are still there' "$(q -c "select count(*) from public.states")" '2'
+denied 'a row past the ceiling of 2 MB is refused' authenticated $A "update public.states set data = jsonb_build_object('bets', '[]'::jsonb, 'deposits', '[]'::jsonb, 'pad', repeat('x', 2000001)) where user_id = '$A'"
 expect 'row level security is on' "$(q -c "select relrowsecurity from pg_class where oid = 'public.states'::regclass")" 't'
 
 echo "$((n - fails))/$n schema checks passed"
