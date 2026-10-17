@@ -1125,7 +1125,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - O import da rotina com `.js`; o teste compila arquivo por arquivo como a Vercel; a checagem de produção chama `/api/keepalive` e exige 401.
   - Linha do banco com teto de 2 MB, contra o cadastro aberto encher o plano grátis. A cópia do servidor passa pela conferência de um backup. Um 401 do banco renova o token. O tema que vem do outro aparelho aparece na hora. O cashout confere a aposta como ela está depois das chamadas à ESPN.
   - Uma sincronização sem nada novo regravava o servidor toda vez (a comparação dependia da ordem das chaves). Achado nos testes desta correção, não pela revisão.
-- **Decisão de produto embutida, a confirmar com o Lucas:** em moedas diferentes, o app não oferece "Juntar os dois", só ficar com um.
+- **Decisão de produto embutida, confirmada pelo Lucas às 11:45 ("faz sentido"):** em moedas diferentes, o app não oferece "Juntar os dois", só ficar com um.
 - **Ficou como estava:** a senha fica no campo da tela depois de uma tentativa errada, até a página recarregar (risco só local); o "Sem conexão com o servidor" também aparece quando o servidor recusa a linha por tamanho.
 
 ## Pendências em 10/10/2026
@@ -1135,7 +1135,6 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Antes da Etapa 2: reconferir os planos grátis da Vercel e do Supabase e testar por duas semanas se a rotina diária segura o projeto do Supabase acordado (D98) | Quem fizer a Etapa 2 |
 | Rodar no Supabase o trecho novo do `schema.sql`: o teto de 2 MB da linha (D102) | Lucas |
-| Dizer se, em moedas diferentes, ficar só com um dos dois históricos está bom (D102) | Lucas |
 | Criar a conta pelo app num aparelho, entrar no outro e ver a mesma banca (D99, D100). Depois, desligar "Allow new users to sign up" no Supabase | Lucas |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
