@@ -2,6 +2,18 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.26.1] - 2026-10-17
+
+### Corrigido
+- Um dado estragado ou de versão antiga (aposta sem seleção, depósito vazio, cache de outro formato, backup ou linha do servidor estragados) não derruba mais o app: o que não dá para mostrar fica de fora e o resto aparece.
+- O aviso que aparece no alto não engole mais o toque no que está embaixo dele.
+- O foco do teclado não volta mais para o começo da página a cada toque; abrir o cupom ou a tela de copiar leva o foco para ela.
+- "Escolher fotos" e "Restaurar de um arquivo" funcionam pelo teclado.
+- Contraste: as dicas dos campos e o `≈` da odd estimada passam de 4,5:1 nos dois temas.
+- Os botões pequenos soltos na tela (`×`, "Atualizar", o chip de apostas da luta, "trocar", "desfazer") recebem uma área de toque de 44 px, sem mudar o desenho.
+- O saldo no alto é lido com o valor pelo leitor de tela, o cupom diz qual tipo de aposta está ligado e a tela de copiar diz o nome dela.
+- O ROI saía +53,9% num lugar e +53,8% em outro para as mesmas apostas, e uma perda de 5,45% saía −5,4%: agora sai igual em todo lugar, e a perda arredonda como o ganho.
+
 ## [0.26.0] - 2026-10-17
 
 ### Adicionado
