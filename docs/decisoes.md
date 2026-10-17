@@ -60,6 +60,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 29. PR #31 (D92) mesclado às 17:15 de 11/10/2026. Às 17:43: "quero que proponha melhorias"; oito propostas, três recomendadas, e "pode fazer" (D93, D94, D95). As outras cinco ficaram propostas: odds em ritmo mais lento longe da luta e placar longo só de vez em quando (as duas depois de medir), trocar os três seletores do sistema que sobraram, os resultados do último card, e fechar as pendências de confirmação numa lista.
 30. PR #32 (D93 a D95) mesclado antes das 18:16 de 11/10/2026. Às 18:16 e 18:17: o que faz sentido fazer agora, e "me manda o fazer agora": os três seletores (D96) e a lista de pendências. Às 18:19, à lista de 23 linhas: "por mim tá tudo ok" (D97).
 31. PR #33 (D96, D97) mesclado às 18:44 de 11/10/2026. Em 17/10/2026, entre 09:18 e 09:25: quanto custa um backend, e como ele seria quando vier (D98).
+32. Em 17/10/2026, a etapa 2: login por código e a cópia no servidor (D99).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -1061,7 +1062,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 ## D98. Quando vier backend: Etapa 2, Supabase Free e rotina diária na Vercel
 
 - **Contexto (17/10/2026, 09:18 a 09:25):** "e se eu quiser evoluir isso pra serviço backend com banco de dados, quanto o custo?", "o que você sugere?", "quero a free tier", "quero entender cada decisão", a pergunta sobre uma rotina que faz um `select` a cada poucos dias para o banco não pausar, "se o banco morrer o plano B já existe: o app como ele é hoje com backup no Telegram" e "pode registrar, e a rotina usando cron da Vercel".
-- **Não é para fazer agora.** O app continua estático (MVP, D33). Isto registra como será quando um dos gatilhos de `docs/escala.md` aparecer: o mesmo saldo no iPhone e no PC, dados perdidos, ou amigos usando.
+- **Não é para fazer agora** (revisto no mesmo dia: o Lucas pediu para fazer, D99). O app continua estático (MVP, D33). Isto registra como será quando um dos gatilhos de `docs/escala.md` aparecer: o mesmo saldo no iPhone e no PC, dados perdidos, ou amigos usando.
 - **Decisão do Lucas:**
   - **Plano grátis.** Vercel Hobby para as funções do servidor e Supabase Free para banco e login.
   - **Começa pela Etapa 2:** o servidor só guarda e sincroniza. A ESPN, o preço e a liquidação continuam no aparelho.
@@ -1084,12 +1085,28 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - Se os termos do plano grátis do Supabase dizem algo sobre manter o projeto acordado por rotina.
   - Se a rotina parar em silêncio, ninguém nota. Ideia para a hora de fazer: o app mostrar quando ela rodou pela última vez.
 
+## D99. Etapa 2 feita: a mesma banca em dois aparelhos
+
+- **Contexto (17/10/2026):** depois da D98, "to seriamente querendo fazer isso" e "quando terminar já pode começar a fazer". Duas perguntas respondidas na hora: login por **código por e-mail** e **mesmo repositório** (o `oito-lados-servidor` oferecido não é usado).
+- **Decisão:**
+  - **Login por um código de 6 números mandado por e-mail, digitado no app.** Sem senha. O link mágico foi descartado porque o app instalado na Tela de Início do iPhone não recebe link de e-mail: o link abriria no Safari, com outro armazenamento.
+  - **Uma linha por pessoa com o estado inteiro**, e não as tabelas da etapa 3. Para guardar uma cópia basta, e o formato do estado já é o do backup.
+  - **A página chama o Supabase direto**, sem função da Vercel no meio. Quem pode ler e escrever cada linha é decidido no banco, pelas regras de `supabase/schema.sql`. A única função é a rotina diária.
+  - **Juntar, não sobrescrever.** Apostas pelo `id`, depósitos pelo instante e valor. Três marcas, postas a cada gravação por `Core.stamp`, resolvem o resto: quando cada aposta mudou, quando as configurações mudaram, e quando o histórico foi reescrito (zerar, restaurar, trocar de moeda). A reescrita vence inteira, para um zerar não voltar do outro aparelho.
+  - **Na primeira vez de um aparelho com histórico diferente do servidor, o app pergunta** (juntar, ficar com o daqui, ficar com o de lá) em vez de juntar sozinho: juntar duas bancas que eram de teste pode somar depósitos que ninguém quer.
+  - **Sem projeto, sem cartão.** Com o endereço e a chave vazios no código, a página não mostra o cartão e não chama nada. O Lucas mandou os dois às 10:28 de 17/10/2026, e eles entraram neste mesmo PR. O teste ponta a ponta põe um servidor simulado no lugar.
+- **Descartado:** função da Vercel entre a página e o banco (mais uma peça e mais chamadas, sem ganho para um usuário); guardar a chave secreta em qualquer lugar do código; sincronizar com o app fechado (exigiria o servidor ler a ESPN, que é a etapa 3).
+- **Fatos de terceiro, lidos em 17/10/2026** no código-fonte do Supabase Auth (`openapi.yaml`, commit `ce9a8ee` de 22/09/2026) e do cliente oficial (`supabase-js`, commit `bb56484` de 16/10/2026), e na documentação da Vercel: os caminhos e corpos de `/auth/v1/otp`, `/auth/v1/verify` e `/auth/v1/token`; a chave `sb_publishable_` vai em `apikey` e nunca em `Authorization`; o e-mail só manda código se o modelo tiver `{{ .Token }}`; o cron da Vercel chama o endereço de produção com `GET`, em UTC, uma vez por dia no Hobby, pode atrasar dentro da hora, e manda `CRON_SECRET` no cabeçalho. **Nada disso foi visto contra o projeto de verdade**, que ainda não existe.
+- **Falta, do lado do Lucas:** rodar o `schema.sql`, pôr o código no modelo de e-mail e o `CRON_SECRET` na Vercel (`supabase/README.md`). Esta sessão não alcança o Supabase (a rede dela recusa o endereço), então nada foi conferido contra o projeto.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Antes da Etapa 2: reconferir os planos grátis da Vercel e do Supabase e testar por duas semanas se a rotina diária segura o projeto do Supabase acordado (D98) | Quem fizer a Etapa 2 |
+| Rodar o `supabase/schema.sql` no projeto, pôr `{{ .Token }}` nos modelos de e-mail e `CRON_SECRET` na Vercel, seguindo `supabase/README.md` (D99) | Lucas |
+| Com o projeto no ar: entrar pelo iPhone e pelo PC e ver a mesma banca; ver se o e-mail chega com o código (D99) | Lucas |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |

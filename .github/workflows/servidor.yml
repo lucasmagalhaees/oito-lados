@@ -1,0 +1,35 @@
+name: Servidor
+
+# Checks the real Supabase project of src/core/cloud.ts: up, e-mail login on, schema run, rules holding for someone not
+# logged in. Not a required check: a red run says what to fix in the project, not in the code. It reads only, and
+# never asks for a login code, so nobody gets an e-mail.
+on:
+  pull_request:
+    paths:
+      - "src/core/cloud.ts"
+      - "supabase/**"
+      - "api/**"
+      - "tests/cloud_live.py"
+      - ".github/workflows/servidor.yml"
+  schedule:
+    - cron: "41 12 * * 5"   # Fridays 09:41 in São Paulo, next to the ESPN contract
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  project:
+    name: Supabase project
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Self-test of the checker
+        run: python tests/cloud_live.py --mock
+      - name: Check the real project
+        # exit 3 = this runner could not reach the project: inconclusive, reported as a warning
+        run: python tests/cloud_live.py || [ $? -eq 3 ]
