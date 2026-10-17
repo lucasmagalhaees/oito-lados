@@ -11,7 +11,7 @@ Passos para o Lucas. Os nomes de tela do Supabase são de 17/10/2026, lidos na d
 
 1. Criar um projeto no plano Free, de preferência na região de São Paulo. **A senha do banco fica só com você**: o app não usa.
 2. **SQL Editor:** colar o conteúdo de `schema.sql` e rodar.
-3. **Authentication → Email Templates:** nos modelos "Magic Link" e "Confirm signup", pôr o código no corpo do e-mail, por exemplo `Seu código do Oito Lados: {{ .Token }}`. Sem o `{{ .Token }}` o e-mail chega com um link, e o app pede o código.
+3. **Authentication → Sign In / Providers:** em "User Signups", desligar **Confirm email** (o app não manda e-mail nenhum: D100) e deixar "Allow new users to sign up" ligado até as contas existirem. Em **Email**, "Minimum password length" em **8**, o mesmo do app.
 4. **Project Settings → API Keys:** copiar a **publishable key** (começa com `sb_publishable_`) e o endereço do projeto (`https://<id>.supabase.co`). Os dois são públicos por natureza (vão na página) e é só isso que precisa ser mandado. **A secret key (`sb_secret_`) não sai do Supabase**: não mande, não cole em lugar nenhum.
 5. **Vercel → Settings → Environment Variables:** criar `CRON_SECRET` com um texto aleatório de pelo menos 16 caracteres, em Production. É o que só o cron da Vercel conhece; sem ele a rotina diária não roda.
 

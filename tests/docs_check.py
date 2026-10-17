@@ -407,11 +407,12 @@ check('the schema is checked on a local Postgres in the verify', 'run schema   t
 crons = json.loads(read('vercel.json')).get('crons', [])
 check('the routine runs once a day, at the time the spec says', crons == [{'path': '/api/keepalive', 'schedule': '17 9 * * *'}] and '`17 9 * * *`' in spec and 'uma vez por dia' in spec, crons)
 check('only the cron gets into the routine', "request.headers.get('authorization') !== `Bearer ${secret}`" in read('api/keepalive.ts') and 'CRON_SECRET' in spec)
-for pattern, text in ((r'SYNC_AFTER = 2000;', '2 s depois da última gravação (`SYNC_AFTER`'), (r'CLOUD_TIMEOUT = 15000', 'no máximo 15 s (`CLOUD_TIMEOUT`)'), (r'export const TOKEN_MARGIN = 60e3;', 'renovada 1 min antes de vencer (`TOKEN_MARGIN`)')):
+for pattern, text in ((r'SYNC_AFTER = 2000;', '2 s depois da última gravação (`SYNC_AFTER`'), (r'CLOUD_TIMEOUT = 15000', 'no máximo 15 s (`CLOUD_TIMEOUT`)'), (r'export const TOKEN_MARGIN = 60e3;', 'renovada 1 min antes de vencer (`TOKEN_MARGIN`)'), (r'export const MIN_PASSWORD = 8, MAX_PASSWORD = 72;', 'A senha tem de 8 (`MIN_PASSWORD`')):
     check('code still has the documented constant', re.search(pattern, csync_src + cloud_src), pattern)
     check('spec still states the constant', text in spec, text)
-check('the join and the marks have tests and are in the spec', all(('Core.' + f) in unit_src for f in ('stamp', 'mergeStates', 'sameState', 'cloudHeaders', 'isCode')) and '`Core.mergeStates`' in spec and '`Core.stamp`' in spec)
+check('the join and the marks have tests and are in the spec', all(('Core.' + f) in unit_src for f in ('stamp', 'mergeStates', 'sameState', 'cloudHeaders', 'isPassword')) and '`Core.mergeStates`' in spec and '`Core.stamp`' in spec)
 check('the marks are put by the save itself, so no part of the app has to remember them', 'Core.stamp(written, S, Date.now())' in read('src/app/state.ts'))
+check('the password only travels: it is never written to storage', "LS.set('oitolados.auth.v1', session)" in csync_src and 'pass' not in csync_src.split('interface Session')[1].split('}')[0] and 'nunca é guardada' in spec)
 check('the session is not in the backup', 'oitolados.auth.v1' not in read('src/app/backup.ts') and '`oitolados.auth.v1`' in spec)
 
 # 9. the verification register keeps both halves, and the harness files it relies on are in place

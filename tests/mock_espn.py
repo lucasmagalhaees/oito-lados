@@ -123,7 +123,7 @@ FX = {'down': False, 'calls': 0, 'body': dict(amount=1.0, base='BRL', date='2026
 # The server copy (Supabase), simulated: login by a code sent by e-mail, tokens, and one row per person that only that person
 # can read or write, as the policies of supabase/schema.sql say. Shapes as in the Supabase Auth OpenAPI and the official JS
 # client (see src/core/cloud.ts). CLOUD['down'] cuts it off; CLOUD['log'] keeps (method, path) of every call.
-CLOUD = {'down': False, 'log': [], 'users': {}, 'codes': {}, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
+CLOUD = {'down': False, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
 def cloud(route):
     req, u = route.request, route.request.url
     path = re.sub(r'^https://[^/]+', '', u); CLOUD['log'].append((req.method, path.split('?')[0]))
@@ -145,22 +145,24 @@ def cloud(route):
         acc, ref = f'acc-{uid}-{n}', f'ref-{uid}-{n}'
         CLOUD['tokens'][acc] = (uid, time.time() + CLOUD['ttl']); CLOUD['refresh'][ref] = uid
         return {'access_token': acc, 'refresh_token': ref, 'token_type': 'bearer', 'expires_in': CLOUD['ttl'], 'expires_at': int(time.time() + CLOUD['ttl']), 'user': {'id': uid, 'email': CLOUD['users'][uid]}}
-    if path.startswith('/auth/v1/otp'):
-        email = body.get('email', '').strip().lower()
-        if '@' not in email: return send(422, {'msg': 'invalid email'})
-        CLOUD['codes'][email] = '%06d' % (100000 + len(CLOUD['codes']) * 7919 % 900000)
-        return send(200, {})
-    if path.startswith('/auth/v1/verify'):
-        email = body.get('email', '').strip().lower()
-        if body.get('type') != 'email' or CLOUD['codes'].get(email) != body.get('token'):
-            return send(403, {'msg': 'Token has expired or is invalid'})
-        del CLOUD['codes'][email]
-        uid = next((k for k, v in CLOUD['users'].items() if v == email), None) or 'u%d' % (len(CLOUD['users']) + 1)
-        CLOUD['users'][uid] = email
+    # errors in the shape of Supabase Auth (internal/api/apierrors: code, error_code, msg)
+    err = lambda status, code, msg: send(status, {'code': status, 'error_code': code, 'msg': msg})
+    who = lambda email: next((k for k, v in CLOUD['users'].items() if v == email), None)
+    if path.startswith('/auth/v1/signup'):
+        email, pw = body.get('email', '').strip().lower(), body.get('password', '')
+        if '@' not in email: return err(400, 'validation_failed', 'Unable to validate email address: invalid format')
+        if len(pw) < 8: return err(422, 'weak_password', 'Password should be at least 8 characters.')
+        if who(email): return err(422, 'user_already_exists', 'User already registered')
+        uid = 'u%d' % (len(CLOUD['users']) + 1); CLOUD['users'][uid] = email; CLOUD['passwords'][uid] = pw
+        if CLOUD['confirm']: return send(200, {'id': uid, 'email': email})              # "Confirm email" on: a user, and no session
+        return send(200, session(uid))
+    if path.startswith('/auth/v1/token') and 'grant_type=password' in u:
+        uid = who(body.get('email', '').strip().lower())
+        if not uid or CLOUD['passwords'].get(uid) != body.get('password'): return err(400, 'invalid_credentials', 'Invalid login credentials')
         return send(200, session(uid))
     if path.startswith('/auth/v1/token'):
         uid = CLOUD['refresh'].pop(body.get('refresh_token'), None)           # a refresh token is used once
-        return send(200, session(uid)) if uid and 'grant_type=refresh_token' in u else send(400, {'msg': 'Invalid Refresh Token'})
+        return send(200, session(uid)) if uid and 'grant_type=refresh_token' in u else err(400, 'refresh_token_not_found', 'Invalid Refresh Token')
     if path.startswith('/auth/v1/logout'):
         return route.fulfill(status=204, headers=cors)
     if path.startswith('/rest/v1/rpc/keepalive'):

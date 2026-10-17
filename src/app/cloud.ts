@@ -26,11 +26,13 @@ function sess(): Session | null {
 const keep = (): void => { LS.set('oitolados.auth.v1', session); };
 export const signedIn = (): boolean => !!sess();
 
-/** What the card shows: the step of the login, the e-mail being used, the last sync, and a message. */
-export const cloud: { step: 'email' | 'code'; email: string; busy: boolean; msg: string; at: number; err: string; ask: { here: { bets: number; deposits: number }; there: { bets: number; deposits: number } } | null; remote: AppState | null } =
-  { step: 'email', email: '', busy: false, msg: '', at: 0, err: '', ask: null, remote: null };
+/** What the card shows: the e-mail being typed, the last sync, and a message. */
+export const cloud: { email: string; busy: boolean; msg: string; at: number; err: string; ask: { here: { bets: number; deposits: number }; there: { bets: number; deposits: number } } | null; remote: AppState | null } =
+  { email: '', busy: false, msg: '', at: 0, err: '', ask: null, remote: null };
+// the password typed, kept only in memory while a login is tried, so a repaint does not empty the field; never stored
+let pass = '';
 
-class CloudError extends Error { constructor(public status: number, message: string) { super(message); } }
+class CloudError extends Error { constructor(public status: number, message: string, public code = '') { super(message); } }
 async function call(path: string, init: { method?: string; body?: unknown; token?: string | null; prefer?: string }): Promise<Json> {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), CLOUD_TIMEOUT);
   const headers = Core.cloudHeaders(KEY, init.token || null);
@@ -39,7 +41,7 @@ async function call(path: string, init: { method?: string; body?: unknown; token
     const r = await fetch(URL + path, { method: init.method || 'GET', headers, body: init.body === undefined ? undefined : JSON.stringify(init.body), signal: ctl.signal, cache: 'no-store' });
     const text = await r.text();
     let j: Json = null; try { j = text ? JSON.parse(text) : null; } catch (e) { /* an answer that is not JSON */ }
-    if (!r.ok) throw new CloudError(r.status, (j && (j.msg || j.message || j.error_description || j.error)) || `HTTP ${r.status}`);
+    if (!r.ok) throw new CloudError(r.status, (j && (j.msg || j.message || j.error_description || j.error)) || `HTTP ${r.status}`, (j && (j.error_code || j.code)) || '');
     return j;
   } finally { clearTimeout(t); }
 }
@@ -58,33 +60,42 @@ async function token(): Promise<string | null> {
   catch (e) { if (e instanceof CloudError && (e.status === 400 || e.status === 401 || e.status === 403)) { session = null; keep(); cloud.err = 'A sessão expirou. Entra de novo para voltar a sincronizar.'; } throw e; }
 }
 
-/* ---- login: a code sent by e-mail, typed in the app ---- */
-export async function sendCode(email: string): Promise<void> {
-  email = email.trim();
+/* ---- login: e-mail and password ----
+   The free plan of Supabase keeps the e-mails it sends on its default text, which carries a link and no code (D100),
+   and a link opened from the e-mail does not reach the app installed on the home screen of the iPhone. So: an account
+   with e-mail and password, created in the app, and no e-mail sent at all ("Confirm email" off in the project). */
+const LOGIN_WHY: Record<string, string> = {
+  invalid_credentials: 'E-mail ou senha errados. Se ainda não tem conta, toca em "Criar conta".',
+  user_already_exists: 'Esse e-mail já tem conta. Toca em "Entrar", com a senha dela.',
+  weak_password: `Senha fraca: usa pelo menos ${Core.MIN_PASSWORD} caracteres.`,
+  email_not_confirmed: 'O servidor ainda pede confirmação por e-mail: no Supabase, desliga "Confirm email".',
+  signup_disabled: 'O servidor não está aceitando contas novas.',
+  over_request_rate_limit: 'Muitas tentativas. Espera um pouco e tenta de novo.'
+};
+/** Enters with an account (`in`) or creates one (`up`). The password is checked here first and only travels to the server. */
+export async function signIn(mode: 'in' | 'up', email: string, password: string): Promise<void> {
+  email = email.trim(); cloud.email = email; pass = password;
   if (!Core.isEmail(email)) { cloud.msg = 'Digita um e-mail válido.'; render(); return; }
+  if (!Core.isPassword(password)) { cloud.msg = password.length < Core.MIN_PASSWORD ? `A senha tem pelo menos ${Core.MIN_PASSWORD} caracteres.` : 'Senha longa demais.'; render(); return; }
   cloud.busy = true; cloud.msg = ''; cloud.err = ''; blurField(); render();
   try {
-    await call('/auth/v1/otp', { method: 'POST', body: { email, create_user: true } });
-    cloud.step = 'code'; cloud.email = email; cloud.msg = `Mandei um código para ${email}. Pode levar um minuto para chegar.`;
-  } catch (e) { cloud.msg = e instanceof CloudError && e.status === 429 ? 'Muitos pedidos de código. Espera um pouco e tenta de novo.' : 'Não deu para mandar o código agora. Confere a internet e tenta de novo.'; }
-  finally { cloud.busy = false; render(); }
-}
-export async function checkCode(code: string): Promise<void> {
-  if (!Core.isCode(code)) { cloud.msg = 'O código tem 6 números.'; render(); return; }
-  cloud.busy = true; cloud.msg = ''; blurField(); render();
-  try {
-    takeSession(await call('/auth/v1/verify', { method: 'POST', body: { type: 'email', email: cloud.email, token: Core.cleanCode(code) } }), cloud.email);
-    cloud.step = 'email'; cloud.msg = '';
-    cloud.busy = false; await syncNow();
+    const j = await call(mode === 'up' ? '/auth/v1/signup' : '/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } });
+    // with confirmation on, a sign-up answers with the user and no session
+    if (mode === 'up' && j && !j.access_token) throw new CloudError(200, 'no session', 'email_not_confirmed');
+    takeSession(j, email);
+    pass = ''; cloud.msg = ''; cloud.busy = false;
+    await syncNow();
     return;
-  } catch (e) { cloud.msg = e instanceof CloudError && (e.status === 400 || e.status === 401 || e.status === 403) ? 'Código errado ou vencido. Confere ou pede outro.' : 'Não deu para conferir o código agora. Tenta de novo.'; }
+  } catch (e) {
+    const code = e instanceof CloudError ? e.code : '';
+    cloud.msg = LOGIN_WHY[code] || (e instanceof CloudError && e.status === 429 ? LOGIN_WHY.over_request_rate_limit : e instanceof CloudError && e.status ? `Não deu para ${mode === 'up' ? 'criar a conta' : 'entrar'} agora (${e.message}).` : 'Sem conexão com o servidor. Confere a internet e tenta de novo.');
+  }
   cloud.busy = false; render();
 }
-export function backToEmail(): void { cloud.step = 'email'; cloud.msg = ''; render(); }
 /** Leaves the server: the tokens go, the data on this device stays as it is. */
 export async function signOut(): Promise<void> {
   const cur = sess(), t = cur && Date.now() < cur.exp ? cur.access : null;
-  session = null; keep(); cloud.ask = null; cloud.remote = null; cloud.at = 0; cloud.err = ''; cloud.msg = ''; render(); toast('Saiu. O que está neste aparelho continua aqui.');
+  session = null; keep(); pass = ''; cloud.ask = null; cloud.remote = null; cloud.at = 0; cloud.err = ''; cloud.msg = ''; render(); toast('Saiu. O que está neste aparelho continua aqui.');
   if (t) call('/auth/v1/logout?scope=local', { method: 'POST', token: t }).catch(() => { /* the token expires by itself */ });
 }
 
@@ -161,9 +172,10 @@ export function cloudHtml(): string {
   let h = '<section class="card" id="cloud"><span class="label">Sincronizar aparelhos</span>';
   if (!sess() || !session) {
     h += '<p class="hint">Entra com o seu e-mail para ter a mesma banca e as mesmas apostas no celular e no computador. O que está neste aparelho continua aqui, com ou sem conexão.</p>';
-    h += cloud.step === 'email'
-      ? `<div class="field"><span>E-mail</span><input id="cloudemail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="voce@email.com" value="${esc(cloud.email)}" aria-label="Seu e-mail"></div><button class="btn block" data-act="cloudsend" ${cloud.busy ? 'disabled' : ''}>${cloud.busy ? 'Mandando…' : 'Mandar código'}</button>`
-      : `<div class="field"><span>Código</span><input id="cloudcode" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="6 números" aria-label="Código que chegou por e-mail"></div><div class="rowbtns"><button class="btn" data-act="cloudcheck" ${cloud.busy ? 'disabled' : ''}>${cloud.busy ? 'Conferindo…' : 'Entrar'}</button><button class="btn ghost" data-act="cloudback">Outro e-mail</button></div>`;
+    h += `<div class="field"><span>E-mail</span><input id="cloudemail" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="voce@email.com" value="${esc(cloud.email)}" aria-label="Seu e-mail"></div>
+      <div class="field"><span>Senha</span><input id="cloudpass" type="password" autocomplete="current-password" maxlength="${Core.MAX_PASSWORD}" placeholder="pelo menos ${Core.MIN_PASSWORD} caracteres" value="${esc(pass)}" aria-label="Sua senha"></div>
+      <div class="rowbtns"><button class="btn" data-act="cloudin" ${cloud.busy ? 'disabled' : ''}>${cloud.busy ? 'Entrando…' : 'Entrar'}</button><button class="btn ghost" data-act="cloudup" ${cloud.busy ? 'disabled' : ''}>Criar conta</button></div>
+      <p class="hint">Na primeira vez, "Criar conta". No outro aparelho, "Entrar" com o mesmo e-mail e a mesma senha. Nenhum e-mail é mandado.</p>`;
   } else if (cloud.ask) {
     const n = (x: { bets: number; deposits: number }): string => `${x.bets} ${x.bets === 1 ? 'aposta' : 'apostas'} e ${x.deposits} ${x.deposits === 1 ? 'depósito' : 'depósitos'}`;
     h += `<p id="cloudask"><b>Este aparelho e o servidor têm históricos diferentes.</b> Aqui: ${n(cloud.ask.here)}. No servidor: ${n(cloud.ask.there)}.</p>
@@ -180,3 +192,5 @@ export function cloudHtml(): string {
 }
 /** Keeps the e-mail typed, so a repaint does not lose it. */
 export function typedEmail(v: string): void { cloud.email = v; }
+/** Keeps the password typed in memory, for the same reason; it is never stored. */
+export function typedPass(v: string): void { pass = v; }

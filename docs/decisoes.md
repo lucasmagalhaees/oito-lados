@@ -61,6 +61,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 30. PR #32 (D93 a D95) mesclado antes das 18:16 de 11/10/2026. Às 18:16 e 18:17: o que faz sentido fazer agora, e "me manda o fazer agora": os três seletores (D96) e a lista de pendências. Às 18:19, à lista de 23 linhas: "por mim tá tudo ok" (D97).
 31. PR #33 (D96, D97) mesclado às 18:44 de 11/10/2026. Em 17/10/2026, entre 09:18 e 09:25: quanto custa um backend, e como ele seria quando vier (D98).
 32. Em 17/10/2026, a etapa 2: login por código e a cópia no servidor (D99).
+33. Em 17/10/2026, às 10:59, o login trocado para e-mail e senha (D100).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -1087,6 +1088,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 
 ## D99. Etapa 2 feita: a mesma banca em dois aparelhos
 
+- **Revista pela D100 no mesmo dia:** o login passou a ser e-mail e senha.
 - **Contexto (17/10/2026):** depois da D98, "to seriamente querendo fazer isso" e "quando terminar já pode começar a fazer". Duas perguntas respondidas na hora: login por **código por e-mail** e **mesmo repositório** (o `oito-lados-servidor` oferecido não é usado).
 - **Decisão:**
   - **Login por um código de 6 números mandado por e-mail, digitado no app.** Sem senha. O link mágico foi descartado porque o app instalado na Tela de Início do iPhone não recebe link de e-mail: o link abriria no Safari, com outro armazenamento.
@@ -1097,7 +1099,20 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - **Sem projeto, sem cartão.** Com o endereço e a chave vazios no código, a página não mostra o cartão e não chama nada. O Lucas mandou os dois às 10:28 de 17/10/2026, e eles entraram neste mesmo PR. O teste ponta a ponta põe um servidor simulado no lugar.
 - **Descartado:** função da Vercel entre a página e o banco (mais uma peça e mais chamadas, sem ganho para um usuário); guardar a chave secreta em qualquer lugar do código; sincronizar com o app fechado (exigiria o servidor ler a ESPN, que é a etapa 3).
 - **Fatos de terceiro, lidos em 17/10/2026** no código-fonte do Supabase Auth (`openapi.yaml`, commit `ce9a8ee` de 22/09/2026) e do cliente oficial (`supabase-js`, commit `bb56484` de 16/10/2026), e na documentação da Vercel: os caminhos e corpos de `/auth/v1/otp`, `/auth/v1/verify` e `/auth/v1/token`; a chave `sb_publishable_` vai em `apikey` e nunca em `Authorization`; o e-mail só manda código se o modelo tiver `{{ .Token }}`; o cron da Vercel chama o endereço de produção com `GET`, em UTC, uma vez por dia no Hobby, pode atrasar dentro da hora, e manda `CRON_SECRET` no cabeçalho. **Nada disso foi visto contra o projeto de verdade**, que ainda não existe.
-- **Falta, do lado do Lucas:** rodar o `schema.sql`, pôr o código no modelo de e-mail e o `CRON_SECRET` na Vercel (`supabase/README.md`). Esta sessão não alcança o Supabase (a rede dela recusa o endereço), então nada foi conferido contra o projeto.
+- **Falta, do lado do Lucas:** o `CRON_SECRET` na Vercel (`supabase/README.md`). O `schema.sql` foi rodado às 11:01 de 17/10/2026. Esta sessão não alcança o Supabase (a rede dela recusa o endereço), então nada foi conferido contra o projeto.
+
+## D100. Login com e-mail e senha, e não por código
+
+- **Contexto (17/10/2026, 10:54 a 10:59):** o Lucas foi pôr o código no modelo de e-mail e o Supabase não deixou ("ta pedindo upgrade pro pro"). Desde 03/06/2026, projeto novo no plano grátis que usa o e-mail do próprio Supabase não edita os modelos; o padrão traz só o link "Sign in", sem código. Só destrava com o Pro (US$ 25/mês) ou com SMTP próprio, que pede um domínio verificado.
+- **Decisão:** e-mail e senha. A conta é criada no app ("Criar conta") e usada no outro aparelho ("Entrar"). "Confirm email" desligado no projeto (feito pelo Lucas às 10:59), então nenhum e-mail é mandado. Senha de pelo menos 8 caracteres, no app e no projeto.
+- **Descartado:**
+  - **Pro**: contra a D98 (plano grátis).
+  - **Link do e-mail**: no iPhone o link abre no Safari, que guarda os dados separados do app instalado na Tela de Início; seria preciso copiar o link e colar no app.
+  - **SMTP próprio**: pede um domínio, e o `vercel.app` não serve.
+- **Consequências:**
+  - Sem confirmação, uma conta pode ser criada com um e-mail que não é de quem cria. Cada conta só vê a própria linha, então isso não expõe nada de ninguém. O que se perde é o "esqueci a senha", que dependeria de e-mail: se a senha for esquecida, os dados continuam no aparelho, e uma conta nova recomeça a cópia.
+  - Com as contas do Lucas criadas, dá para desligar "Allow new users to sign up" no projeto.
+- **Fatos de terceiro:** a trava dos modelos foi lida em 17/10/2026 em [uma discussão no Supabase](https://supabase.com/contribute/t/860-66969-7729-gd_D_kwDODMpXOc4AnPCz) e num [artigo da Brevo de 08/10/2026](https://www.brevo.com/blog/supabase-email-templates/), e confirmada pela tela do projeto do Lucas. Os caminhos `/auth/v1/signup` e `/auth/v1/token?grant_type=password`, a sessão que o cadastro devolve com a confirmação desligada e os códigos de erro (`user_already_exists`, `invalid_credentials`, `weak_password`, no campo `error_code`) foram lidos no código-fonte do Supabase Auth (commit `ce9a8ee`).
 
 ## Pendências em 10/10/2026
 
@@ -1105,8 +1120,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
 | Antes da Etapa 2: reconferir os planos grátis da Vercel e do Supabase e testar por duas semanas se a rotina diária segura o projeto do Supabase acordado (D98) | Quem fizer a Etapa 2 |
-| Rodar o `supabase/schema.sql` no projeto, pôr `{{ .Token }}` nos modelos de e-mail e `CRON_SECRET` na Vercel, seguindo `supabase/README.md` (D99) | Lucas |
-| Com o projeto no ar: entrar pelo iPhone e pelo PC e ver a mesma banca; ver se o e-mail chega com o código (D99) | Lucas |
+| Criar `CRON_SECRET` na Vercel, seguindo `supabase/README.md` (D99) | Lucas |
+| Criar a conta pelo app num aparelho, entrar no outro e ver a mesma banca (D99, D100). Depois, desligar "Allow new users to sign up" no Supabase | Lucas |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |

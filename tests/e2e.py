@@ -1238,20 +1238,29 @@ with sync_playwright() as p:
         return c, pg_, errs_
     S_ = lambda pg_: pg_.evaluate('window.__OL.S')
     money = lambda pg_: pg_.inner_text('#bal').replace('\xa0', ' ')
-    def login(pg_, email):
-        pg_.fill('#cloudemail', email); pg_.click('[data-act=cloudsend]'); pg_.wait_for_selector('#cloudcode')
-        assert f'Mandei um código para {email}' in pg_.inner_text('#cloudmsg'), pg_.inner_text('#cloud')
-        pg_.fill('#cloudcode', '000000'); pg_.click('[data-act=cloudcheck]'); pg_.wait_for_function('document.getElementById("cloudmsg") && document.getElementById("cloudmsg").textContent.includes("Código errado")')
-        pg_.fill('#cloudcode', ' ' + CLOUD['codes'][email.lower()][:3] + ' ' + CLOUD['codes'][email.lower()][3:]); pg_.click('[data-act=cloudcheck]')
+    # "#cloudstatus" shows up while the sync is still running ("Sincronizando…"): what was joined is only there once it says when
+    def synced(pg_):
+        pg_.wait_for_function('() => { const e = document.getElementById("cloudstatus"); return e && e.textContent.includes("Sincronizado às"); }')
+    def said(pg_, text):
+        pg_.wait_for_function('t => document.getElementById("cloudmsg") && document.getElementById("cloudmsg").textContent.includes(t)', arg=text)
+    def login(pg_, email, pw='senha-boa-123', how='cloudin'):
+        pg_.fill('#cloudemail', email); pg_.fill('#cloudpass', pw); pg_.click(f'[data-act={how}]')
     bet = lambda id_, t, stake: dict(id=id_, t=t, type='single', stake=stake, unit=10, odd=2, sgp={}, status='open', payout=0, settledAt=None,
         legs=[dict(fid='f1', eid='600000001', key='ml:a', market='Vencedor', sel='Lima vence', cat='Vencedor', weight='Lightweight', fight='Lima x Rocha', event='UFC Fight Night', date=now_ms + 86400000, odd=2, src='real')])
     phone_state = dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 5000, v=1000)], bets=[bet('ph1', now_ms - 4000, 100)])
     pc_state = dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 3000, v=500)], bets=[])
-    CLOUD.update(down=False, log=[], users={}, codes={}, tokens={}, refresh={}, rows={}, seq=0)
+    CLOUD.update(down=False, log=[], users={}, passwords={}, confirm=False, tokens={}, refresh={}, rows={}, seq=0)
     cph, phone, ph_errs = device(phone_state)
     assert phone.locator('#cloudemail').count() == 1 and phone.locator('#cloudstatus').count() == 0, 'not logged in: the card asks for an e-mail'
-    phone.fill('#cloudemail', 'não é e-mail'); phone.click('[data-act=cloudsend]'); assert 'e-mail válido' in phone.inner_text('#cloudmsg') and CLOUD['log'] == []
-    login(phone, 'Lucas@Exemplo.com'); phone.wait_for_selector('#cloudstatus')
+    assert phone.get_attribute('#cloudpass', 'type') == 'password' and phone.get_attribute('#cloudpass', 'autocomplete') == 'current-password'
+    login(phone, 'não é e-mail'); said(phone, 'e-mail válido')
+    login(phone, 'lucas@exemplo.com', 'curta'); said(phone, 'pelo menos 8 caracteres'); assert CLOUD['log'] == [], 'nothing goes to the server before the form is right'
+    login(phone, 'lucas@exemplo.com'); said(phone, 'Se ainda não tem conta')                       # no account yet: "Entrar" says to create one
+    assert phone.input_value('#cloudpass') == 'senha-boa-123', 'a failed try keeps what was typed'
+    CLOUD['confirm'] = True; login(phone, 'lucas@exemplo.com', how='cloudup'); said(phone, 'desliga "Confirm email"')
+    CLOUD.update(confirm=False, users={}, passwords={})
+    login(phone, 'Lucas@Exemplo.com', how='cloudup'); synced(phone)
+    assert 'senha-boa-123' not in json.dumps(phone.evaluate('({...localStorage})')), 'the password is not stored on the device'
     assert 'Entrou como' in phone.inner_text('#cloudstatus') and 'Sincronizado às' in phone.inner_text('#cloudstatus'), phone.inner_text('#cloud')
     assert CLOUD['rows']['u1']['bets'][0]['id'] == 'ph1' and CLOUD['rows']['u1']['deposits'] == [dict(t=now_ms - 5000, v=1000)], 'the first device sends its history to an empty server'
     assert all(':' not in m for m, _ in CLOUD['log']), CLOUD['log']
@@ -1259,10 +1268,12 @@ with sync_playwright() as p:
     assert 'numa cópia no servidor' in phone.inner_text('#view') and 'só neste aparelho' not in phone.inner_text('#view'), 'signed in, the data card says a copy is on the server'
     # the computer has a history of its own: the person chooses, and here joins both
     cpc, pc, pc_errs = device(pc_state)
+    login(pc, 'lucas@exemplo.com', how='cloudup'); said(pc, 'já tem conta')
+    login(pc, 'lucas@exemplo.com', 'senha-errada-1'); said(pc, 'E-mail ou senha errados')
     login(pc, 'lucas@exemplo.com'); pc.wait_for_selector('#cloudask')
     assert 'Aqui: 0 apostas e 1 depósito. No servidor: 1 aposta e 1 depósito.' in pc.inner_text('#cloudask') and len(S_(pc)['deposits']) == 1, pc.inner_text('#cloud')
     pc.locator('#cloud').scroll_into_view_if_needed(); pc.screenshot(path=str(SHOTS / 's57-primeira-vez.png'))
-    pc.click('[data-act=cloudfirst][data-c=join]'); pc.wait_for_selector('#cloudstatus')
+    pc.click('[data-act=cloudfirst][data-c=join]'); synced(pc)
     assert sorted(d['v'] for d in S_(pc)['deposits']) == [500, 1000] and [x['id'] for x in S_(pc)['bets']] == ['ph1'] and money(pc) == 'R$ 1.400,00', (money(pc), S_(pc))
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [500, 1000], 'and the server has both'
     phone.click('[data-act=cloudsync]'); phone.wait_for_function('window.__OL.S.deposits.length === 2')
@@ -1297,7 +1308,7 @@ with sync_playwright() as p:
     before = len(CLOUD['log']); phone.fill('#dep', '5'); phone.click('[data-act=deposit]'); phone.wait_for_timeout(2600)
     assert money(phone) == 'R$ 5,00' and len(CLOUD['log']) == before, 'logged out: nothing is sent'
     # another person never sees this row
-    cx, other, ox = device(dict(v=1, deposits=[], bets=[])); login(other, 'outra@pessoa.com'); other.wait_for_selector('#cloudstatus')
+    cx, other, ox = device(dict(v=1, deposits=[], bets=[])); login(other, 'outra@pessoa.com', 'outra-senha-9', 'cloudup'); synced(other)
     assert S_(other)['deposits'] == [] and set(CLOUD['rows']) == {'u1', 'u2'}, 'a new person gets an empty history of their own'
     assert not ph_errs and not pc_errs and not ox, (ph_errs, pc_errs, ox)
     for c in (cph, cpc, cx): c.close()

@@ -32,7 +32,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). Nas configurações você escolhe se o cupom pede o valor em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades. Onde aparece dinheiro em jogo aparece também em unidades, e o ganho possível (retorno menos a stake) vem em dinheiro e em unidades: por aposta, por evento e no total em aberto.
 - **Leitura rápida:** mais e menos de uma linha aparecem como + e −, em tons neutros e com seta, e cada opção ligada a um lutador leva a cor do canto dele. Com os mercados abertos, uma legenda presa na tela lembra quem é o vermelho e quem é o azul.
 - **Tema e cores:** tema automático, claro ou escuro. Os cantos têm três pares de cor (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
-- **Dois aparelhos:** a mesma banca no iPhone e no computador, entrando com um código mandado por e-mail. Sem o servidor, tudo funciona igual, só neste aparelho.
+- **Dois aparelhos:** a mesma banca no iPhone e no computador, entrando com e-mail e senha. Sem o servidor, tudo funciona igual, só neste aparelho.
 - **Uso da ESPN:** a Carteira conta as chamadas que o app faz à ESPN neste aparelho, por tipo, e exporta as contagens num arquivo.
 - **Abre sem internet:** o app fica guardado no aparelho e abre na hora, com os últimos dados que carregou. Quando sai uma versão nova, ele avisa e troca com um toque.
 - **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.

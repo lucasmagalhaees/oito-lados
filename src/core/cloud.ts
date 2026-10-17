@@ -22,7 +22,8 @@ export function cloudHeaders(key: string, token: string | null): Record<string, 
 }
 /** How long before a token expires it is renewed. */
 export const TOKEN_MARGIN = 60e3;
-/** The six digits of the code sent by e-mail, as typed: spaces and dashes left out. */
-export const cleanCode = (s: string): string => String(s || '').replace(/[\s-]/g, '');
-export const isCode = (s: string): boolean => /^\d{6,10}$/.test(cleanCode(s));
+/** The shortest password the app accepts, the same the project asks for (Authentication, Email, "Minimum password
+ *  length"), and the longest one the server can check (it keeps a bcrypt hash, which reads 72 bytes). */
+export const MIN_PASSWORD = 8, MAX_PASSWORD = 72;
+export const isPassword = (s: string): boolean => typeof s === 'string' && s.length >= MIN_PASSWORD && new TextEncoder().encode(s).length <= MAX_PASSWORD;
 export const isEmail = (s: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());

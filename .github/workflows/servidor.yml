@@ -2,7 +2,7 @@ name: Servidor
 
 # Checks the real Supabase project of src/core/cloud.ts: up, e-mail login on, schema run, rules holding for someone not
 # logged in. Not a required check: a red run says what to fix in the project, not in the code. It reads only, and
-# never asks for a login code, so nobody gets an e-mail.
+# never creates an account or logs in.
 on:
   pull_request:
     paths:

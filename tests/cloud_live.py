@@ -4,7 +4,7 @@ run, and do its rules hold for someone not logged in?
 Usage: python3 tests/cloud_live.py          (calls the real project; needs a network that reaches it)
        python3 tests/cloud_live.py --mock   (self-test of this script against a local imitation)
 
-Only reads, and one write that must be refused. It never asks for a login code, so nobody gets an e-mail. Every call
+Only reads, and one write that must be refused. It never creates an account or logs in. Every call
 carries the production site as Origin, and the answers are checked for the CORS header the page needs.
 
 Exit codes: 0 all hold, 1 a check failed, 3 inconclusive (this machine could not reach the project at all).
@@ -38,9 +38,10 @@ def run(base):
     except (urllib.error.URLError, OSError) as e: return None, f'sem resposta do projeto: {e}'
     ok('the project answers, and accepts calls from the production site', st == 200 and cors(acao), f'HTTP {st}, CORS {acao!r}: {raw}')
     ok('login by e-mail is on', isinstance(j, dict) and (j.get('external') or {}).get('email') is True, raw)
-    ok('new people can sign up (the first login creates the account)', isinstance(j, dict) and j.get('disable_signup') is False, raw)
-    st, acao, j, raw = call(base, '/auth/v1/otp', 'OPTIONS', extra={'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'apikey,content-type'})
-    ok('the browser may ask for a code from the page (CORS preflight)', st in (200, 204) and cors(acao), f'HTTP {st}, CORS {acao!r}')
+    ok('new people can sign up ("Criar conta" in the app)', isinstance(j, dict) and j.get('disable_signup') is False, raw)
+    ok('no e-mail confirmation is asked ("Confirm email" off): an account works as soon as it is created', isinstance(j, dict) and j.get('mailer_autoconfirm') is True, raw)
+    st, acao, j, raw = call(base, '/auth/v1/token?grant_type=password', 'OPTIONS', extra={'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'apikey,content-type'})
+    ok('the browser may log in from the page (CORS preflight)', st in (200, 204) and cors(acao), f'HTTP {st}, CORS {acao!r}')
     st, acao, j, raw = call(base, '/rest/v1/states?select=user_id&limit=1')
     schema = not (st == 404 or (isinstance(j, dict) and j.get('code') in ('PGRST205', '42P01')))
     ok('the table exists (supabase/schema.sql was run)', schema, f'HTTP {st}: {raw}')
@@ -60,7 +61,7 @@ class Imitation(http.server.BaseHTTPRequestHandler):
         if body is not None: self.wfile.write(json.dumps(body).encode())
     def do_GET(self):
         if self.headers.get('apikey') != KEY: return self.send(401, {'message': 'no key'})
-        if self.path == '/auth/v1/settings': return self.send(200, {'external': {'email': True}, 'disable_signup': False})
+        if self.path == '/auth/v1/settings': return self.send(200, {'external': {'email': True}, 'disable_signup': False, 'mailer_autoconfirm': True})
         if self.path.startswith('/rest/v1/states'): return self.send(200, [])
         self.send(404, {})
     def do_OPTIONS(self): self.send(204)
