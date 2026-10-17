@@ -64,6 +64,8 @@ export interface Bet {
   from?: string; printed?: number;
   /** The bet came from copying someone else's (a print or a text), not from the person's own picks. */
   copied?: boolean;
+  /** When this bet last changed on this device (placed, settled, cashed out, renamed). Joining two devices keeps the later one. */
+  u?: number;
 }
 export interface Deposit { t: number; v: number }
 export interface Conversion { t: number; from: Currency; to: Currency; rate: number; date: string }
@@ -79,6 +81,11 @@ export interface AppState {
   copyDrop?: 3 | 5 | 10;
   /** Until when the person has seen what closed: bets settled after it are summed up in the "since last time" strip. */
   seen?: number;
+  /** When the history was last rewritten as a whole (reset, restore, change of currency): two devices on different
+   *  epochs are not joined item by item, the later one wins. Absent: never rewritten since it was first synced. */
+  epoch?: number;
+  /** When a setting (`settingsOf`) last changed: joining two devices keeps the later settings. */
+  setAt?: number;
   deposits: Deposit[]; bets: Bet[];
 }
 

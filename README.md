@@ -32,6 +32,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 - **Unidade:** uma porcentagem da banca (10% por padrão, ajustável). Nas configurações você escolhe se o cupom pede o valor em dinheiro ou em unidades, e a Carteira mostra o resultado em unidades. Onde aparece dinheiro em jogo aparece também em unidades, e o ganho possível (retorno menos a stake) vem em dinheiro e em unidades: por aposta, por evento e no total em aberto.
 - **Leitura rápida:** mais e menos de uma linha aparecem como + e −, em tons neutros e com seta, e cada opção ligada a um lutador leva a cor do canto dele. Com os mercados abertos, uma legenda presa na tela lembra quem é o vermelho e quem é o azul.
 - **Tema e cores:** tema automático, claro ou escuro. Os cantos têm três pares de cor (vermelho e azul, rosa e verde, laranja e roxo), escolhidos separadamente para lutas masculinas e femininas.
+- **Dois aparelhos:** a mesma banca no iPhone e no computador, entrando com e-mail e senha. Sem o servidor, tudo funciona igual, só neste aparelho.
 - **Uso da ESPN:** a Carteira conta as chamadas que o app faz à ESPN neste aparelho, por tipo, e exporta as contagens num arquivo.
 - **Abre sem internet:** o app fica guardado no aparelho e abre na hora, com os últimos dados que carregou. Quando sai uma versão nova, ele avisa e troca com um toque.
 - **Valores e moeda:** campos com máscara de milhares; banca em real, dólar ou euro. A moeda é escolhida no cartão de depósito, e passar para outra moeda converte a banca inteira pela cotação do dia, com ou sem depósito.
@@ -39,7 +40,7 @@ As telas acima vêm do teste automatizado, com lutadores e resultados inventados
 
 ## Como funciona
 
-É uma página estática, sem backend. O navegador consulta a API pública da ESPN para montar o card, ler as odds e acompanhar status, resultado e estatísticas.
+É uma página estática. O navegador consulta a API pública da ESPN para montar o card, ler as odds e acompanhar status, resultado e estatísticas.
 
 O código é TypeScript em módulos (`src/`). O build do Vite gera `dist/index.html`, a página inteira num arquivo, com script e estilo dentro, e `dist/sw.js`, o service worker que guarda essa página no aparelho. É isso que os testes usam e o que vai para o ar.
 
@@ -50,7 +51,7 @@ O código é TypeScript em módulos (`src/`). O build do Vite gera `dist/index.h
 | Liquidação | Sempre o resultado oficial: vencedor, método, round, tempo e quedas |
 | Cotação para trocar a moeda da banca | Frankfurter (`api.frankfurter.dev`), consultado só quando um depósito muda a moeda |
 
-Saldo e apostas ficam no `localStorage` do aparelho. A Carteira salva um backup em arquivo, que dá para mandar por mensagem, e restaura a partir dele; também copia e cola o backup como texto.
+Saldo e apostas ficam no `localStorage` do aparelho. Com o login, uma cópia vai para o Supabase (plano grátis) e é juntada com a de outro aparelho; o aparelho continua sendo a fonte, e o app funciona sem o servidor. Uma função da Vercel, chamada uma vez por dia, mantém o banco acordado. Montar o projeto: `supabase/README.md`. A Carteira salva um backup em arquivo, que dá para mandar por mensagem, e restaura a partir dele; também copia e cola o backup como texto.
 
 A especificação completa (endpoints, formato dos dados, modelo de preço e regras de liquidação) está em [`CLAUDE.md`](CLAUDE.md).
 
@@ -113,6 +114,9 @@ src/core/                            lógica pura: odds, leitores da ESPN, preç
 src/app/                             a página: estado, rede, telas e eventos
 src/main.ts                          ponto de entrada
 src/sw.js                            service worker: guarda o app no aparelho
+api/keepalive.ts                     rotina diária que mantém o banco acordado
+supabase/schema.sql                  tabela e regras de acesso do banco
+supabase/README.md                   como montar o projeto do Supabase
 package.json                         Vite e TypeScript, em versões exatas
 vite.config.js                       build: a página num arquivo só, mais o service worker
 tsconfig.json                        TypeScript em modo strict
@@ -122,6 +126,9 @@ scripts/check_production.py          confere a produção contra a main
 tests/unit.cases.mjs                 casos do núcleo (preço, liquidação, leitor, histórico)
 tests/unit.py                        os casos no navegador, contra a página gerada
 tests/core.mjs                       os mesmos casos no Node, sem navegador
+tests/keepalive.mjs                  a rotina diária, com a rede trocada
+tests/schema_check.sh                o schema num Postgres local
+tests/cloud_live.py                  conferência do projeto do Supabase de verdade
 tests/contract.py                    leitores da ESPN contra respostas reais gravadas
 tests/contract_live.py               conferência da API real da ESPN
 tests/docs_check.py                  documentação conferida contra o código
@@ -155,7 +162,7 @@ CLAUDE.md                            especificação e regras do projeto
 - Sem internet dá para abrir e ver lutas, apostas e carteira como estavam. Apostar, fazer cashout e trocar de moeda exigem conexão.
 - Depois de uma publicação, o aparelho continua na versão anterior até você tocar em "Atualizar agora".
 - As odds travam quando a luta começa. Não há aposta ao vivo.
-- Os dados ficam em um aparelho só.
+- A sincronização entre aparelhos só acontece com o app aberto, e precisa do login.
 
 ## Aviso
 

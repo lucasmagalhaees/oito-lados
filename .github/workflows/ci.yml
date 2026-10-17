@@ -84,7 +84,11 @@ jobs:
           npm ci
           npm run build
       - name: End-to-end against a mocked ESPN API
-        run: python tests/e2e.py ${{ matrix.theme }}
+        # the tail of a failure also becomes an annotation, readable without downloading the log
+        shell: bash
+        run: |
+          set -o pipefail
+          python tests/e2e.py ${{ matrix.theme }} 2>&1 | tee e2e.log || { echo "::error title=e2e ${{ matrix.theme }}::$(grep -v '^\s*$' e2e.log | tail -n 15 | tr '\n' '|' | cut -c1-1800)"; exit 1; }
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

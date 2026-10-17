@@ -588,6 +588,58 @@ export default function cases(Core) {
   eq('retry: each failure in a row doubles the wait, up to five minutes', [1, 2, 3, 4, 5, 6, 7, 50].map(n => Core.retryDelay(8e3, n)), [16e3, 32e3, 64e3, 128e3, 256e3, 300e3, 300e3, 300e3]);
   eq('retry: from the slow pace too, and the longest wait is five minutes', [Core.retryDelay(30e3, 1), Core.retryDelay(30e3, 3), Core.retryDelay(120e3, 1), Core.retryDelay(120e3, 2), Core.RETRY_MAX], [60e3, 240e3, 240e3, 300e3, 300e3]);
   eq('retry: a pace slower than the longest wait is kept as it is', [Core.retryDelay(600e3, 3), Core.retryDelay(8e3, 2.9)], [600e3, 32e3]);
+  /* keeping two devices in step: the marks put on each save, and the join of two copies */
+  const syb = (id, t, extra) => ({ id, t, type: 'single', stake: 10, odd: 2, legs: [], status: 'open', payout: 0, settledAt: null, ...extra });
+  const sys = (bets, deposits, extra) => ({ v: 1, deposits: deposits || [], bets: bets || [], ...extra });
+  const SY0 = sys([syb('a', 100), syb('b', 200, { status: 'won', payout: 20, settledAt: 300 })], [{ t: 50, v: 1000 }], { unitPct: 10 });
+  const sy1 = Core.stamp(null, SY0, 999);
+  eq('stamp: on the first save a bet with no mark gets the time it was settled or placed, and nothing else is marked', [sy1.bets.map(b => b.u), sy1.epoch, sy1.setAt], [[100, 300], undefined, undefined]);
+  const sy2s = { ...sy1, bets: [{ ...sy1.bets[0], status: 'lost', settledAt: 400 }, sy1.bets[1], syb('c', 500)] };
+  const sy2 = Core.stamp(sy1, sy2s, 1000);
+  eq('stamp: a bet that changed and a new bet are marked now; one that did not change keeps its mark', sy2.bets.map(b => [b.id, b.u]), [['a', 1000], ['b', 300], ['c', 1000]]);
+  eq('stamp: placing and settling bets is not a rewrite, and no setting changed', [sy2.epoch, sy2.setAt], [undefined, undefined]);
+  eq('stamp: a renamed tipster is a change of the bet', Core.stamp(sy2, { ...sy2, bets: sy2.bets.map(b => b.id === 'b' ? { ...b, from: 'Zé' } : b) }, 1100).bets.find(b => b.id === 'b').u, 1100);
+  eq('stamp: a setting changed marks the settings', [Core.stamp(sy2, { ...sy2, unitPct: 5 }, 1200).setAt, Core.stamp(sy2, { ...sy2, theme: 'dark' }, 1300).setAt, Core.stamp(sy2, { ...sy2, seen: 5 }, 1400).setAt], [1200, 1300, undefined]);
+  eq('stamp: a reset, a restore that drops bets, a deposit gone and a change of currency are rewrites', [Core.stamp(sy2, { ...sy2, bets: [], deposits: [] }, 2000).epoch, Core.stamp(sy2, { ...sy2, bets: sy2.bets.slice(1) }, 2100).epoch, Core.stamp(sy2, { ...sy2, deposits: [] }, 2200).epoch, Core.stamp(sy2, { ...sy2, cur: 'USD' }, 2300).epoch, Core.stamp(sy2, { ...sy2, cur: 'BRL' }, 2400).epoch], [2000, 2100, 2200, 2300, undefined]);
+  // the join
+  const syPh = sys([syb('a', 100, { u: 100 }), syb('p', 600, { u: 600 })], [{ t: 50, v: 1000 }, { t: 610, v: 200 }], { unitPct: 10, setAt: 0, seen: 700 });
+  const syPc = sys([syb('a', 100, { status: 'won', payout: 20, settledAt: 800, u: 800 }), syb('q', 650, { u: 650 })], [{ t: 50, v: 1000 }], { unitPct: 5, setAt: 900, seen: 650, theme: 'dark' });
+  const syJ1 = Core.mergeStates(syPh, syPc), syJ2 = Core.mergeStates(syPc, syPh);
+  eq('join: bets and deposits are a union by id, the same bet keeps its later change', [syJ1.state.bets.map(b => [b.id, b.status]), syJ1.state.deposits, syJ1.dropped], [[['a', 'won'], ['p', 'open'], ['q', 'open']], [{ t: 50, v: 1000 }, { t: 610, v: 200 }], 0]);
+  eq('join: the later settings, and the latest "seen"', [syJ1.state.unitPct, syJ1.state.theme, syJ1.state.setAt, syJ1.state.seen], [5, 'dark', 900, 700]);
+  eq('join: the same whichever device joins', Core.sameState(syJ1.state, syJ2.state), true);
+  eq('join: joining again changes nothing', [Core.sameState(Core.mergeStates(syJ1.state, syPc).state, syJ1.state), Core.sameState(Core.mergeStates(syJ1.state, syJ1.state).state, syJ1.state)], [true, true]);
+  eq('join: with no marks, the bet that is further along is kept', Core.mergeStates(sys([syb('x', 1)]), sys([syb('x', 1, { status: 'lost', settledAt: 5 })])).state.bets[0].status, 'lost');
+  // a reset on one device does not come back from the other
+  const syReset = sys([syb('n', 3000, { u: 3000 })], [{ t: 2900, v: 500 }], { epoch: 2800 });
+  const syOld = sys([syb('a', 100, { u: 100 }), syb('late', 3100, { u: 3100 })], [{ t: 50, v: 1000 }, { t: 3050, v: 70 }]);
+  const syJ3 = Core.mergeStates(syOld, syReset);
+  eq('join: after a rewrite on one side, what the other made before it is left out, and what it made after it is kept', [syJ3.state.bets.map(b => b.id), syJ3.state.deposits.map(d => d.v), syJ3.state.epoch, syJ3.dropped], [['n', 'late'], [500, 70], 2800, 2]);
+  eq('join: in either order', Core.sameState(Core.mergeStates(syReset, syOld).state, syJ3.state), true);
+  eq('join: after a change of currency, nothing from the other side in the old currency is mixed in', Core.mergeStates(syOld, { ...syReset, cur: 'USD' }).state.bets.map(b => b.id), ['n']);
+  // what the review of PR #35 found, each as it was found
+  const syServer = sys([syb('a', 100, { u: 100 }), syb('b', 200, { u: 200 })], [{ t: 50, v: 1000 }], { epoch: 0 });
+  const syWiped = sys([], [], { epoch: 9000 });
+  eq('first meeting: a device that was reset, with nothing on it, takes the server history and does not wipe it', [Core.firstMeet(syWiped, syServer).how, Core.firstMeet(syWiped, syServer).canJoin], ['adopt', true]);
+  eq('first meeting: nothing on the server yet, this device goes up', [Core.firstMeet(syServer, null).how, Core.firstMeet(syServer, sys([], [])).how], ['push', 'push']);
+  eq('first meeting: one side holds all the other has, in the same currency, so they are summed without asking', [Core.firstMeet(sys([syb('a', 100)], [{ t: 50, v: 1000 }], { epoch: 9000 }), syServer).how, Core.firstMeet(syServer, sys([syb('a', 100)])).how], ['union', 'union']);
+  eq('first meeting: each with something of its own, the person is asked; summing is offered only in the same currency', [Core.firstMeet(sys([syb('z', 300)]), syServer), Core.firstMeet(sys([syb('z', 300)], [], { cur: 'USD' }), syServer)], [{ how: 'ask', canJoin: true }, { how: 'ask', canJoin: false }]);
+  const syBoth = Core.joinBoth(sys([syb('z', 300, { u: 300 })], [{ t: 20, v: 5 }], { epoch: 9000 }), syServer);
+  eq('"Juntar os dois" sums both, even when one side had a rewrite', [syBoth.state.bets.map(b => b.id), syBoth.state.deposits.map(d => d.v), syBoth.dropped], [['a', 'b', 'z'], [5, 1000], 0]);
+  const syUsd = sys([syb('u1', 10, { u: 10 })], [{ t: 5, v: 200 }], { cur: 'USD' }), syBrl = sys([syb('r1', 20, { u: 20 })], [{ t: 6, v: 1000 }], { cur: 'BRL' });
+  const syCur1 = Core.mergeStates(syUsd, syBrl), syCur2 = Core.mergeStates(syBrl, syUsd);
+  eq('two currencies with no rewrite are never summed: the later activity is kept whole, the same in both orders', [syCur1.state.cur, syCur1.state.deposits.map(d => d.v), syCur1.dropped, Core.sameState(syCur1.state, syCur2.state)], ['BRL', [1000], 2, true]);
+  const syCashed = syb('c', 100, { status: 'cashed', payout: 15, settledAt: 500, u: 500 }), syRenamed = syb('c', 100, { from: 'Zé', u: 900 });
+  eq('a bet closed on one device is not opened again by a later change to the old open copy, in either order', [Core.mergeStates(sys([syCashed]), sys([syRenamed])).state.bets[0].status, Core.mergeStates(sys([syRenamed]), sys([syCashed])).state.bets[0].status], ['cashed', 'cashed']);
+  eq('two copies that differ only in the order of their keys are the same, so nothing is sent again', [Core.sameState({ v: 1, cur: 'BRL', deposits: [], bets: [syb('a', 1, { u: 1 })] }, { bets: [{ ...syb('a', 1), u: 1, payout: 0 }], deposits: [], cur: 'BRL', v: 1 }), Core.sameState(sys([syb('a', 1)]), sys([syb('a', 2)]))], [true, false]);
+  eq('a rewrite is never behind the one already known, even with the clock of the device running late', Core.stamp(sys([syb('a', 1)], [], { epoch: 5000 }), sys([], [], { epoch: 5000 }), 2000).epoch, 5001);
+  eq('join: the conversions of the side that wins a rewrite; a union otherwise', [Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { conv: [{ t: 2 }] })).state.conv.map(c => c.t), Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { epoch: 5, conv: [{ t: 2 }] })).state.conv.map(c => c.t)], [[1, 2], [2]]);
+  eq('state size: what each side holds', Core.stateSize(syPh), { bets: 2, deposits: 2 });
+  /* the server copy: how a call is signed, and what is typed to log in */
+  eq('cloud: a new-format key goes only in apikey; the token, once there is one, in Authorization', [Core.cloudHeaders('sb_publishable_abc', null), Core.cloudHeaders('sb_publishable_abc', 'tok')], [{ apikey: 'sb_publishable_abc', 'Content-Type': 'application/json' }, { apikey: 'sb_publishable_abc', 'Content-Type': 'application/json', Authorization: 'Bearer tok' }]);
+  eq('cloud: an old-format key (a token itself) stands in for the token while there is none; a secret key never goes as a token', [Core.cloudHeaders('eyJold', null).Authorization, Core.cloudHeaders('eyJold', 'tok').Authorization, Core.cloudHeaders('sb_secret_x', null).Authorization], ['Bearer eyJold', 'Bearer tok', undefined]);
+  eq('cloud: a project is an address of Supabase and a publishable key', [Core.cloudSet('https://abcdefghijkl.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://PROJETO.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://abcdefghijkl.supabase.co', 'sb_secret_abcdefghijkl'), Core.cloudSet('http://abcdefghijkl.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://evil.com', 'sb_publishable_abcdefghij')], [true, false, false, false, false]);
+  eq('cloud: a password of 8 to 72 bytes, and an e-mail', [Core.isPassword('1234567'), Core.isPassword('12345678'), Core.isPassword('x'.repeat(72)), Core.isPassword('x'.repeat(73)), Core.isPassword('é'.repeat(36)), Core.isPassword('é'.repeat(37)), Core.isPassword(undefined), Core.isEmail(' lucas@x.com '), Core.isEmail('lucas@x'), Core.isEmail('a b@x.com'), Core.MIN_PASSWORD, Core.TOKEN_MARGIN], [false, true, true, false, true, false, false, true, false, false, 8, 60000]);
   /* the filter by country: the fights with a fighter from one, and the countries there are to choose from */
   const lf = (id, ca, cb) => ({ id, a: { name: 'A' + id, country: ca }, b: { name: 'B' + id, country: cb } });
   const LF = [lf('1', 'Brazil', 'England'), lf('2', 'China', 'default'), lf('3', 'Brazil', 'Brazil'), lf('4', '', 'USA'), lf('5', ' brazil ', 'Atlantis')];

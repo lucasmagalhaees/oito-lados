@@ -17,6 +17,7 @@ Idioma da interface: português do Brasil, informal. Comentários no código: in
 Decisão do Lucas em 09/10/2026: **MVP para um usuário**, simples de propósito. Validar hipóteses usando de verdade e só depois escalar, se for preciso. Portanto:
 
 - Não adicionar backend, login nem banco sem ele pedir. O app continua sendo uma página estática.
+- Em 17/10/2026 ele pediu a etapa 2: a mesma banca no iPhone e no computador, com Supabase Free e Vercel Hobby (D98, D99). O servidor só guarda uma cópia: a página continua estática, falando com a ESPN, dando preço e liquidando, e funciona igual sem ele. Ver "Sincronizar aparelhos".
 - No mesmo dia ele pediu a etapa 1 do plano de escala: código em TypeScript, em módulos, com build pelo Vite (D33). Isso organiza o código e não muda o produto.
 - O plano de escala (hipóteses a validar, gatilhos, etapas, modelo de dados, fonte de dados, pontos jurídicos, custos) está em [`docs/escala.md`](docs/escala.md). Consultar antes de propor qualquer mudança de arquitetura.
 
@@ -48,6 +49,8 @@ O que cada peça do harness cobre:
 | `tests/settle.py` | A aposta só fechar certo quando a ESPN responde tudo de uma vez: resultado que atrasa, ou que vem com um nome que o app não conhece |
 | `tests/pwa.py` | Dizer que o app abre sem internet e avisa de versão nova sem nunca ter visto acontecer |
 | `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
+| `tests/keepalive.mjs`, `tests/schema_check.sh` | A rotina diária deixar entrar quem não é o cron, e o banco deixar alguém ler ou escrever a linha de outro |
+| `tests/cloud_live.py` (workflow `Servidor`, no PR que mexe no servidor e toda semana) | O projeto do Supabase de verdade estar desligado, sem o schema ou com as regras abertas, e o código achar que está tudo certo |
 | `scripts/check_production.py` (workflow `Produção`, depois de cada merge) | CI verde e deploy feito, mas a produção servindo outra versão |
 | `tsc` em modo `strict` (primeiro passo do `verify.sh`) | Chamar função com o dado errado, ou ler um campo que pode não existir |
 | Hook de parada (`.claude/hooks/verify-on-stop.sh`) | Encerrar a tarefa com checagem falhando |
@@ -60,6 +63,8 @@ O que cada peça do harness cobre:
 - `index.html`: o esqueleto da página que o build usa como entrada (cabeçalho, ícone embutido em base64, as partes fixas da tela).
 - `dist/index.html`: o que o build gera e o que vai para o ar: a página inteira num arquivo, com script e estilo dentro. Não é versionado.
 - `dist/sw.js`: o service worker, gerado pelo build a partir de `src/sw.js`. É o único outro arquivo publicado; guarda a página no aparelho.
+- `api/keepalive.ts`: a única função de servidor, chamada uma vez por dia pelo cron da Vercel (`vercel.json`) para o projeto do Supabase não pausar. `tests/keepalive.mjs` a roda no Node com a rede trocada, empacotada e também compilada arquivo por arquivo, como a Vercel publica (foi assim que um import sem `.js`, que quebrava a função ao carregar, apareceu).
+- `supabase/schema.sql` + `supabase/README.md`: a tabela, as regras de acesso e o passo a passo de montar o projeto. `tests/schema_check.sh` roda o schema num Postgres local e confere as regras. `tests/cloud_live.py` confere o projeto de verdade, pelo workflow `Servidor` (`.github/workflows/servidor.yml`), que roda no PR que mexe no servidor e toda sexta.
 - `package.json`, `package-lock.json`, `vite.config.js`, `tsconfig.json`: o build. Sem framework e sem dependência em tempo de execução.
 - `scripts/verify.sh`: o comando único de verificação.
 - `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção está no commit da `main`.
@@ -117,6 +122,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 31. Na tela de Lutas, um filtro por país mostra as lutas do card escolhido no alto que têm lutador daquele país. O Brasil tem um botão próprio ("Brasileiros"), sempre ali; cada outro país do card tem o seu ao lado.
 32. No alto da tela de Lutas ficam os três próximos cards. O card que a ESPN marca como encerrado sai da tela, e os três seguintes são os que estão lá.
 33. Na Carteira, o cartão "Uso da ESPN" conta as chamadas que o app faz à ESPN neste aparelho: quantas, de que tipo, quanto demoram, quanto voltou e quantas falharam, de hoje e dos últimos 7 dias, e hora a hora nas últimas 24 horas. As contagens podem ser exportadas em arquivo ou copiadas como texto.
+34. A mesma banca e as mesmas apostas no iPhone e no computador: entrar com e-mail e senha, e o que muda num aparelho aparece no outro. Sem conexão com o servidor, o app funciona como antes e sincroniza quando ele volta.
 
 Escala fica para depois: ver "Escopo: MVP" acima e `docs/escala.md`.
 
@@ -195,6 +201,8 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/core/card.ts` | O card de um evento: `cardSections` (as partes do card, pela hora em que as lutas começam) e `cardsToShow` (os eventos que aparecem no alto: os três próximos que não acabaram), `findFights` (as lutas com o que foi digitado no nome dos lutadores), `fromCountry` (as lutas com lutador de um país) e `countries` (os países que há, e em quantas lutas cada um tem lutador) |
 | `src/core/usage.ts` | A contagem das chamadas à ESPN: `usageAdd` (conta uma chamada no dia e no tipo dela), `usageSum` (as somas de um dia em diante, por tipo e no total), `usageHours` (as horas pedidas que têm chamada), `usageRead` (lê o que foi guardado, descartando o que não é contagem) e os tipos de chamada (`USAGE_KINDS`) |
 | `src/core/pace.ts` | `retryDelay`: quanto esperar pela próxima sincronização depois de rodadas que falharam, com o teto `RETRY_MAX` |
+| `src/core/sync.ts` | Juntar dois aparelhos: `stamp` (as marcas que cada gravação põe: `u` em cada aposta, `setAt`, `epoch`), `mergeStates` (junta a cópia do aparelho com a do servidor), `sameState` e `stateSize` |
+| `src/core/cloud.ts` | O servidor: `CLOUD_URL` e `CLOUD_KEY`, `cloudSet`, `cloudHeaders` (como uma chamada é assinada), `TOKEN_MARGIN` e a conferência do e-mail e da senha (`isEmail`, `isPassword`, `MIN_PASSWORD`) |
 | `src/core/index.ts` | O objeto `Core`, com a mesma superfície que os testes sempre usaram |
 
 ### `src/app/`: a página
@@ -215,6 +223,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/app/render.ts` | `render` e as três telas, a lista de lutas que se repinta sozinha debaixo da busca (`paintList`), cupom (`renderSheet`, `slipSummary`), gráfico, `place` e as duas partes dele que o lote também usa (`recheck`, `writeBets`) |
 | `src/app/events.ts` | Um listener delegado por `data-act`, depósito e troca de moeda |
 | `src/app/update.ts` | Registro do service worker, aviso de versão nova (`initUpdates`, `applyUpdate`, `checkNow`) e `builtFrom`, o commit da página |
+| `src/app/cloud.ts` | A sincronização: o login com e-mail e senha (`signIn`, `signOut`), a cópia no servidor (`syncNow`, `queueSync`, `resolveFirst` para o primeiro encontro de dois históricos), `initCloud` e o cartão da Carteira (`cloudHtml`) |
 | `src/app/usage.ts` | O uso da ESPN: `record` (conta cada chamada, chamado por `getJSON`), o cartão da Carteira (`usageHtml`), e as contagens entregues como arquivo, como texto ou zeradas (`saveUsageFile`, `copyUsage`, `resetUsage`) |
 | `src/main.ts` | Entrada: liga os listeners, expõe `window.__OL`, dispara a primeira sincronização e registra o service worker |
 | `src/env.d.ts` | Declarações de tipo de `window.__OL` e do leitor de imagem; os tipos do Vite (import de CSS, `import.meta.env`) vêm por referência |
@@ -261,6 +270,12 @@ O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma d
 `oitolados.fx.v1`: última cotação lida, `{ date, rates: { BRL: 1, USD, EUR }, ts }`.
 
 `oitolados.usage.v1`: as chamadas à ESPN contadas neste aparelho, `{ v: 1, days: { 'AAAA-MM-DD': { peak, k: { board|odds|result|td|astats|form: { n, err, ms, bytes, max } }, h: { '0'..'23': { n, err, bytes, peak, k: { tipo: n } } } } } }` (`h` só nos 7 dias mais recentes) (seção "Uso da ESPN"). Não faz parte do backup, e "Zerar simulação" não mexe nele.
+
+`oitolados.auth.v1`: a sessão no servidor, `{ email, uid, access, refresh, exp }` (seção "Sincronizar aparelhos"). Sem ela, não há sincronização. Não faz parte do backup.
+
+`oitolados.link.v1`: o `uid` da conta com que o histórico deste aparelho já foi juntado. Fica separado da sessão, para sair e entrar de novo não contar como primeira vez.
+
+Para juntar dois aparelhos, `oitolados.v1` ganhou três marcas, postas por `Core.stamp` a cada gravação: `u` em cada aposta (quando ela mudou pela última vez), `setAt` (quando uma configuração mudou) e `epoch` (quando o histórico foi reescrito: aposta ou depósito que sumiu, ou troca de moeda).
 
 ### Chaves de seleção
 
@@ -514,6 +529,22 @@ Pedido do Lucas em 11/10/2026 (D92): saber como está o uso da API da ESPN, com 
 - **Ninguém mais vê:** as contagens não são enviadas a lugar nenhum. Para alguém analisar, é preciso mandar o arquivo ou o texto.
 - **Limite conhecido:** conta o que a página pediu, não o que a ESPN recebeu. Um app aberto em dois aparelhos tem duas contagens.
 
+## Sincronizar aparelhos (servidor)
+
+Pedido do Lucas em 17/10/2026 (D98, feito na D99): a mesma banca no iPhone e no computador, no plano grátis.
+
+- **O aparelho continua sendo a fonte da verdade.** Tudo segue em `oitolados.v1`, como antes; o servidor guarda uma cópia. Servidor fora do ar, pausado ou sumido: o app funciona igual, só não sincroniza, e o cartão diz "Sem conexão com o servidor". O plano B, se ele morrer de vez, é o backup em arquivo.
+- **Onde:** Supabase Free (banco e login) e uma função na Vercel Hobby. A página chama o Supabase direto; a função só mantém o banco acordado. Tudo no mesmo repositório e no mesmo deploy.
+- **O projeto:** `CLOUD_URL` e `CLOUD_KEY` (`src/core/cloud.ts`), o endereço e a chave publicável, mandados pelo Lucas em 17/10/2026. Vazios, o cartão não aparece e nada é chamado. O teste ponta a ponta serve a página com um servidor simulado no lugar dos dois, e também com os dois vazios. Montar o projeto: `supabase/README.md`.
+- **Login** (D100, que revê a D99): e-mail e senha. "Criar conta" na primeira vez (`/auth/v1/signup`), "Entrar" no outro aparelho (`/auth/v1/token?grant_type=password`). **Nenhum e-mail é mandado**: o projeto está com "Confirm email" desligado. O código por e-mail da D99 não deu: no plano grátis, projeto novo não edita o modelo do e-mail, que só traz link, e o link não chega ao app instalado na Tela de Início do iPhone. A senha tem de 8 (`MIN_PASSWORD`, o mesmo mínimo configurado no projeto) a 72 bytes, só vai para o servidor e nunca é guardada no aparelho. A sessão fica em `oitolados.auth.v1` e é renovada 1 min antes de vencer (`TOKEN_MARGIN`). Sessão recusada pelo servidor: o app pede para entrar de novo, e os dados do aparelho ficam. "Sair" apaga só a sessão.
+- **O que vai para o servidor:** uma linha por pessoa na tabela `states`, com o estado inteiro (`oitolados.v1`). Quem lê e escreve cada linha é decidido no banco (`supabase/schema.sql`): cada um só a sua, ninguém apaga, e sem login não se vê nada. O endereço e a chave publicável vão na página e são públicos por natureza; a chave secreta nunca entra no código (o `docs_check.py` confere).
+- **Quando sincroniza:** ao abrir, ao voltar para o app, no "Sincronizar agora" e 2 s depois da última gravação (`SYNC_AFTER`; as gravações vêm em rajadas). Uma de cada vez: a pedida durante outra roda quando ela acaba. Cada chamada espera no máximo 15 s (`CLOUD_TIMEOUT`). Um 401 do banco renova o token uma vez e tenta de novo. A cópia do servidor passa pela mesma conferência de um backup antes de entrar, e só volta ao servidor se a junção mudou alguma coisa (a comparação, `Core.sameState`, não depende da ordem das chaves).
+- **Como junta** (`Core.mergeStates`): apostas pelo `id`, depósitos pelo instante e valor, conversões de moeda pelo instante. A mesma aposta nos dois: a encerrada (ganha, perdida, anulada ou com cashout) vence a aberta, qualquer que seja a marca, porque aposta não reabre e cashout não se refaz; entre duas abertas ou duas encerradas, fica a que mudou por último (`u`). Configurações: as que mudaram por último (`setAt`). `seen`: o maior. Com as marcas diferentes, juntar em qualquer ordem dá o mesmo resultado; num empate exato de marcas, fica o do aparelho que está juntando.
+- **Zerar, restaurar e trocar de moeda reescrevem o histórico** (`epoch`): aí não se junta item por item, senão o zerado voltaria do outro aparelho. Vale a reescrita mais nova, e do outro lado só entra o que foi criado depois dela, na mesma moeda. A marca de uma reescrita nunca fica atrás da que o aparelho já conhecia (`Math.max(agora, epoch + 1)`), para um aparelho com o relógio atrasado não perder o próprio zerar. Dois históricos em moedas diferentes nunca são somados: sem reescrita que os separe, fica inteiro o que teve movimento por último. O que ficou de fora é contado e dito ("2 itens ficaram de fora…").
+- **Primeira vez de um aparelho com a conta** (`Core.firstMeet`, D102): servidor vazio, o histórico daqui sobe; aparelho vazio, ele fica com o do servidor, mesmo que tenha zerado ou trocado de moeda antes de entrar (zerar antes de entrar não apaga o servidor); um lado já contém tudo do outro, na mesma moeda, os dois são somados sem perguntar. Se cada um tem algo só seu, o cartão pergunta antes de mexer, com quantas apostas e depósitos tem cada um: "Juntar os dois" (`Core.joinBoth`: soma tudo, sem reescrita cortando nada), "Ficar com o deste aparelho" ou "Ficar com o do servidor". Ficar com um apaga o outro, aqui e no servidor. Em moedas diferentes não há "Juntar": a tela diz as duas moedas e oferece só ficar com um.
+- **Rotina diária** (`api/keepalive.ts`): o cron da Vercel chama `/api/keepalive` uma vez por dia (`17 9 * * *`, em UTC: 06:17 em Brasília). Ela faz uma consulta (`keepalive()`, uma contagem feita como visitante anônimo, que não vê linha nenhuma), para o projeto do Supabase não pausar depois de uma semana sem uso. Só o cron entra: a Vercel manda o `CRON_SECRET` no cabeçalho, e sem ele a resposta é 401. A Vercel diz que o cron é "melhor esforço", sem nova tentativa: um dia que falha não pausa o projeto, uma semana inteira sim.
+- **Limites conhecidos:** a sincronização é feita só com o app aberto. Dois aparelhos mexendo na mesma aposta ao mesmo tempo: fica a última mudança. Nada disso foi visto com o Supabase de verdade (ver `docs/verificacao.md`).
+
 ## Sincronização
 
 - `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 30 dias à frente (`BOARD_AHEAD`): o bastante para ter os três cards seguintes ao que acabou, mesmo com uma semana sem evento no meio.
@@ -568,9 +599,12 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 npm ci                       # Vite e TypeScript
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: tipos, build, docs, core, unit, contract, autoteste da checagem de produção, e2e claro e escuro, settle, pwa e cobertura
+scripts/verify.sh            # tudo: tipos, build, docs, core, a rotina diária, o schema do banco (se houver Postgres), unit, contract, autoteste da checagem de produção, e2e claro e escuro, settle, pwa e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 node tests/core.mjs          # os casos do núcleo, sem navegador
+node tests/keepalive.mjs     # a rotina diária (api/keepalive.ts), com a rede trocada
+tests/schema_check.sh        # o schema do banco num Postgres local
+python3 tests/cloud_live.py  # o projeto do Supabase de verdade (precisa alcançá-lo; --mock testa o script)
 python3 tests/contract_live.py   # API real da ESPN (precisa de internet)
 npm run dev                  # servidor de desenvolvimento do Vite
 ```
@@ -601,7 +635,7 @@ Para testar contra a ESPN de verdade: `npm run dev` e abrir o endereço que o Vi
 
 ## Publicação
 
-Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. O `vercel.json` manda a Vercel fazer o mesmo que o `verify.sh` e o CI fazem: `npm ci`, `npm run build`, publicar `dist/`. O `.vercelignore` deixa de fora o que o build não lê (testes, documentação). São publicados dois arquivos: `index.html` e `sw.js`. A primeira importação do projeto, ainda sem `vercel.json`, falhou porque a Vercel escolheu sozinha o preset "FastHTML" (Python) e procurou um `main.py`.
+Deploy contínuo pela integração da Vercel com o GitHub: cada PR ganha uma URL de prévia e cada merge na `main` publica em produção. O `vercel.json` manda a Vercel fazer o mesmo que o `verify.sh` e o CI fazem: `npm ci`, `npm run build`, publicar `dist/`. O `.vercelignore` deixa de fora o que o build não lê (testes, documentação). São publicados dois arquivos, `index.html` e `sw.js`, e uma função, `api/keepalive.ts`, que o cron do `vercel.json` chama uma vez por dia. A primeira importação do projeto, ainda sem `vercel.json`, falhou porque a Vercel escolheu sozinha o preset "FastHTML" (Python) e procurou um `main.py`.
 
 O build grava o commit em `<meta name="ol-commit">`. Na Vercel ele vem da variável `VERCEL_GIT_COMMIT_SHA`; fora dela, do `git`.
 
@@ -610,7 +644,7 @@ A Vercel publica o que chegar na `main` sem olhar o CI. Quem garante que só ent
 **Merges em sequência podem deixar a produção numa versão antiga.** Em 09/10/2026 os PRs #4, #5, #6 e #7 foram mesclados em menos de um minuto. A Vercel fez um deploy por merge, o do #4 terminou por último e ficou com o endereço de produção: CI verde, quatro deploys com sucesso, e o app no ar sem nada dos outros três PRs (D32). Por isso:
 
 - Mesclar um PR por vez e esperar o deploy, ou mesclar só o último quando um PR já contém os anteriores.
-- O workflow `Produção` roda `scripts/check_production.py` depois de cada push na `main`: espera a produção mostrar o carimbo do commit que entrou e **continua olhando por 5 min**, porque o deploy errado pode chegar depois do certo. Falhou: na Vercel, promover o deploy do commit mais recente da `main`, ou fazer um novo merge.
+- O workflow `Produção` roda `scripts/check_production.py` depois de cada push na `main`: espera a produção mostrar o carimbo do commit que entrou e **continua olhando por 5 min**, porque o deploy errado pode chegar depois do certo. Falhou: na Vercel, promover o deploy do commit mais recente da `main`, ou fazer um novo merge. Com o commit certo no ar, chama também `/api/keepalive` sem o segredo e exige 401: a rotina diária que não carrega (um 500) ou que não foi publicada (404) falha o workflow.
 - Em PR o mesmo script só informa qual commit a produção está servindo (`--report`) e nunca falha. `--selftest` testa o script contra um servidor local e roda no `verify.sh`.
 
 **Publicar não troca o app de quem já abriu.** O aparelho mostra a cópia guardada até a pessoa tocar em "Atualizar agora" (seção "App guardado no aparelho"). A checagem de produção lê o servidor, não o aparelho: produção certa e app antigo na mão é o estado normal entre a publicação e o toque.

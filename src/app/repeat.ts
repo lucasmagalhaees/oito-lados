@@ -26,7 +26,7 @@ export function repeatBet(id: string | undefined): void {
 }
 export async function doCashout(id: string | undefined): Promise<void> {
   if (ui.cashing) return;
-  const b = S.bets.find(x => x.id === id && x.status === 'open');
+  let b = S.bets.find(x => x.id === id && x.status === 'open');
   const before = b ? cashoutOf(b) : null;
   if (!b || !before || !before.ok) { ui.cash = null; render(); return; }
   ui.cashing = true; ui.cashMsg = ''; render();
@@ -41,7 +41,9 @@ export async function doCashout(id: string | undefined): Promise<void> {
   } catch (e) { ui.cashing = false; ui.cashMsg = 'Sem conexão com a ESPN. Não deu pra confirmar o cashout, tenta de novo.'; render(); return; }
   ui.cashing = false;
   settle();                                    // a result may have come in while we were asking
-  if (b.status !== 'open') { ui.cash = null; render(); return; }
+  // the bet as it is now: a sync with another device may have put a new copy of it in place while we were asking
+  b = S.bets.find(x => x.id === id);
+  if (!b || b.status !== 'open') { ui.cash = null; render(); return; }
   const c = cashoutOf(b);
   if (!c.ok) { ui.cash = null; render(); toast(CASH_WHY[c.why] || 'Cashout indisponível.'); return; }
   if (Math.abs(c.value - before.value) > 0.004) { ui.cashMsg = `O valor mudou para ${money(c.value)}. Confere e confirma de novo.`; render(); return; }

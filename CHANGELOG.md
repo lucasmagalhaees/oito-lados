@@ -2,6 +2,12 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.25.0] - 2026-10-17
+
+### Adicionado
+- Sincronizar aparelhos: a mesma banca e as mesmas apostas no iPhone e no computador, entrando com e-mail e senha (nenhum e-mail é mandado). O aparelho continua guardando tudo, e o app funciona igual sem o servidor.
+- Uma rotina diária no cron da Vercel, para o banco do plano grátis não pausar.
+
 ## [0.24.1] - 2026-10-11
 
 ### Alterado

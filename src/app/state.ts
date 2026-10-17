@@ -15,7 +15,25 @@ export let S: AppState = validState(saved) ? saved : { v: 1, deposits: [], bets:
 delete (S as { tip?: unknown }).tip;          // the separate setting for copied prints, gone since money-or-units decides it
 // what closed before this moment has been seen: a state from before this existed must not announce its whole history
 if (!(Number(S.seen) > 0)) S.seen = Date.now();
-export const saveS = (): boolean => LS.set('oitolados.v1', S);
+/** What was last written to the device: each save is compared with it, to put the marks that let two devices be joined (`Core.stamp`). */
+let written: AppState = JSON.parse(JSON.stringify(S));
+/** What runs after each save: the server copy sets it (`initCloud`). Not imported from there: this module runs while
+ *  the modules load, and importing the page modules from here would load them before it. */
+let afterSave: () => void = () => { /* no server copy */ };
+export function onSave(fn: () => void): void { afterSave = fn; }
+/** Writes the state to the device, with its marks updated, and lets the server copy know. */
+export function saveS(): boolean {
+  const st = Core.stamp(written, S, Date.now());
+  S.bets.forEach((b, i) => { b.u = st.bets[i].u; });
+  if (st.epoch) S.epoch = st.epoch;
+  if (st.setAt) S.setAt = st.setAt;
+  written = JSON.parse(JSON.stringify(S));
+  afterSave();
+  return LS.set('oitolados.v1', S);
+}
+/** Takes a state that came from joining with the server copy, as it is: its marks are already right, and stamping it
+ *  against this device's last save would make what came from the other device look new here. */
+export function adoptS(next: AppState): void { S = next; written = JSON.parse(JSON.stringify(next)); setCurrency(S.cur); applyTheme(); LS.set('oitolados.v1', S); }
 export function setS(next: AppState): void { S = next; }
 /** The currency of the bankroll. It is always set once the page has loaded; the fallback only satisfies the type. */
 export const curNow = (): Currency => S.cur || 'BRL';

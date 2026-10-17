@@ -11,6 +11,7 @@ import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCac
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import { copyUsage, resetUsage, saveUsageFile } from './usage';
+import { resolveFirst, signIn, signOut, syncNow, typedEmail, typedPass } from './cloud';
 import type { Currency, Period } from '../core';
 import type { Slip, Ui } from './state';
 
@@ -171,6 +172,10 @@ document.addEventListener('click', e => {
   else if (a === 'deposit') deposit();
   else if (a === 'convonly') convertOnly();
   else if (a === 'bksave') saveBackupFile();
+  else if (a === 'cloudin' || a === 'cloudup') signIn(a === 'cloudup' ? 'up' : 'in', valOf('#cloudemail'), valOf('#cloudpass'));
+  else if (a === 'cloudsync') syncNow();
+  else if (a === 'cloudout') signOut();
+  else if (a === 'cloudfirst') resolveFirst(d.c === 'here' ? 'here' : d.c === 'there' ? 'there' : 'join');
   else if (a === 'usagesave') saveUsageFile();
   else if (a === 'usagecopy') copyUsage();
   else if (a === 'usagereset') resetUsage();
@@ -203,6 +208,8 @@ document.addEventListener('change', e => {
   if (t.id === 'impfile') importImages([...(t.files || [])]);
   else if (t.id === 'bkfile') pickBackupFile((t.files || [])[0]);
   else if (t.classList.contains('opstake')) stakeFor(Number(t.dataset.op), t.value);
+  else if (t.id === 'cloudemail') typedEmail(t.value);
+  else if (t.id === 'cloudpass') typedPass(t.value);
 });
 document.addEventListener('paste', e => {
   if (!imp.open || imp.busy) return;

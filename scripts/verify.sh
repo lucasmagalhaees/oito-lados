@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command that answers "is this still correct?".
-#   scripts/verify.sh           types + build + docs + core + unit + contract + production-check self-test + end-to-end (both themes) + settling with late answers + offline and update (service worker) + code coverage minimums
-#   scripts/verify.sh --quick   types + build + docs + core + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
+#   scripts/verify.sh           types + build + docs + core + keep-alive routine + server check self-test + database schema + unit + contract + production-check self-test + end-to-end (both themes) + settling with late answers + offline and update (service worker) + code coverage minimums
+#   scripts/verify.sh --quick   types + build + docs + core + keep-alive routine + server check self-test + database schema + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
 # Every test runs against dist/, what the build produces and what ships. The one exception is `core`: the same cases as
 # `unit`, run in Node against src/core built by itself, to show the core stands without a page.
 # Exit: 0 all passed, 1 something failed, 3 test dependencies missing.
@@ -55,6 +55,13 @@ run build    npm run --silent build
 if [ "$fail" -ne 0 ]; then echo "verify: HÁ FALHAS no código ou no build; os testes não rodaram. Não declare que funciona."; exit 1; fi
 run docs     python3 tests/docs_check.py
 run core     node tests/core.mjs
+run keepalive node tests/keepalive.mjs
+run cloud    python3 tests/cloud_live.py --mock
+if ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1 || [ -n "${PG_BIN:-}" ]; then
+  run schema   tests/schema_check.sh
+else
+  printf 'pulado %-10s %s\n' schema 'sem Postgres nesta máquina (tests/schema_check.sh)'
+fi
 run unit     python3 tests/unit.py
 run contract python3 tests/contract.py
 run prod     python3 scripts/check_production.py --selftest

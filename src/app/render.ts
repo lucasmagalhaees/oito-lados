@@ -11,6 +11,7 @@ import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp,
 import { busy, nextIn, shownEvents } from './sync';
 import { builtFrom, canUpdate } from './update';
 import { usageHtml, waitText } from './usage';
+import { cloudHtml, signedIn } from './cloud';
 import type { BenchSide, Bet, CardPart, Currency, Fight, FightEvent, Leg, LegState, OriginRow, OpenTotals, Option, Outcome, Period, Side, StatementRow } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
 import type { CopyMeta, Slip } from './state';
@@ -465,7 +466,8 @@ function vCarteira(w: Wallet): string {
     <button class="btn ghost block" data-act="orgrename">${froms.length ? 'Renomear' : 'Dar nome'}</button>
     <p class="hint">Toda aposta que entra pelo "Copiar aposta" é do tipster; as que você monta no card são suas. Dar a um tipster o nome de outro junta os dois.</p>`;
   h += '</section>';
-  h += `<section class="card"><span class="label">Seus dados</span><p class="hint">Saldo e apostas ficam salvos só neste aparelho. Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir. O arquivo pode ser mandado pra você mesmo no Telegram ou guardado nos Arquivos.</p>
+  h += cloudHtml();
+  h += `<section class="card"><span class="label">Seus dados</span><p class="hint">${signedIn() ? 'Saldo e apostas ficam salvos neste aparelho e numa cópia no servidor. O backup continua valendo: é o que sobra se o servidor sumir.' : 'Saldo e apostas ficam salvos só neste aparelho.'} Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir. O arquivo pode ser mandado pra você mesmo no Telegram ou guardado nos Arquivos.</p>
     <div class="rowbtns"><button class="btn" data-act="bksave">Salvar backup em arquivo</button><label class="btn ghost" for="bkfile">Restaurar de um arquivo</label><input type="file" id="bkfile" accept="application/json,.json,text/plain,.txt" hidden></div>`;
   const rf = ui.restoreFile;
   if (rf) h += `<div class="bkpeek" id="bkpeek"><p><b>${esc(rf.name)}</b></p><p class="hint">${rf.savedAt ? `Salvo em ${esc(dWhen.format(rf.savedAt))}. ` : ''}${rf.bets} ${rf.bets === 1 ? 'aposta' : 'apostas'}${rf.open ? ` (${rf.open} ${rf.open === 1 ? 'aberta' : 'abertas'})` : ''} e ${esc(fmtOf(rf.cur).format(rf.deposited))} depositados. Restaurar troca tudo o que está neste aparelho pelo que está no arquivo.</p><div class="rowbtns"><button class="btn" data-act="bkapply">Restaurar e substituir tudo</button><button class="btn ghost" data-act="bkcancel">Cancelar</button></div></div>`;

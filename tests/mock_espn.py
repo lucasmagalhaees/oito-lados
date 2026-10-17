@@ -120,8 +120,71 @@ def props(fid):
 calls = []
 # exchange rates: obviously invented round numbers (1 real = 0.20 dollar = 0.16 euro), so nobody takes them for a real quote
 FX = {'down': False, 'calls': 0, 'body': dict(amount=1.0, base='BRL', date='2026-01-02', rates=dict(EUR=0.16, USD=0.2))}
+# The server copy (Supabase), simulated: accounts with e-mail and password, tokens, and one row per person that only that person
+# can read or write, as the policies of supabase/schema.sql say. Shapes as in the Supabase Auth OpenAPI and the official JS
+# client (see src/core/cloud.ts). CLOUD['down'] cuts it off; CLOUD['log'] keeps (method, path) of every call.
+CLOUD = {'down': False, 'log': [], 'users': {}, 'passwords': {}, 'confirm': False, 'tokens': {}, 'refresh': {}, 'rows': {}, 'seq': 0, 'ttl': 3600}
+def cloud(route):
+    req, u = route.request, route.request.url
+    path = re.sub(r'^https://[^/]+', '', u); CLOUD['log'].append((req.method, path.split('?')[0]))
+    hdr = {k.lower(): v for k, v in req.headers.items()}
+    cors = {'access-control-allow-origin': '*'}
+    def send(status, o=None):
+        route.fulfill(status=status, content_type='application/json', headers=cors, body='' if o is None else json.dumps(o))
+    if req.method == 'OPTIONS':
+        return route.fulfill(status=204, headers={**cors, 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+    if CLOUD['down']:
+        return route.abort()
+    if not hdr.get('apikey', '').startswith('sb_publishable_'):
+        return send(401, {'message': 'No API key found in request'})
+    if hdr.get('authorization', '').startswith('Bearer sb_'):
+        return send(401, {'message': 'a publishable key is not a token'})
+    body = json.loads(req.post_data) if req.post_data else {}
+    def session(uid):
+        CLOUD['seq'] += 1; n = CLOUD['seq']
+        acc, ref = f'acc-{uid}-{n}', f'ref-{uid}-{n}'
+        CLOUD['tokens'][acc] = (uid, time.time() + CLOUD['ttl']); CLOUD['refresh'][ref] = uid
+        return {'access_token': acc, 'refresh_token': ref, 'token_type': 'bearer', 'expires_in': CLOUD['ttl'], 'expires_at': int(time.time() + CLOUD['ttl']), 'user': {'id': uid, 'email': CLOUD['users'][uid]}}
+    # errors in the shape of Supabase Auth (internal/api/apierrors: code, error_code, msg)
+    err = lambda status, code, msg: send(status, {'code': status, 'error_code': code, 'msg': msg})
+    who = lambda email: next((k for k, v in CLOUD['users'].items() if v == email), None)
+    if path.startswith('/auth/v1/signup'):
+        email, pw = body.get('email', '').strip().lower(), body.get('password', '')
+        if '@' not in email: return err(400, 'validation_failed', 'Unable to validate email address: invalid format')
+        if len(pw) < 8: return err(422, 'weak_password', 'Password should be at least 8 characters.')
+        if who(email): return err(422, 'user_already_exists', 'User already registered')
+        uid = 'u%d' % (len(CLOUD['users']) + 1); CLOUD['users'][uid] = email; CLOUD['passwords'][uid] = pw
+        if CLOUD['confirm']: return send(200, {'id': uid, 'email': email})              # "Confirm email" on: a user, and no session
+        return send(200, session(uid))
+    if path.startswith('/auth/v1/token') and 'grant_type=password' in u:
+        uid = who(body.get('email', '').strip().lower())
+        if not uid or CLOUD['passwords'].get(uid) != body.get('password'): return err(400, 'invalid_credentials', 'Invalid login credentials')
+        return send(200, session(uid))
+    if path.startswith('/auth/v1/token'):
+        uid = CLOUD['refresh'].pop(body.get('refresh_token'), None)           # a refresh token is used once
+        return send(200, session(uid)) if uid and 'grant_type=refresh_token' in u else err(400, 'refresh_token_not_found', 'Invalid Refresh Token')
+    if path.startswith('/auth/v1/logout'):
+        return route.fulfill(status=204, headers=cors)
+    if path.startswith('/rest/v1/rpc/keepalive'):
+        return send(200, 0)
+    if path.startswith('/rest/v1/states'):
+        tok = CLOUD['tokens'].get(hdr.get('authorization', '')[len('Bearer '):])
+        if not tok or tok[1] < time.time():
+            return send(401, {'message': 'JWT expired'})
+        uid = tok[0]
+        if req.method == 'GET':
+            m = re.search(r'user_id=eq\.([\w-]+)', u)
+            return send(200, [{'data': CLOUD['rows'][uid]}] if m and m.group(1) == uid and uid in CLOUD['rows'] else [])   # the policy: only your own row
+        if req.method == 'POST':
+            if body.get('user_id') != uid: return send(403, {'message': 'new row violates row-level security policy'})
+            if 'resolution=merge-duplicates' not in hdr.get('prefer', '') or 'on_conflict=user_id' not in u: return send(409, {'message': 'duplicate key value'})
+            CLOUD['rows'][uid] = body['data']
+            return route.fulfill(status=201, headers=cors)
+    return send(404, {'message': 'not found'})
+
 def handle(route):
     u = route.request.url; calls.append(u)
+    if '.supabase.co/' in u: return cloud(route)
     def ok(o): route.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin':'*'}, body=json.dumps(o))
     if 'fonts.g' in u: return route.abort()
     if ESPN['down'] and 'espn.com' in u: return route.abort()

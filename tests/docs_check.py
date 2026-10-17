@@ -40,7 +40,7 @@ for line in (block.group(1).splitlines() if block else []):
         check('README lists a path that exists', (ROOT / rel).exists(), rel)
 
 # 3. files the spec names in backticks exist
-for rel in set(re.findall(r'`((?:tests|docs|scripts|\.github|\.claude)/[\w./-]+)`', spec + readme + read('CONTRIBUTING.md'))):
+for rel in set(re.findall(r'`((?:tests|docs|scripts|api|supabase|\.github|\.claude)/[\w./-]+)`', spec + readme + read('CONTRIBUTING.md'))):
     if rel.endswith('...') or rel.startswith('tests/shots') or rel.startswith('tests/.build'):
         continue                      # branch-name patterns such as docs/..., and output that only exists after a test run
     check('documented path exists', (ROOT / rel).exists(), rel)
@@ -392,6 +392,28 @@ people = {x for x in real_names if not re.search(r'Decision|Takedown|Accuracy|Sl
 check('found the real names in the samples', len(people) >= 4, people)
 for name in people:
     check('invented fixture does not use a real fighter', name not in mock and name.split()[-1] not in mock, name)
+
+# 8b. the copy on the server (D99): never a secret key, each row only its owner's, the routine once a day, the numbers
+cloud_src, csync_src, sync_src = src_of('core/cloud.ts'), src_of('app/cloud.ts'), src_of('core/sync.ts')
+everywhere = '\n'.join(q.read_text(encoding='utf-8') for q in [*(ROOT / 'src').rglob('*.ts'), *(ROOT / 'api').rglob('*.ts'), ROOT / 'index.html', ROOT / 'vercel.json'])
+key = re.search(r"export const CLOUD_KEY = '([^']*)';", cloud_src); url = re.search(r"export const CLOUD_URL = '([^']*)';", cloud_src)
+check('the key in the page is empty or a publishable one, and no secret key is anywhere in the code', bool(key and url) and (key.group(1) == '' or key.group(1).startswith('sb_publishable_')) and not re.search(r'sb_secret_[\w-]{8,}|eyJ[\w-]{20,}\.[\w-]{20,}', everywhere), key and key.group(1))
+check('the address is empty or a Supabase project, set together with the key', bool(key and url) and (url.group(1) == '') == (key.group(1) == '') and (url.group(1) == '' or re.fullmatch(r'https://[a-z0-9]+\.supabase\.co', url.group(1))), url and url.group(1))
+check('with no project set the card does not show and nothing syncs', "if (!cloudOn()) return '';" in csync_src and "if (!cloudOn()) return;" in csync_src and 'nada é chamado' in spec)
+schema = read('supabase/schema.sql')
+grants = [l for l in schema.splitlines() if l.startswith('grant ')]
+check('the table keeps row level security, its owner\'s row only, and nobody deletes', 'enable row level security' in schema and schema.count('(select auth.uid()) = user_id') == 4 and 'for delete' not in schema and 'revoke all on table public.states from anon, authenticated;' in schema and not any('delete' in g or ' all ' in g for g in grants), grants)
+check('the schema is checked on a local Postgres in the verify', 'run schema   tests/schema_check.sh' in verify_sh and 'run keepalive node tests/keepalive.mjs' in verify_sh)
+crons = json.loads(read('vercel.json')).get('crons', [])
+check('the routine runs once a day, at the time the spec says', crons == [{'path': '/api/keepalive', 'schedule': '17 9 * * *'}] and '`17 9 * * *`' in spec and 'uma vez por dia' in spec, crons)
+check('only the cron gets into the routine', "request.headers.get('authorization') !== `Bearer ${secret}`" in read('api/keepalive.ts') and 'CRON_SECRET' in spec)
+for pattern, text in ((r'SYNC_AFTER = 2000;', '2 s depois da última gravação (`SYNC_AFTER`'), (r'CLOUD_TIMEOUT = 15000', 'no máximo 15 s (`CLOUD_TIMEOUT`)'), (r'export const TOKEN_MARGIN = 60e3;', 'renovada 1 min antes de vencer (`TOKEN_MARGIN`)'), (r'export const MIN_PASSWORD = 8, MAX_PASSWORD = 72;', 'A senha tem de 8 (`MIN_PASSWORD`')):
+    check('code still has the documented constant', re.search(pattern, csync_src + cloud_src), pattern)
+    check('spec still states the constant', text in spec, text)
+check('the join and the marks have tests and are in the spec', all(('Core.' + f) in unit_src for f in ('stamp', 'mergeStates', 'sameState', 'firstMeet', 'joinBoth', 'cloudHeaders', 'isPassword')) and '`Core.mergeStates`' in spec and '`Core.stamp`' in spec)
+check('the marks are put by the save itself, so no part of the app has to remember them', 'Core.stamp(written, S, Date.now())' in read('src/app/state.ts'))
+check('the password only travels: it is never written to storage', "LS.set('oitolados.auth.v1', session)" in csync_src and 'pass' not in csync_src.split('interface Session')[1].split('}')[0] and 'nunca é guardada' in spec)
+check('the session is not in the backup', 'oitolados.auth.v1' not in read('src/app/backup.ts') and '`oitolados.auth.v1`' in spec)
 
 # 9. the verification register keeps both halves, and the harness files it relies on are in place
 ver = read('docs/verificacao.md')

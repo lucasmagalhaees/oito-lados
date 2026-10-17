@@ -1,6 +1,6 @@
 # Escala: decisões e caminho
 
-Este documento guarda o que foi decidido sobre escala e o que fazer quando chegar a hora. Nada daqui está implementado.
+Este documento guarda o que foi decidido sobre escala e o que fazer quando chegar a hora. Feitas: a etapa 1 (D33) e a etapa 2 (D99, falta o projeto do Supabase). A etapa 3 não.
 
 ## Decisão atual (09/10/2026)
 
@@ -74,6 +74,7 @@ Backend mínimo, só para guardar o estado.
 - O navegador continua consultando a ESPN e liquidando. O servidor só persiste.
 - **Decidido em 17/10/2026 (D98 em `docs/decisoes.md`):** Vercel Hobby para as funções e Supabase Free para banco e login, em TypeScript, reaproveitando `src/core/`. O aparelho continua sendo a fonte da verdade (`localStorage`) e o servidor guarda uma cópia: banco fora do ar não para o app, só a sincronização. Uma rotina diária no cron da Vercel faz uma consulta no banco para o projeto do Supabase não pausar. Se o banco morrer de vez, o plano B é o app como é hoje, com o backup em arquivo.
 - Conflito entre aparelhos: o histórico é uma lista de depósitos e apostas com `id`, então dá para unir por `id` em vez de sobrescrever.
+- **Feita em 17/10/2026 (D99):** login com e-mail e senha (D100), uma linha por pessoa com o estado inteiro, a página falando direto com o Supabase e a rotina diária em `api/keepalive.ts`. Projeto criado e schema rodado em 17/10/2026; falta o `CRON_SECRET` na Vercel.
 
 O que já ajuda: o saldo é derivado do histórico (não existe campo de saldo para divergir) e cada aposta tem `id` próprio.
 
