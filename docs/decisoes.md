@@ -59,6 +59,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 28. PR #30 (D91) mesclado às 16:40 de 11/10/2026. Entre 16:23 e 16:41: como está o uso da API da ESPN, e como medir (D92).
 29. PR #31 (D92) mesclado às 17:15 de 11/10/2026. Às 17:43: "quero que proponha melhorias"; oito propostas, três recomendadas, e "pode fazer" (D93, D94, D95). As outras cinco ficaram propostas: odds em ritmo mais lento longe da luta e placar longo só de vez em quando (as duas depois de medir), trocar os três seletores do sistema que sobraram, os resultados do último card, e fechar as pendências de confirmação numa lista.
 30. PR #32 (D93 a D95) mesclado antes das 18:16 de 11/10/2026. Às 18:16 e 18:17: o que faz sentido fazer agora, e "me manda o fazer agora": os três seletores (D96) e a lista de pendências. Às 18:19, à lista de 23 linhas: "por mim tá tudo ok" (D97).
+31. PR #33 (D96, D97) mesclado às 18:44 de 11/10/2026. Em 17/10/2026, entre 09:18 e 09:25: quanto custa um backend, e como ele seria quando vier (D98).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -1057,11 +1058,38 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   23. As cores dos cantos, com a cor quente no lutador de cima, e + e − em tons neutros (D40, D41).
 - **O que a lista não trazia** continua sem confirmação, e está numa linha só das pendências.
 
+## D98. Quando vier backend: Etapa 2, Supabase Free e rotina diária na Vercel
+
+- **Contexto (17/10/2026, 09:18 a 09:25):** "e se eu quiser evoluir isso pra serviço backend com banco de dados, quanto o custo?", "o que você sugere?", "quero a free tier", "quero entender cada decisão", a pergunta sobre uma rotina que faz um `select` a cada poucos dias para o banco não pausar, "se o banco morrer o plano B já existe: o app como ele é hoje com backup no Telegram" e "pode registrar, e a rotina usando cron da Vercel".
+- **Não é para fazer agora.** O app continua estático (MVP, D33). Isto registra como será quando um dos gatilhos de `docs/escala.md` aparecer: o mesmo saldo no iPhone e no PC, dados perdidos, ou amigos usando.
+- **Decisão do Lucas:**
+  - **Plano grátis.** Vercel Hobby para as funções do servidor e Supabase Free para banco e login.
+  - **Começa pela Etapa 2:** o servidor só guarda e sincroniza. A ESPN, o preço e a liquidação continuam no aparelho.
+  - **O aparelho continua sendo a fonte da verdade.** Tudo segue no `localStorage` como hoje; o servidor recebe uma cópia. Banco fora do ar ou pausado: o app funciona como hoje, sem sincronizar, e sincroniza quando ele volta, juntando pelo `id` de cada depósito e aposta.
+  - **Plano B:** se o banco morrer de vez, o app como é hoje, com o backup em arquivo (D81).
+  - **Rotina diária no cron da Vercel** para o projeto do Supabase não pausar: uma função chamada uma vez por dia que faz uma consulta simples no banco.
+- **Por que Supabase, e não Neon:** o Supabase Free traz login pronto. O defeito dele, pausar o projeto depois de 1 semana sem uso e só voltar religando à mão, é coberto pela rotina diária; e, se a rotina falhar, o pior é o outro aparelho ficar desatualizado até o projeto ser religado.
+- **Por que o cron da Vercel, e não o GitHub Actions:** fica no mesmo projeto e no mesmo deploy. Um workflow agendado do GitHub para de rodar depois de 60 dias sem atividade num repositório público, sem avisar.
+- **No mesmo repositório, sem repositório à parte** (pergunta das 09:26): as funções da Vercel ficam numa pasta do próprio projeto e saem no mesmo deploy, com o mesmo CI e a mesma proteção da `main`. Elas importam `src/core/` direto, então a regra do app não fica duplicada em dois lugares. Um repositório separado pediria copiar o núcleo (ou publicá-lo como pacote) e manter dois deploys em sincronia. Como a Vercel organiza essas funções (pasta, formato) é fato de terceiro: conferir na hora de fazer.
+- **Por que TypeScript, e não Spring Boot:** `src/core/` já roda fora do navegador (D62) e iria para o servidor sem reescrever, com os testes. Spring Boot pediria reescrever o núcleo e um container ligado o tempo todo, que não é grátis.
+- **Limites desta decisão:**
+  - **Vale só para a Etapa 2.** Na Etapa 3 (amigos e ranking) o servidor decide preço e liquidação, e banco fora quer dizer app parado para todo mundo; o plano B deixa de valer e a escolha precisa ser revista.
+  - **O Vercel Hobby não permite uso comercial** (anúncio, assinatura). Se acontecer, é o Pro.
+- **Fatos de terceiro, vistos em 17/10/2026** por busca e por guias de terceiros (a página da Neon foi lida direto; as da Vercel e do Supabase, não), **reconferir antes de fazer:**
+  - Vercel Hobby: grátis, sem uso comercial, até 1 milhão de chamadas de função por mês; estourou, para até virar o mês. Cron no Hobby: uma execução por dia (`docs/escala.md`, conferido em 09/10/2026). Pro: US$ 20/mês por pessoa, com US$ 20 de crédito de uso.
+  - Supabase Free: 500 MB de banco, 50 mil usuários ativos por mês, 2 projetos, pausa depois de 1 semana sem uso. Pro: US$ 25/mês, não pausa.
+  - Neon Free: 1 GB por projeto, desliga depois de 5 min parado e religa na chamada seguinte.
+- **Não sei, e conferir antes de depender:**
+  - O que o Supabase conta como uso para não pausar. Teste: um projeto com a rotina rodando por duas semanas.
+  - Se os termos do plano grátis do Supabase dizem algo sobre manter o projeto acordado por rotina.
+  - Se a rotina parar em silêncio, ninguém nota. Ideia para a hora de fazer: o app mostrar quando ela rodou pela última vez.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
 |---|---|
 | Proteger a `main` exigindo PR e os checks do CI | Lucas |
+| Antes da Etapa 2: reconferir os planos grátis da Vercel e do Supabase e testar por duas semanas se a rotina diária segura o projeto do Supabase acordado (D98) | Quem fizer a Etapa 2 |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |

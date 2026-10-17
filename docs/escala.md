@@ -72,6 +72,7 @@ Backend mínimo, só para guardar o estado.
 
 - Login simples (link mágico por e-mail ou OAuth) e uma tabela com o estado do usuário, ou as tabelas da etapa 3 já no formato final.
 - O navegador continua consultando a ESPN e liquidando. O servidor só persiste.
+- **Decidido em 17/10/2026 (D98 em `docs/decisoes.md`):** Vercel Hobby para as funções e Supabase Free para banco e login, em TypeScript, reaproveitando `src/core/`. O aparelho continua sendo a fonte da verdade (`localStorage`) e o servidor guarda uma cópia: banco fora do ar não para o app, só a sincronização. Uma rotina diária no cron da Vercel faz uma consulta no banco para o projeto do Supabase não pausar. Se o banco morrer de vez, o plano B é o app como é hoje, com o backup em arquivo.
 - Conflito entre aparelhos: o histórico é uma lista de depósitos e apostas com `id`, então dá para unir por `id` em vez de sobrescrever.
 
 O que já ajuda: o saldo é derivado do histórico (não existe campo de saldo para divergir) e cada aposta tem `id` próprio.
