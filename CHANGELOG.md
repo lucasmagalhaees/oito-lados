@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.26.2] - 2026-10-18
+
+### Adicionado
+- Teste de mutação do núcleo (`npm run mutation`, com o Stryker): planta um erro pequeno de cada vez em `src/core` e vê se algum caso de `tests/unit.cases.mjs` falha. A pontuação passou de 75,8% para 91,2%, com 182 checagens novas nos casos do núcleo (599 para 781). Nenhum erro de regra foi achado; o produto não muda.
+
 ## [0.26.1] - 2026-10-17
 
 ### Corrigido

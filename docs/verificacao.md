@@ -177,6 +177,7 @@ O que se sabe que funciona, como se sabe, e o que ainda é suposição. Regra: u
 | Acessibilidade em 393 px, temas claro e escuro, em Lutas, mercados, cupom, copiar aposta, apostas abertas e encerradas e Carteira inteira (com o servidor simulado logado): contraste AA de todo texto e das dicas dos campos, nomes e rótulos, área de toque de 44 px nos botões soltos, foco que fica no botão depois de repintar, foco na folha de baixo ao abrir, botões de arquivo pelo teclado, aviso que não segura toque | `python3 tests/a11y.py` (102 checagens; 39 falhavam antes: dica dos campos a 4,08:1 no escuro e 4,12:1 no claro, `≈` a 4,27–4,48:1, foco caindo para o começo da página a cada toque, "Restaurar de um arquivo" e "Escolher fotos" fora do alcance do teclado, o aviso no alto engolindo o toque em "Encerradas" por 4,2 s, alvos de 17 a 40 px) | 17/10/2026 |
 | O ROI e a odd contra o print saem iguais em todo lugar e arredondam a perda como o ganho | `python3 tests/a11y.py`: 70 de lucro em 130 apostados aparecia como +53,9% nos quadros, na frase e no extrato e +53,8% na tabela; agora +53,8% nos quatro. Odd pega a 5,20 contra 5,50 do print (−5,45%) aparecia como −5,4%; agora −5,5% | 17/10/2026 |
 | Desempenho da repintura, medido antes de mexer: com 400 apostas encerradas, trocar de aba ou de período leva de 2 a 37 ms; com 2.000, de 3 a 204 ms (a lista de encerradas é a mais lenta). Uma sincronização sem nada novo faz 1 chamada à ESPN, e uma forçada faz 6. Nada foi otimizado | Script de medição (`performance.now()` em volta do clique, no Chromium dos testes, numa máquina de desenvolvimento), não guardado no repositório | 17/10/2026 |
+| Os casos do núcleo pegam os erros que dizem pegar | `npm run mutation` (Stryker 10.0.0 rodando `node tests/core.mjs`), por partes: os 10 módulos de dinheiro e dados, depois `tip.ts`, depois os outros 5. 91,2% dos 4.763 mutantes mortos, contra 75,8% antes dos casos novos. Tabela por módulo em "Teste de mutação do núcleo", abaixo | 18/10/2026 |
 
 ## Não verificado
 
@@ -257,5 +258,52 @@ O que se sabe que funciona, como se sabe, e o que ainda é suposição. Regra: u
 | As setas e os atalhos de 0,2u a 0,4u no iPhone | Só no Chromium dos testes | Montar uma múltipla de cinco no iPhone, com o valor em unidades |
 | A ordem em que o iPhone entrega várias fotos e o tempo de leitura de várias seguidas | Que a galeria do iOS entrega as fotos e a lista é montada foi visto nas capturas do Lucas (acima). A ordem importa agora, porque as fotos são numeradas por ela | Escolher os cinco prints de uma vez e ver se "Foto 1" é a primeira escolhida |
 | A máscara de valores no teclado do iPhone | O teste digita num Chromium de computador. O teclado numérico do iOS e o cursor no Safari não foram vistos | Digitar um valor acima de mil no iPhone |
+| Que os mutantes que sobram no núcleo são equivalentes | Nos 10 módulos de dinheiro e dados os 145 que sobram foram lidos um a um e classificados à mão (abaixo), sem uma prova; nos outros 6 módulos os 275 que sobram não foram classificados | Ler cada um no relatório (`reports/mutation/index.html`) e escrever o caso que o mataria |
 | Plausibilidade das odds estimadas | Não foram comparadas com casas de verdade | Comparar algumas num card real |
 | Limites gratuitos de hospedagem | Vieram de um comparativo de setembro de 2026, não das páginas oficiais de preço | Conferir no site de cada serviço antes de depender |
+
+## Teste de mutação do núcleo
+
+Conferido em 18/10/2026, no branch `test/mutacao-nucleo` sobre `0a95656`. O Stryker 10.0.0 troca, um de cada vez, um pedaço de `src/core` (um `<` por `<=`, um `+` por `-`, um `&&` por `||`, uma constante, um `return` apagado) e roda `node tests/core.mjs`. O mutante que nenhum caso nota "sobrevive". Os tempos são de uma máquina de 2 núcleos: os 10 módulos de dinheiro e dados levaram 109 min (é o `pricing.ts` que pesa: com ele instrumentado cada rodada dos casos leva uns 4 s), `tip.ts` 10 min e os outros 5 juntos 10 min. Por isso o teste não está no `verify.sh`.
+
+```
+npm run mutation -- --mutate src/core/settlement.ts,src/core/cashout.ts,src/core/pricing.ts,src/core/money.ts,src/core/fx.ts,src/core/sync.ts,src/core/history.ts,src/core/odds.ts,src/core/pace.ts,src/core/cloud.ts
+npm run mutation -- --mutate src/core/tip.ts
+npm run mutation -- --mutate src/core/espn.ts,src/core/usage.ts,src/core/form.ts,src/core/card.ts,src/core/flags.ts
+```
+
+"Antes" é a `main` de 17/10/2026 (599 checagens no núcleo), rodada inteira de uma vez. "Depois" são os mesmos mutantes com os casos novos (781 checagens). Mortos inclui os que estouraram o tempo (um laço que não acaba é um erro notado).
+
+| Módulo | Mutantes | Antes: mortos / sobreviventes | Antes | Depois: mortos / sobreviventes | Depois |
+|---|---|---|---|---|---|
+| `settlement.ts` | 368 | 335 / 33 | 91,0% | 351 / 17 | 95,4% |
+| `cashout.ts` | 145 | 124 / 21 | 85,5% | 135 / 10 | 93,1% |
+| `pricing.ts` | 701 | 461 / 240 | 65,8% | 648 / 53 | 92,4% |
+| `money.ts` | 162 | 143 / 19 | 88,3% | 149 / 13 | 92,0% |
+| `fx.ts` | 118 | 100 / 18 | 84,7% | 116 / 2 | 98,3% |
+| `sync.ts` | 396 | 273 / 123 | 68,9% | 370 / 26 | 93,4% |
+| `history.ts` | 548 | 505 / 43 | 92,2% | 532 / 16 | 97,1% |
+| `odds.ts` | 78 | 37 / 41 | 47,4% | 73 / 5 | 93,6% |
+| `pace.ts` | 12 | 8 / 4 | 66,7% | 10 / 2 | 83,3% |
+| `cloud.ts` | 57 | 47 / 10 | 82,5% | 56 / 1 | 98,2% |
+| `tip.ts` | 1.049 | 793 / 256 | 75,6% | 837 / 212 | 79,8% |
+| `espn.ts` | 492 | 222 / 270 | 45,1% | 459 / 33 | 93,3% |
+| `usage.ts` | 227 | 200 / 27 | 88,1% | 213 / 14 | 93,8% |
+| `form.ts` | 246 | 212 / 34 | 86,2% | 238 / 8 | 96,7% |
+| `card.ts` | 108 | 103 / 5 | 95,4% | 107 / 1 | 99,1% |
+| `flags.ts` | 56 | 48 / 8 | 85,7% | 49 / 7 | 87,5% |
+| **Tudo** | **4.763** | **3.611 / 1.152** | **75,8%** | **4.343 / 420** | **91,2%** |
+
+`types.ts` e `index.ts` ficam de fora: um só declara formas, o outro só junta os módulos.
+
+O que estava por trás dos sobreviventes de antes: o `espn.ts` só era exercitado de verdade pelo `tests/contract.py`, que não roda dentro da mutação, e o placar inteiro (`normEvent`) não tinha caso no núcleo; o preço era conferido por propriedades (somas, limites), não pelos números, e a mistura histórica por categoria, os limites da taxa de quedas e os textos dos mercados podiam mudar sem nenhum caso notar; e na junção de dois aparelhos (`sync.ts`) a ordem das cópias sempre punha a mais nova do lado que ganha, o que deixava passar um erro plantado na escolha da cópia mais nova. Os casos novos entram em `tests/unit.cases.mjs` marcados "found by mutation testing". Os de preço guardam os números que o modelo dá hoje: mudar o modelo de propósito muda esses números, e eles têm de ser refeitos depois de conferir que os novos são os que se quer.
+
+**Nenhum erro de regra apareceu.** Nenhum mutante revelou um resultado errado do código como está.
+
+Os 145 que sobram nos 10 módulos de dinheiro e dados, lidos um a um:
+
+- **Equivalentes de verdade**, sem entrada que os separe: comparações em fronteiras que não existem (`>` e `>=` numa linha X.5 contra um inteiro, ou em `2:30` já anulado antes), contadores usados só como verdadeiro ou falso (`won--`), valores iniciais de lista que são sobrescritos ou filtrados (`add()` descarta a opção sem odd), o cache da grade de quedas, o tamanho inicial de um `Array`, o `String(null)` que já não tem dígito, o `parseFloat('+130')`.
+- **Código redundante**, coberto por outro caminho: o vencedor em `legOutcome` é decidido na linha 16, o que deixa sem efeito o tratamento dele nas linhas 19 e 23; o `a.m === 'dec'` do total de rounds em `pricing.ts`, porque o desfecho por decisão já está no último round e na segunda metade; a parte do `rank` de `sync.ts` que olha o status, já comparado antes; o primeiro teste de `prob == null` no cashout, que o `!(prob > 0)` já cobre. Não foi mexido: é proteção, e tirar seria mudar o código sem mudar o comportamento.
+- **Só diferem para dados que o app não produz**: aposta encerrada sem `settledAt`, simples com mais de uma seleção, aposta sem seleção, unidade negativa, `retryDelay` com falhas negativas, `stepUnits` com direção 0, moeda que não é real, dólar ou euro, chances exatamente iguais a 2% ou 98% em ponto flutuante, um bilionésimo a mais na bisseção, e a 41ª queda da grade.
+
+Os 275 dos outros 6 módulos (`tip.ts`, `espn.ts`, `usage.ts`, `form.ts`, `flags.ts`, `card.ts`) não foram lidos um a um. No `tip.ts`, que é quase todos, são em maioria trocas dentro das expressões regulares do leitor de prints (`\s*` por `\s`, `\d{1,2}` por `\d`, uma âncora `^` ou `$` a menos): cada uma muda o que o leitor aceita num formato que nenhum caso traz. O leitor mostra o que entendeu antes de qualquer aposta, o que limita o estrago.

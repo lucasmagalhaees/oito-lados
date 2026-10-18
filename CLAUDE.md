@@ -42,6 +42,7 @@ O que cada peça do harness cobre:
 | `scripts/verify.sh` | Afirmar que está certo sem ter rodado nada |
 | `tests/unit.cases.mjs`, rodado por `tests/unit.py` e por `tests/core.mjs` | Mexer em preço ou liquidação e quebrar uma regra sem notar |
 | `tests/core.mjs` (os mesmos casos, no Node, sem página) | O núcleo passar a depender de página, rede ou armazenamento sem ninguém notar |
+| `npm run mutation` (Stryker, `stryker.config.mjs`; fora do `verify.sh`) | Os casos do núcleo passarem sem pegar o erro que dizem pegar: troca um `<` por `<=`, um `+` por `-`, apaga um `return`, e vê se algum caso falha |
 | `tests/contract.py` + `tests/fixtures/espn/` | Escrever leitor para um formato de API imaginado |
 | `tests/contract_live.py` (toda semana no GitHub Actions) | A API real mudar e a documentação continuar dizendo o contrário |
 | `tests/docs_check.py` | Documentação citar número, arquivo ou chave que não existe mais |
@@ -72,6 +73,7 @@ O que cada peça do harness cobre:
 - `scripts/check_production.py` + `.github/workflows/producao.yml`: confere se a produção está no commit da `main`.
 - `scripts/capture_espn.py`: grava respostas reais da ESPN como amostra em `tests/fixtures/espn/`. De uma máquina que não alcança a ESPN, roda pelo workflow `ESPN contract` com a entrada `capture`, que commita as amostras no branch em que foi disparado (nunca na `main`).
 - `tests/unit.cases.mjs`: os casos do `Core` (conversão de odds, normalizadores, preço, combinadas, liquidação, leitor de apostas, histórico), num arquivo só. Dois executores rodam os mesmos casos: `tests/unit.py`, no navegador, contra a página gerada, e `tests/core.mjs`, no Node, contra o núcleo construído sozinho.
+- `stryker.config.mjs`: o teste de mutação do núcleo (`npm run mutation`), que planta um erro pequeno de cada vez em `src/core` e roda `node tests/core.mjs`. Relatório em `reports/mutation/`, fora do repositório. Não está no `verify.sh`, porque leva mais de duas horas. A pontuação por módulo está em `docs/verificacao.md`.
 - `tests/contract.py`: normalizadores contra respostas reais gravadas em `tests/fixtures/espn/` e `tests/fixtures/fx/`.
 - `tests/contract_live.py`: confere a API real da ESPN (agendado em `.github/workflows/espn-contract.yml`).
 - `tests/docs_check.py`: confere a documentação contra o código.
@@ -611,6 +613,7 @@ npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
 scripts/verify.sh            # tudo: tipos, build, docs, core, a rotina diária, o schema do banco (se houver Postgres), unit, contract, autoteste da checagem de produção, e2e claro e escuro, settle, pwa, acessibilidade, dados estragados e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 node tests/core.mjs          # os casos do núcleo, sem navegador
+npm run mutation             # teste de mutação do núcleo (Stryker rodando o core.mjs); mais de 2 h em 2 núcleos; um módulo: npm run mutation -- --mutate src/core/fx.ts
 node tests/keepalive.mjs     # a rotina diária (api/keepalive.ts), com a rede trocada
 tests/schema_check.sh        # o schema do banco num Postgres local
 python3 tests/cloud_live.py  # o projeto do Supabase de verdade (precisa alcançá-lo; --mock testa o script)

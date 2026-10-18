@@ -15,6 +15,18 @@ export default function cases(Core) {
   eq('am2dec EVEN', Core.am2dec('EVEN'), 2);
   eq('am2dec null', Core.am2dec(null), null);
   eq('am2dec 0', Core.am2dec(0), null);
+  // found by mutation testing (docs/verificacao.md). eq compares JSON, where Infinity and NaN read as null: "no price" is asked for exactly
+  eq('am2dec: no price is null, not an infinite odd', [Core.am2dec(null), Core.am2dec(0), Core.am2dec('abc')].map(x => x === null), [true, true, true]);
+  eq('am2dec: EVEN with spaces around, and a text that only contains "ev" is not even', [Core.am2dec(' EVEN '), Core.am2dec('never')], [2, null]);
+  eq('estimated odd: the fair chance with the 7% margin, between 1.02 and 51', [Core.mo(0.5), Core.mo(0.25), Core.mo(0.99), Core.mo(0.01), Core.mo(0.0041)], [1.87, 3.74, 1.02, 51, 51]);
+  eq('estimated odd: a chance of 0.4% or less is not offered', [Core.mo(0.004), Core.mo(0.001), Core.mo(0), Core.mo(NaN)].map(x => x === null), [true, true, true, true]);
+  /* with no method lines, the finishes follow the historical mix of the division; in a five-round fight decision is x0.88 */
+  const MIX = { 'Heavyweight': [.48, .12, .40], 'Light Heavyweight': [.42, .14, .44], 'Middleweight': [.36, .17, .47], 'Welterweight': [.31, .16, .53], 'Lightweight': [.27, .19, .54], 'Featherweight': [.26, .17, .57],
+    'Bantamweight': [.24, .17, .59], 'Flyweight': [.20, .20, .60], 'W Featherweight': [.22, .15, .63], 'W Bantamweight': [.18, .17, .65], 'W Flyweight': [.13, .17, .70], 'W Strawweight': [.10, .17, .73], 'Catchweight': [.28, .17, .55] };
+  const mixOf = (weight, rounds) => { const p = Core.probs({ weight, rounds }, { ml: { a: 1.8, b: 2.05 }, method: null, dist: null, total: null }); return ['a', 'b'].map(s => ['ko', 'sub', 'dec'].map(m => Math.round(p.M[s][m] / (s === 'a' ? p.pa : p.pb) * 1e6) / 1e6)); };
+  for (const w in MIX) eq(`no method line: the mix of ${w}, the same for both fighters`, mixOf(w, 3), [MIX[w], MIX[w]]);
+  const five = (w => { const d = w[2] * 0.88, k = (1 - d) / (1 - w[2]); return [w[0] * k, w[1] * k, d].map(x => Math.round(x * 1e6) / 1e6); })(MIX.Middleweight);
+  eq('no method line, five rounds: decision x0.88, the finishes take the rest in proportion', mixOf('Middleweight', 5), [five, five]);
 
   /* ---- ESPN normalisers ---- */
   const cls = (name, displayName) => { const r = Core.normResult({ result: { name, displayName }, period: 2, clock: 100, displayClock: '1:40' }); return r && r.method; };
@@ -45,6 +57,44 @@ export default function cases(Core) {
   eq('distance yes listed second', dist(['-170', '+130']), { yes: 2.3, no: 1.59 });
   eq('distance needs two prices', dist(['+130']), null);
   O.dist = { yes: 2.3, no: 1.59 };
+  /* the board, read from an invented answer in the shape of the recorded ones (tests/fixtures/espn/scoreboard_*.json):
+     found by mutation testing (docs/verificacao.md); tests/contract.py reads the real ones, but outside of these cases */
+  const ath = (displayName, shortName, alt) => ({ fullName: displayName, displayName, shortName, flag: { alt } });
+  const EV = { id: 'e9', name: 'UFC Teste: Almeida vs. Dunne', date: '2026-10-03T20:00Z', status: { type: { name: 'STATUS_SCHEDULED' } }, competitions: [
+    { id: 'c1', date: '2026-10-04T00:00Z', type: { abbreviation: 'Middleweight' }, format: { regulation: { periods: 5 } }, status: { clock: 0, displayClock: '0:00', period: 0, type: { name: 'STATUS_SCHEDULED', state: 'pre' } },
+      competitors: [{ id: '302', order: 2, winner: false, athlete: ath('Connor Lee Dunne', 'C. Lee Dunne', 'Ireland'), records: [{ summary: '10-2-0' }] }, { id: '301', order: 1, winner: false, athlete: ath('Rafael Almeida', 'R. Almeida', 'Brazil'), records: [{ summary: '20-1-0' }] }] },
+    { id: 'c2', competitors: [{ id: '1', order: 1, athlete: { fullName: 'Caio Brandt' } }, { id: '2', order: 2 }], status: { type: { name: 'STATUS_CANCELED' } } },
+    { id: 'c3', competitors: [{ id: '5', order: 1, athlete: ath('Ivo Rocha', 'I. Rocha', 'Peru') }] },
+    { id: 'c4', date: '2026-10-04T01:00Z', type: { abbreviation: 'W Flyweight' }, format: { regulation: { periods: 3 } }, status: { displayClock: '3:10', period: 2, type: { name: 'STATUS_IN_PROGRESS', state: 'in' } },
+      competitors: [{ id: '7', order: 1, winner: false, athlete: ath('Marina Teles', 'Teles', 'Brazil') }, { id: '8', order: 2, winner: true, athlete: { displayName: 'Joana Prado', shortName: 'J.' } }] }] };
+  const EVN = Core.normEvent(EV), fx1 = EVN.fights[0], fx2 = EVN.fights[1], fx4 = EVN.fights[2];
+  eq('board: the event, and a fight with fewer than two fighters is left out', [EVN.id, EVN.name, EVN.date, EVN.completed, EVN.fights.map(f => f.id)], ['e9', 'UFC Teste: Almeida vs. Dunne', Date.parse('2026-10-03T20:00Z'), false, ['c1', 'c2', 'c4']]);
+  eq('board: a fight, fighter a being the one of order 1', [fx1.id, fx1.eventId, fx1.eventName, fx1.date, fx1.idx, fx1.weight, fx1.rounds, fx1.state, fx1.canceled, fx1.period, fx1.clock, fx1.winner], ['c1', 'e9', 'UFC Teste: Almeida vs. Dunne', Date.parse('2026-10-04T00:00Z'), 0, 'Middleweight', 5, 'pre', false, 0, '0:00', null]);
+  eq('board: each fighter, the surname taken from the short name without the initial', [fx1.a, fx1.b], [{ id: '301', name: 'Rafael Almeida', last: 'Almeida', country: 'Brazil', record: '20-1-0', winner: false }, { id: '302', name: 'Connor Lee Dunne', last: 'Lee Dunne', country: 'Ireland', record: '10-2-0', winner: false }]);
+  eq('board: a cancelled fight is over, and what is missing gets a default', [fx2.state, fx2.canceled, fx2.date, fx2.rounds, fx2.weight, fx2.period, fx2.clock, fx2.a.name, fx2.a.last, fx2.b.name, fx2.b.last, fx2.b.country, fx2.b.record, fx2.idx], ['post', true, Date.parse('2026-10-03T20:00Z'), 3, '', 0, '', 'Caio Brandt', 'Brandt', 'A definir', '', '', '', 1]);
+  eq('board: a fight under way, the winner marked, and a short name with nothing but an initial', [fx4.state, fx4.period, fx4.clock, fx4.winner, fx4.a.last, fx4.b.last, fx4.b.winner, fx4.idx], ['in', 2, '3:10', 'b', 'Teles', 'Prado', true, 3]);
+  eq('board: an event is over when the source says so in any of its three ways', [{ completed: true }, { state: 'post' }, { name: 'STATUS_FINAL' }, { name: 'STATUS_SCHEDULED', state: 'pre' }].map(type => Core.normEvent({ id: 1, date: '2026-10-03T20:00Z', status: { type } }).completed), [true, true, true, false]);
+  eq('board: an event with no fights or no status', (e => [e.fights, e.completed, e.name])(Core.normEvent({ id: 2, date: '2026-10-03T20:00Z' })), [[], false, '']);
+  /* the odds of a fight, read from invented answers in the shape of tests/fixtures/espn/odds.json */
+  const oddsAns = (over, x) => ({ items: [{ provider: { name: 'DraftKings' }, overUnder: 3.5, overOdds: -120, underOdds: -110, homeAthleteOdds: side('302', 105, 200, 2200, 450), awayAthleteOdds: side('301', -125, 800, 300, 250), propBets: { $ref: 'http://x/props?lang=en' }, ...over }, ...(x || [])] });
+  eq('odds: an item without both sides is passed over for the next one', Core.normOdds({ items: [{ homeAthleteOdds: side('302', 105, 1, 1, 1) }, oddsAns().items[0]] }, F).ml, { a: 1.8, b: 2.05 });
+  eq('odds: a side of another fighter, or a side with no moneyline, is no odds', [Core.normOdds(oddsAns({ awayAthleteOdds: side('999', -125, 800, 300, 250) }), F), Core.normOdds(oddsAns({ awayAthleteOdds: { ...side('301', -125, 800, 300, 250), moneyLine: undefined } }), F), Core.normOdds(oddsAns({ homeAthleteOdds: { athlete: {}, moneyLine: 105 } }), F), Core.normOdds(null, F)], [null, null, null, null]);
+  eq('odds: the moneyline can come under the current prices', Core.normOdds(oddsAns({ awayAthleteOdds: { ...side('301', null, 800, 300, 250), moneyLine: undefined, current: { moneyLine: { american: '-150' }, victoryMethod: side('301', 0, 800, 300, 250).current.victoryMethod } } }), F).ml, { a: 1.67, b: 2.05 });
+  eq('odds: no method lines when one side lacks one of them', [Core.normOdds(oddsAns({ homeAthleteOdds: { ...side('302', 105, 200, 2200, 450), current: { victoryMethod: { koTkoDq: am(200), submission: am(2200) } } } }), F).method, Core.normOdds(oddsAns({ homeAthleteOdds: { ...side('302', 105, 200, 2200, 450), current: {} } }), F).method], [null, null]);
+  eq('odds: a total line must be a half inside the rounds of the fight, with both prices', [3.5, 0.5, 4.5, 5.5, 0, 3, -0.5].map(l => !!Core.normOdds(oddsAns({ overUnder: l }), F).total).concat([!!Core.normOdds(oddsAns({ overOdds: null }), F).total, !!Core.normOdds(oddsAns({ underOdds: null }), F).total]), [true, true, true, false, false, false, false, false, false]);
+  eq('odds: the book and the props link, with defaults', [Core.normOdds(oddsAns(), F).book, Core.normOdds(oddsAns({ provider: undefined }), F).book, Core.normOdds(oddsAns({ propBets: undefined }), F).props, Core.normOdds(oddsAns({ propBets: { $ref: 'https://x/http:/p' } }), F).props], ['DraftKings', 'casa', '', 'https://x/http:/p']);
+  const distOf = (items, o) => Core.attachDistance(o || Core.normOdds(payload, F), F, { items }).dist;
+  const dItem = v => ({ type: { name: 'Fight To Go The Distance' }, odds: { american: { value: v } } });
+  eq('distance: only the distance items with a price count, and the other props are left aside', [distOf([dItem('+130'), { type: { name: 'Total Rounds' }, odds: { american: { value: '+500' } } }, dItem('-170'), { type: {} }, null, { odds: {} }, { type: { name: 'Distance' } }]), distOf([dItem('+130'), dItem('-170')], { ...Core.normOdds(payload, F), method: null })], [{ yes: 2.3, no: 1.59 }, null]);
+  eq('distance: the decision chance of both fighters is summed to tell which price is the yes', distOf([dItem('-300'), dItem('+220')], { ...Core.normOdds(payload, F), method: { a: { ko: 9, sub: 9, dec: 2.2 }, b: { ko: 9, sub: 9, dec: 2.2 } } }), { yes: 1.33, no: 3.2 });
+  const rs = (s) => Core.normResult({ period: 2, ...s });
+  eq('result: the time from the displayed clock, else the numeric one, else none', [rs({ result: { name: 'kotko' }, displayClock: '3:26' }).time, rs({ result: { name: 'kotko' }, displayClock: ' 12:05 ' }).time, rs({ result: { name: 'kotko' }, displayClock: '3:2', clock: 63 }).time, rs({ result: { name: 'kotko' }, displayClock: 'x3:26', clock: 7 }).time, rs({ result: { name: 'kotko' }, displayClock: '3:26x' }).time, rs({ result: { name: 'kotko' }, clock: '63' }).time, rs({ result: { name: 'kotko' }, displayClock: 'a:bc' }).time], [206, 725, 63, 7, null, null, null]);
+  eq('result: the words of the result, with nothing missing made up', [rs({ result: { displayName: 'KO/TKO' } }), rs({ result: { name: 'decision---split' } })].map(r => [r.method, r.label, r.desc, r.clock, r.round]), [['ko', 'KO/TKO', '', '', 2], ['dec', '', '', '', 2]]);
+  eq('result: a no contest written without the hyphen, and one overturned', [rs({ result: { name: 'nocontest' } }).method, rs({ result: { displayName: 'Overturned' } }).method], ['nc', 'nc']);
+  eq('past fight: no date, category or rounds told, and a no contest nobody won', (p => [p.date, p.weight, p.rounds, p.won, p.label])(Core.normPastFight({ id: 'p2', competitors: [{ id: '10', winner: true }, { id: '20', winner: false }] }, { period: 1, displayClock: '2:00', result: { name: 'no-contest', displayName: 'No Contest' } }, '10')), [0, '', 0, null, 'No Contest']);
+  eq('past fight: a fight with a winner is a win only for the athlete who won it, and the format is read when it is there', [Core.normPastFight({ id: 'p3', format: {}, competitors: [{ id: '10', winner: true }, { id: '20', winner: false }] }, { period: 1, displayClock: '1:00', result: { name: 'kotko', displayName: 'KO/TKO' } }, '20').won, Core.normPastFight({ id: 'p3', format: { regulation: {} }, competitors: [] }, null, '20').rounds], [false, 0]);
+  eq('takedowns: a stat is read only by its name and only as a number', [Core.statValue({ splits: { categories: [{ stats: [{ name: 'other', value: 9 }] }, {}, { stats: [{ name: 'takedownsLanded', value: '3' }, { name: 'takedownsLanded', value: 4 }] }] } }, 'takedownsLanded'), Core.statValue({ splits: {} }, 'x'), Core.statValue(null, 'x'), Core.statValue({}, 'x')], [4, null, null, null]);
+  eq('links of the source go by https, and only at the start', [Core.statusRef({ status: { $ref: 'http://a/http:/b' } }), Core.normEventlog({ events: { items: [{ competition: { $ref: 'xhttp://a/competitions/9' } }] } })[0].competition], ['https://a/http:/b', 'xhttp://a/competitions/9']);
 
   /* ---- pricing ---- */
   const P = Core.price(F, O, { a: { tdAvg: 1.52 }, b: { tdAvg: 0.43 } }), J = P.J, M = P.map;
@@ -81,6 +131,37 @@ export default function cases(Core) {
   for (const ks of [['fm:ko', 'tot:o:1.5'], ['ml:a', 'td:o:1.5'], ['mov:b:ko', 'rnd:1'], ['ml:b', 'dist:yes', 'td:u:1.5']]) {
     const c = combo(ks); ok('combo never pays less than its best leg: ' + ks.join('+'), c.ok && c.odd >= Math.max(...ks.map(k => M[k].odd)));
   }
+  /* pricing, as the model prices today: found by mutation testing (docs/verificacao.md). A change to the model changes these
+     numbers on purpose; regenerate them only after checking the new ones are the ones wanted. */
+  const shapeOf = Q => Q.groups.map(g => [g.id, g.cat, g.title, g.note || '', g.cols, g.heads ? 'h' : ''].join('|') + ': ' + g.opts.map(o => [o.key, o.label, o.full].join('|')).join(' ; '));
+  const oddsOf = Q => Q.groups.map(g => g.opts.map(o => o.key + '=' + o.odd + (o.src === 'real' ? 'r' : '')).join(' ')).join(' ');
+  const jointOf = Q => Object.keys(Q.map).filter(k => !/^td/.test(k)).map(k => k + '=' + Math.round(Q.J.prob([k]) * 1e4) / 1e4).join(' ');
+  const F3 = { ...F, rounds: 3, weight: 'W Flyweight' }, P3 = Core.price(F3, { ml: { a: 1.25, b: 4.2 }, method: null, total: null, dist: null }, { a: { tdAvg: 0 } }), P4 = Core.price(F3, { ml: { a: 1.02, b: 21 }, method: null, total: null, dist: null });
+  eq('price: the markets, their titles and the words of every selection', shapeOf(P), ["ml|Vencedor|Vencedor||2|: ml:a|Almeida|Rafael Almeida vence ; ml:b|Dunne|Connor Lee Dunne vence","mov|Método|Método de vitória||2|h: mov:a:ko|KO/TKO|Almeida por KO/TKO ; mov:b:ko|KO/TKO|Dunne por KO/TKO ; mov:a:sub|Submission|Almeida por Submission ; mov:b:sub|Submission|Dunne por Submission ; mov:a:dec|Decisão|Almeida por Decisão ; mov:b:dec|Decisão|Dunne por Decisão","fm|Método|Como a luta termina||3|: fm:ko|KO/TKO|Luta termina por KO/TKO ; fm:sub|Submission|Luta termina por Submission ; fm:dec|Decisão|Luta termina por Decisão","dist|Método|Vai até a decisão?||2|: dist:yes|Sim|Luta vai até a decisão ; dist:no|Não|Luta não vai até a decisão","tot|Rounds|Total de rounds|+ é mais de, − é menos de · X.5 = metade do round seguinte (2:30)|2|: tot:o:1.5|+1.5|+1.5 rounds ; tot:u:1.5|−1.5|−1.5 rounds ; tot:o:2.5|+2.5|+2.5 rounds ; tot:u:2.5|−2.5|−2.5 rounds ; tot:o:3.5|+3.5|+3.5 rounds ; tot:u:3.5|−3.5|−3.5 rounds ; tot:o:4.5|+4.5|+4.5 rounds ; tot:u:4.5|−4.5|−4.5 rounds","rnd|Rounds|Round em que a luta acaba|por nocaute ou submission|3|: rnd:1|Round 1|Luta acaba no round 1 ; rnd:2|Round 2|Luta acaba no round 2 ; rnd:3|Round 3|Luta acaba no round 3 ; rnd:4|Round 4|Luta acaba no round 4 ; rnd:5|Round 5|Luta acaba no round 5","wr|Rounds|Vencedor e round||2|h: wr:a:1|Round 1|Almeida vence no round 1 ; wr:b:1|Round 1|Dunne vence no round 1 ; wr:a:2|Round 2|Almeida vence no round 2 ; wr:b:2|Round 2|Dunne vence no round 2 ; wr:a:3|Round 3|Almeida vence no round 3 ; wr:b:3|Round 3|Dunne vence no round 3 ; wr:a:4|Round 4|Almeida vence no round 4 ; wr:b:4|Round 4|Dunne vence no round 4 ; wr:a:5|Round 5|Almeida vence no round 5 ; wr:b:5|Round 5|Dunne vence no round 5","td|Quedas|Quedas na luta|+ é mais de, − é menos de · soma dos dois lutadores|2|: td:o:0.5|+0.5|+0.5 quedas na luta ; td:u:0.5|−0.5|−0.5 quedas na luta ; td:o:1.5|+1.5|+1.5 quedas na luta ; td:u:1.5|−1.5|−1.5 quedas na luta ; td:o:2.5|+2.5|+2.5 quedas na luta ; td:u:2.5|−2.5|−2.5 quedas na luta","tda|Quedas|Acerta pelo menos 1 queda?||2|: tda:a:yes|Almeida: sim|Almeida acerta pelo menos 1 queda ; tda:a:no|Almeida: não|Almeida não acerta nenhuma queda ; tda:b:yes|Dunne: sim|Dunne acerta pelo menos 1 queda ; tda:b:no|Dunne: não|Dunne não acerta nenhuma queda"]);
+  eq('price: the markets of a three-round fight with no lines but the winner', shapeOf(P3).map(s => s.split(': ')[0]), ["ml|Vencedor|Vencedor||2|","mov|Método|Método de vitória||2|h","fm|Método|Como a luta termina||3|","dist|Método|Vai até a decisão?||2|","tot|Rounds|Total de rounds|+ é mais de, − é menos de · X.5 = metade do round seguinte (2:30)|2|","rnd|Rounds|Round em que a luta acaba|por nocaute ou submission|3|","wr|Rounds|Vencedor e round||2|h","td|Quedas|Quedas na luta|+ é mais de, − é menos de · soma dos dois lutadores|2|","tda|Quedas|Acerta pelo menos 1 queda?||2|"]);
+  eq('price: every odd of a five-round fight with all the lines (r is real)', oddsOf(P), "ml:a=1.8r ml:b=2.05r mov:a:ko=9r mov:b:ko=3r mov:a:sub=4r mov:b:sub=23r mov:a:dec=3.5r mov:b:dec=5.5r fm:ko=2.62 fm:sub=3.97 fm:dec=2.3r dist:yes=2.3r dist:no=1.59r tot:o:1.5=1.27 tot:u:1.5=3.5 tot:o:2.5=1.54 tot:u:2.5=2.37 tot:o:3.5=1.83r tot:u:3.5=1.91r tot:o:4.5=2.13 tot:u:4.5=1.67 rnd:1=4.81 rnd:2=6.43 rnd:3=8.58 rnd:4=11.45 rnd:5=15.28 wr:a:1=9.84 wr:b:1=9.43 wr:a:2=13.13 wr:b:2=12.59 wr:a:3=17.53 wr:b:3=16.8 wr:a:4=23.4 wr:b:4=22.42 wr:a:5=31.23 wr:b:5=29.93 td:o:0.5=1.36 td:u:0.5=2.97 td:o:1.5=2 td:u:1.5=1.75 td:o:2.5=2.96 td:u:2.5=1.37 tda:a:yes=1.57 tda:a:no=2.3 tda:b:yes=3.05 tda:b:no=1.35");
+  eq('price: every odd of a three-round fight with the winner line only', oddsOf(P3), "ml:a=1.25r ml:b=4.2r mov:a:ko=9.33 mov:b:ko=31.34 mov:a:sub=7.13 mov:b:sub=23.97 mov:a:dec=1.73 mov:b:dec=5.82 fm:ko=7.19 fm:sub=5.5 fm:dec=1.34 dist:yes=1.34 dist:no=3.12 tot:o:1.5=1.15 tot:u:1.5=5.05 tot:o:2.5=1.27 tot:u:2.5=3.51 rnd:1=6.82 rnd:2=9.75 rnd:3=13.92 wr:a:1=8.85 wr:b:1=29.75 wr:a:2=12.65 wr:b:2=42.49 wr:a:3=18.07 wr:b:3=51 td:o:0.5=1.58 td:u:0.5=2.29 td:o:1.5=3.04 td:u:1.5=1.35 tda:a:yes=3.14 tda:a:no=1.33 tda:b:yes=2.14 tda:b:no=1.66");
+  eq('price: a heavy favourite: what is too unlikely to offer is left out', oddsOf(P4), "ml:a=1.02r ml:b=21r mov:a:ko=7.54 mov:b:ko=51 mov:a:sub=5.76 mov:b:sub=51 mov:a:dec=1.4 mov:b:dec=28.82 fm:ko=7.19 fm:sub=5.5 fm:dec=1.34 dist:yes=1.34 dist:no=3.12 tot:o:1.5=1.15 tot:u:1.5=5.05 tot:o:2.5=1.27 tot:u:2.5=3.51 rnd:1=6.82 rnd:2=9.75 rnd:3=13.92 wr:a:1=7.15 wr:b:1=51 wr:a:2=10.22 wr:b:2=51 wr:a:3=14.6 td:o:0.5=1.41 td:u:0.5=2.79 td:o:1.5=2.37 td:u:1.5=1.54 td:o:2.5=4.32 td:u:2.5=1.19 tda:a:yes=2.14 tda:a:no=1.66 tda:b:yes=2.14 tda:b:no=1.66");
+  eq('price: the joint model\'s chance of every selection but takedowns (their odds are above), five rounds with all the lines', jointOf(P), "ml:a=0.5391 ml:b=0.4609 mov:a:ko=0.089 mov:b:ko=0.2671 mov:a:sub=0.2003 mov:b:sub=0.0348 mov:a:dec=0.2498 mov:b:dec=0.159 fm:ko=0.3561 fm:sub=0.2351 fm:dec=0.4087 dist:yes=0.4087 dist:no=0.5913 tot:o:1.5=0.7332 tot:u:1.5=0.2668 tot:o:2.5=0.606 tot:u:2.5=0.394 tot:o:3.5=0.5107 tot:u:3.5=0.4893 tot:o:4.5=0.4393 tot:u:4.5=0.5607 rnd:1=0.1941 rnd:2=0.1454 rnd:3=0.1089 rnd:4=0.0816 rnd:5=0.0611 wr:a:1=0.095 wr:b:1=0.0991 wr:a:2=0.0712 wr:b:2=0.0743 wr:a:3=0.0533 wr:b:3=0.0556 wr:a:4=0.0399 wr:b:4=0.0417 wr:a:5=0.0299 wr:b:5=0.0312");
+  eq('price: the joint model\'s chance of every selection but takedowns, three rounds with the winner line only', jointOf(P3), "ml:a=0.7706 ml:b=0.2294 mov:a:ko=0.1002 mov:b:ko=0.0298 mov:a:sub=0.131 mov:b:sub=0.039 mov:a:dec=0.5394 mov:b:dec=0.1606 fm:ko=0.13 fm:sub=0.17 fm:dec=0.7 dist:yes=0.7 dist:no=0.3 tot:o:1.5=0.8151 tot:u:1.5=0.1849 tot:o:2.5=0.7336 tot:u:2.5=0.2664 rnd:1=0.137 rnd:2=0.0959 rnd:3=0.0671 wr:a:1=0.1056 wr:b:1=0.0314 wr:a:2=0.0739 wr:b:2=0.022 wr:a:3=0.0517 wr:b:3=0.0154");
+  /* pricing rules, each named: found by mutation testing (docs/verificacao.md) */
+  eq('combo: an impossible or a redundant combination is refused', [combo(['dist:yes', 'tot:u:1.5']).ok, combo(['ml:a', 'mov:a:sub']).ok, combo(['ml:a', 'fm:ko']).ok], [false, false, true]);
+  eq('combo: the joint chance with the 10% margin, never under the best leg', c1.odd, Math.max(Core.r2(1 / (c1.p * 1.1)), M['fm:ko'].odd, M['tot:o:1.5'].odd));
+  const Osym = { ml: { a: 1.91, b: 1.91 }, method: { a: { ko: 5, sub: 9, dec: 3.5 }, b: { ko: 5, sub: 9, dec: 3.5 } }, total: null, dist: null }, Psym = Core.price(F, Osym);
+  eq('combo: in an even fight, a combination is paid as the market of the right fighter', Core.combo(Psym.J, ['ml:b', 'fm:ko'], [1.91, Psym.map['fm:ko'].odd], Psym.map).same, 'Dunne por KO/TKO');
+  eq('joint: a selection the model does not know has no chance', J.prob(['nope:a']), 0);
+  near('chance: a winner pick together with anything else comes from the joint model', P.chance(['ml:a', 'tot:o:1.5']), J.prob(['ml:a', 'tot:o:1.5']), 1e-12);
+  const pd = o => Core.probs(F, { ...O, ...o }).pDec;
+  eq('distance line too sure either way is not used', [pd({ dist: { yes: 60, no: 1.01 } }), pd({ dist: { yes: 1.01, no: 60 } })].map(x => Math.round(x * 1e9)), [pd({ dist: null }), pd({ dist: null })].map(x => Math.round(x * 1e9)));
+  const shOf = o => Core.probs(F, { ...O, ...o }).sh.map(x => Math.round(x * 1e9));
+  eq('total line that cannot be met is not used: the rounds keep the default shape', [shOf({ total: { line: 3.5, over: 30, under: 1.01 } }), shOf({ total: { line: 4.5, over: 1.01, under: 101 } })], [shOf({ total: null }), shOf({ total: null })]);
+  const P0 = Core.probs(F, O), tdaYes = st => Math.round(Core.jointModel(P0, { a: st }).prob(['tda:a:yes']) * 1e9);
+  eq('takedown rate: between 0.15 and 5 a fight; 0 is a low prior of 0.5; anything else unknown is 0.9', [tdaYes({ tdAvg: 10 }) === tdaYes({ tdAvg: 5 }), tdaYes({ tdAvg: 5 }) === tdaYes({ tdAvg: 4 }), tdaYes({ tdAvg: 0.05 }) === tdaYes({ tdAvg: 0.15 }), tdaYes({ tdAvg: 0.15 }) === tdaYes({ tdAvg: 0.2 }), tdaYes({ tdAvg: 0 }) === tdaYes({ tdAvg: 0.5 }), tdaYes({}) === tdaYes({ tdAvg: 0.9 }), tdaYes({ tdAvg: '2' }) === tdaYes({ tdAvg: 0.9 }), tdaYes({ tdAvg: -1 }) === tdaYes({ tdAvg: 0.9 }), tdaYes(undefined) === tdaYes({ tdAvg: 0.9 }), Math.round(Core.jointModel(P0).prob(['tda:b:yes']) * 1e9) === Math.round(Core.jointModel(P0, { b: { tdAvg: 0.9 } }).prob(['tda:b:yes']) * 1e9)], [true, false, true, false, true, true, true, true, true, true]);
+  eq('a market with nothing to offer is not shown: a one-round fight has no total', Core.price({ ...F, rounds: 1 }, { ...O, total: null }).groups.map(g => g.id).includes('tot'), false);
+  near('joint: a fighter lands a takedown or does not', J.prob(['tda:a:yes']) + J.prob(['tda:a:no']), 1, 2e-3);
+  eq('price: the distance with no line of its own is estimated, in the same words', ['dist:yes', 'dist:no'].map(k => [P3.map[k].sel, P3.map[k].src, P3.groups.find(g => g.id === 'dist').opts.find(o => o.key === k).label]), [['Luta vai até a decisão', 'est', 'Sim'], ['Luta não vai até a decisão', 'est', 'Não']]);
+  eq('price: the takedown lines never go under 0.5', Object.keys(Core.price(F3, { ml: { a: 1.25, b: 4.2 }, method: null, total: null, dist: null }, { a: { tdAvg: 0.15 }, b: { tdAvg: 0.15 } }).map).filter(k => /^td:/.test(k)).map(k => +k.split(':')[2]).sort(), [0.5, 0.5, 1.5, 1.5]);
+  eq('over/under and corner only for the markets that have them', [Core.overUnder('rnd:o'), Core.overUnder('ml:u'), Core.sideOf('fm:a'), Core.sideOf('ml:x'), Core.isWomens('Flyweight W ')], [null, null, null, null, false]);
 
   /* ---- settlement of one selection ---- */
   const fight = (o) => Object.assign({ state: 'post', canceled: false, rounds: 3, period: 2, winner: 'a' }, o);
@@ -119,6 +200,13 @@ export default function cases(Core) {
   eq('live: round 3 finish still open', out('rnd:3', live, null, null, true), null);
   eq('live: winner never early', out('ml:a', live, null, null, true), null);
   eq('live: takedown over already hit', out('td:o:1.5', live, null, { a: 2, b: 0, final: false }, true), 'won');
+  // found by mutation testing (docs/verificacao.md): each of these failed to notice a planted mistake
+  eq('live, shown early: method, how it ends and the distance wait for the result', ['mov:a:ko', 'fm:ko', 'dist:yes', 'dist:no'].map(k => out(k, live, null, null, true)), [null, null, null, null]);
+  eq('live, shown early: a total or a round still to come is open', [out('tot:o:1.5', fight({ state: 'in', period: 1, winner: null }), null, null, true), out('tot:u:3.5', live, null, null, true), out('wr:a:3', live, null, null, true), out('wr:a:1', live, null, null, true)], [null, null, null, 'lost']);
+  eq('shown early: only a fight in the cage is read early; one that is over waits for its result', out('tot:o:1.5', fight({ period: 3, winner: null }), null, null, true), null);
+  table('submission R2 1:00 by a: a finish for the distance and the round markets', fight(), { method: 'sub', round: 2, time: 60 }, TD, { 'dist:no': 'won', 'dist:yes': 'lost', 'rnd:2': 'won', 'wr:a:2': 'won', 'wr:b:2': 'lost' });
+  table('KO in R2: a later round is lost too', fight(), KO, TD, { 'rnd:3': 'lost', 'wr:a:3': 'lost' });
+  table('a finish in the round of the line with no time read voids the total', fight(), { method: 'ko', round: 2, time: null }, TD, { 'tot:o:1.5': 'void', 'tot:u:1.5': 'void', 'tot:o:2.5': 'lost', 'tot:u:0.5': 'lost' });
 
   /* ---- settlement of a whole bet ---- */
   const leg = (fid, odd) => ({ fid, odd });
@@ -137,6 +225,8 @@ export default function cases(Core) {
   eq('combo with a void leg drops that fight', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27), leg('f2', 2)], { f1: 4.5 }), ['won', 'void', 'won']), { status: 'won', payout: 20 });
   eq('combo alone with a void leg refunds', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'void']), { status: 'void', payout: 10 });
   eq('combo with a lost leg loses', Core.betResult(bet(10, [leg('f1', 2.62), leg('f1', 1.27)], { f1: 4.5 }), ['won', 'lost']), { status: 'lost', payout: 0 });
+  eq('without a price fixed for the combo, the selections of one fight multiply', Core.betResult(bet(10, [leg('f1', 2), leg('f1', 1.5)]), ['won', 'won']), { status: 'won', payout: 30 });
+  eq('a combo price fixed for a fight with a single selection is not used', Core.betResult(bet(10, [leg('f1', 2), leg('f2', 1.5)], { f1: 9 }), ['won', 'won']), { status: 'won', payout: 30 });
 
   /* ---- cashout: the stake back before anything starts; a market offer once part of a parlay has won ---- */
   const lg = (state, out, extra) => Object.assign({ state, canceled: false, out: out || null }, extra);
@@ -170,6 +260,16 @@ export default function cases(Core) {
   eq('the price is asked for the selections of that fight together', asked, ['f2', ['fm:ko', 'tot:o:1.5']]);
   eq('same-fight combo alone, before the fight: refund', Core.cashout({ status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f2', 2.62), leg('f2', 1.27)] }, [lg('pre'), lg('pre')], () => 0.2), { ok: true, kind: 'refund', value: 10 });
   eq('cashout margin', Core.CASHOUT_MARGIN, 0.05);
+  // found by mutation testing (docs/verificacao.md): each of these failed to notice a planted mistake
+  eq('parlay with one fight off the board: unknown, even when another one is', Core.cashout(two, [lg('post', 'won'), null], never), { ok: false, why: 'unknown' });
+  const comboVoid = { status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f1', 2), Object.assign(leg('f2', 2.62), { key: 'fm:ko' }), Object.assign(leg('f2', 1.27), { key: 'tot:o:1.5' }), leg('f3', 3)] };
+  eq('a same-fight combo with one void selection leaves the offer whole, even with its other selection won', Core.cashout(comboVoid, [lg('post', 'won'), lg('post', 'won'), lg('post', 'void'), lg('pre')], () => 0.5), { ok: true, kind: 'market', value: 28.5, full: 60, chance: 0.5 });
+  const comboHalf = { status: 'open', stake: 10, sgp: { f2: 4.5 }, legs: [leg('f1', 2), Object.assign(leg('f2', 2.62), { key: 'fm:ko' }), Object.assign(leg('f2', 1.27), { key: 'tot:o:1.5' })] };
+  eq('a same-fight combo with one selection won and the other still to be read holds the offer', Core.cashout(comboHalf, [lg('pre'), lg('post', 'won'), lg('post')], () => 0.5), { ok: false, why: 'settling' });
+  eq('without a price fixed for the combo, the selections of one fight multiply', Core.cashout({ status: 'open', stake: 10, legs: [leg('f1', 2), leg('f2', 2), leg('f2', 1.5)] }, [lg('post', 'won'), lg('pre'), lg('pre')], () => 0.5), { ok: true, kind: 'market', value: 28.5, full: 60, chance: 0.5 });
+  eq('a combo price fixed for a fight with a single selection is not used', Core.cashout({ status: 'open', stake: 10, sgp: { f1: 9 }, legs: [leg('f1', 2), leg('f2', 1.5)] }, [lg('post', 'won'), lg('pre')], () => 0.5), { ok: true, kind: 'market', value: 14.25, full: 30, chance: 0.5 });
+  eq('an offer that rounds to less than a cent is no offer', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => 1e-6), { ok: false, why: 'noprice' });
+  eq('an offer of exactly one cent is still an offer', Core.cashout(two, [lg('post', 'won'), lg('pre')], () => 0.01 / 28.5).value, 0.01);
 
   /* ---- money fields: thousands mask and parsing (dot groups thousands, comma starts the cents) ---- */
   for (const [raw, want] of [['', ''], ['5', '5'], ['150', '150'], ['1500', '1.500'], ['15000', '15.000'], ['1234567', '1.234.567'], ['1.500', '1.500'], ['15.00', '1.500'],
@@ -182,6 +282,9 @@ export default function cases(Core) {
     eq(`number -> field -> number ${v}`, Core.parseMoney(Core.moneyText(v)), v);
   eq('field text of 1234.5', Core.moneyText(1234.5), '1.234,5');
   eq('field text of 730', Core.moneyText(730), '730');
+  // found by mutation testing (docs/verificacao.md)
+  eq('parse agrees with the mask on commas after the first one', [Core.parseMoney('1,5,5'), Core.parseMoney(Core.maskMoney('1,5,5'))], [1.55, 1.55]);
+  eq('parse: digits too many to be a number read as nothing', Core.parseMoney('9'.repeat(400)), 0);
 
   /* ---- currency: the rate answer, the cross rate and converting the whole state ---- */
   const FXJ = { amount: 1.0, base: 'BRL', date: '2026-01-02', rates: { EUR: 0.16, USD: 0.2 } };
@@ -216,6 +319,14 @@ export default function cases(Core) {
   eq('convert: empty state', Core.convertState({ v: 1, deposits: [], bets: [] }, 'EUR', 0.16), { v: 1, deposits: [], bets: [], cur: 'EUR' });
   const back = Core.convertState(US, 'BRL', 5);
   near('convert: there and back lands within cents', Core.balanceOf(back), 1072.19, 0.03);
+  // found by mutation testing (docs/verificacao.md). eq compares JSON, where NaN reads as null and an undefined field
+  // vanishes: the checks below that care about "no value" ask for it exactly
+  eq('fx: rejects a date with something before or after it', [Core.normFx({ ...FXJ, date: 'x2026-01-02' }), Core.normFx({ ...FXJ, date: '2026-01-02T00:00' })], [null, null]);
+  eq('fx: a date that is not text is no date, even one that reads as a date', Core.normFx({ ...FXJ, date: ['2026-01-02'] }), null);
+  eq('fx: no rate for a currency it does not know, nor from one, nor at a rate of zero', [Core.fxRate(fx, 'BRL', 'GBP'), Core.fxRate(fx, 'GBP', 'BRL'), Core.fxRate({ rates: { BRL: 1, USD: 0 } }, 'BRL', 'USD'), Core.fxRate({ rates: { BRL: 0, USD: 0.2 } }, 'BRL', 'USD')].map(x => x === null), [true, true, true, true]);
+  eq('convert: a bet with no unit, or one that is not positive, gets none made up', [Object.prototype.hasOwnProperty.call(US.bets[2], 'unit'), Core.convertState({ deposits: [], bets: [{ stake: 1, payout: 0, unit: -5 }] }, 'USD', 0.2).bets[0].unit], [false, -5]);
+  eq('convert: the cent that rounding moved goes into the first of the largest deposits', Core.convertState({ deposits: [{ t: 1, v: 0.02 }, { t: 2, v: 50.02 }, { t: 3, v: 50.02 }], bets: [{ stake: 50.03, payout: 0 }, { stake: 50.03, payout: 0 }] }, 'USD', 0.2).deposits.map(d => d.v), [0.01, 10.01, 10]);
+  eq('convert: with no deposit there is nowhere to put a cent, and nothing breaks', Core.convertState({ deposits: [], bets: [{ stake: 0.03, payout: 0 }] }, 'USD', 0.2), { deposits: [], bets: [{ stake: 0.01, payout: 0 }], cur: 'USD' });
 
   /* ---- unit: a percentage of the bankroll, 10% by default ---- */
   eq('unit default is 10% of the bankroll', Core.unitValue(1000, undefined), 100);
@@ -266,6 +377,11 @@ export default function cases(Core) {
   eq('units step: up to the next half unit', [0, 0.2, 0.3, 0.5, 0.75, 1, 2.5].map(v => Core.stepUnits(v, 1)), [0.5, 0.5, 0.5, 1, 1, 1.5, 3]);
   eq('units step: down to the half unit below, never under zero', [0, 0.2, 0.5, 0.75, 1, 3].map(v => Core.stepUnits(v, -1)), [0, 0, 0, 0.5, 0.5, 2.5]);
   eq('units step: nonsense counts as zero, and the top of the field holds', [Core.stepUnits('x', 1), Core.stepUnits(undefined, -1), Core.stepUnits(9999.99, 1)], [0.5, 0, 9999.5]);
+  // found by mutation testing (docs/verificacao.md)
+  eq('units field: only the zeros in front go, not one inside the number', [Core.maskUnits('105'), Core.maskUnits('1005'), Core.parseUnits('105')], ['105', '1005', 105]);
+  eq('units step: an infinite or a negative value counts as zero', [Core.stepUnits(Infinity, 1), Core.stepUnits(-3, 1), Core.stepUnits(-3, -1)], [0.5, 0.5, 0]);
+  const sug = Core.suggestedUnits(5, 'multi'); sug.push(9);
+  eq('suggested stake: changing one suggestion does not change the next', Core.suggestedUnits(5, 'multi'), [0.2, 0.3, 0.4]);
   eq('the setting that used to say what a unit of the source is worth is gone', [typeof Core.tipCfg, typeof Core.TIP_MODES], ['undefined', 'undefined']);
 
   /* ---- copying a bet from a pasted tip or from the text read off a print ---- */
@@ -389,9 +505,27 @@ export default function cases(Core) {
   const ACCA3 = Core.parseTip("Eventos: 3\nRafael Almeida - Connor Lee Dunne\nCaio Brandt - Dario Kessler\nTipo de aposta Acumulador\n1X2: V1: Rafael Almeida - Connor Lee Dunne 2.10", card3);
   eq('complete: once the fights it names are settled, a slip that should have more says so', Core.completeTip(ACCA3, [{ fid: 'f2', key: 'ml:a' }]).problems, [{ code: 'short', want: 3, got: 2 }]);
   eq('complete: and while one of them is still open, only that is reported', Core.completeTip(ACCA3, []).problems, [{ code: 'nomarket', fid: 'f2' }]);
+  /* reading a tip: found by mutation testing (docs/verificacao.md) */
+  eq('copied stake: no bankroll, no unit, exactly', Core.tipStake(MONEY, 'money', 0).units === null, true);
+  const card4 = card.concat([{ id: 'f4', rounds: 3, a: { name: 'Ivo Yun', last: 'Yun' }, b: { name: 'Davi Kessler', last: 'Kessler' } }]);
+  eq('tip: a surname of three letters is a name', Core.parseTip("Yun para vencer", card4).items.map(i => [i.fid, i.key]), [['f4', 'ml:a']]);
+  for (const [txt, units] of [['1,25u', 1.25], ['10 unidades', 10], ['1 unit', 1]])
+    eq(`tip: stake "${txt}"`, tip("Almeida x Dunne\nAlmeida para vencer\n" + txt).stake, U(units));
+  for (const [txt, v] of [['R$ 1.750', 1750], ['R$ 1.234.567,8', 1234567.8], ['Aposta 5 BRL', 5], ['Aposta 1756BRL', 1756], ['Aposta 1756.50 BRL', 1756.5], ['Aposta 2,500 USD', 2500], ['Aposta 1,234,567.89 USD', 1234567.89]])
+    eq(`tip: amount written as "${txt}"`, tip("Almeida x Dunne\nDunne para vencer\n" + txt).stake, { kind: 'money', money: v });
+  eq('tip: an odd at the start of a line, an odd of two digits, and one read with a colon alone on its line', [tip("Almeida x Dunne\nDunne para vencer\n1.44").items[0][2], tip("Almeida x Dunne\nDunne para vencer 12.50").items[0][2], tip("Almeida x Dunne\nDunne para vencer\n1:44").items[0][2]], [1.44, 12.5, 1.44]);
+  eq('tip: the distance with no article, and "go the distance"', [tip("Almeida x Dunne\nLuta nao vai ate decisao").items, tip("Almeida x Dunne\nFight to go the distance").items], [one('f3', 'dist:no', null), one('f3', 'dist:yes', null)]);
+  eq('tip: a method at the very end of the text', tip("Almeida x Dunne\nAlmeida por KO").items, one('f3', 'mov:a:ko', null));
+  eq('tip: the round written as "2º round", "2 round" or "round3"', [tip("Almeida x Dunne\nLuta acaba no 2º round").items, tip("Almeida x Dunne\nLuta acaba no 2 round").items, tip("Almeida x Dunne\nLuta acaba no round3").items], [one('f3', 'rnd:2', null), one('f3', 'rnd:2', null), one('f3', 'rnd:3', null)]);
+  eq('tip: the first round and the last round of the fight are rounds', [tip("Dunne vence no round 1 (Almeida x Dunne)").items, tip("Teles vence no round 3 (Teles x Prado Jr.)").items, tip("Almeida x Dunne\nLuta acaba no round 5").items], [one('f3', 'wr:b:1', null), one('f1', 'wr:a:3', null), one('f3', 'rnd:5', null)]);
+  eq('tip: "vence" and "simples" at the very end of the text', [tip("Almeida x Dunne\nDunne vence").items, Core.parseTip("Almeida x Dunne\nDunne para vencer\nAposta simples", card).kind], [one('f3', 'ml:b', null), 'single']);
+  eq('tip: "Eventos: 10" is a multiple of ten, and "evento: 2" of two', [Core.parseTip("Eventos: 10\nAlmeida x Dunne\nDunne para vencer", card).legs, Core.parseTip("Evento: 2\nAlmeida x Dunne\nDunne para vencer", card).legs], [10, 2]);
+  eq('complete: a printed odd of 1 or less is no printed odd', [Core.completeTip(ACCA, [{ fid: 'f2', key: 'ml:a', printedOdd: 1 }]).items[1].printedOdd, Core.completeTip(ACCA, [{ fid: 'f2', key: 'ml:a', printedOdd: 0.5 }]).items[1].printedOdd], [null, null]);
 
   /* the odd of the original, kept with the bet: what was printed against what was taken */
   const pleg = (fid, odd, printed) => ({ fid, key: 'ml:a', odd, printed });
+  eq('printed odd: an odd of 1 printed for the whole bet, or for a selection, is no printed odd; nor an odd of 1 taken', [Core.printedEdge({ type: 'single', odd: 2, printed: 1, legs: [pleg('f1', 2, 1.9)] }).printed, Core.printedEdge({ type: 'multi', odd: 2, legs: [pleg('f1', 1, 1), pleg('f2', 2, 2)] }), Core.printedEdge({ type: 'single', odd: 1, legs: [pleg('f1', 1, 1.9)] })], [1.9, null, null]);
+  eq('printed odd: a bet taken at exactly the printed odd is not ahead', Core.edgeSummary([{ type: 'single', odd: 2, legs: [pleg('f1', 2, 2)] }]), { n: 1, avg: 0, ahead: 0 });
   eq('printed odd: a single', Core.printedEdge({ type: 'single', odd: 1.7, legs: [pleg('f1', 1.7, 1.68)] }), { printed: 1.68, got: 1.7, diff: 0.0119 });
   eq('printed odd: a multiple with the odd of the whole bet', Core.printedEdge({ type: 'multi', odd: 1.55, printed: 1.614, legs: [pleg('f1', 1.2), pleg('f2', 1.29)] }), { printed: 1.614, got: 1.55, diff: -0.0397 });
   eq('printed odd: a multiple with an odd on every selection multiplies them', Core.printedEdge({ type: 'multi', odd: 1.6, legs: [pleg('f1', 1.2, 1.232), pleg('f2', 1.33, 1.31)] }).printed, 1.614);
@@ -518,6 +652,27 @@ export default function cases(Core) {
   eq('statement: the rows of the events carry the name and the day of each', stm.events.map(r => [r.event, r.date / DAYMS]), [['UFC 3: Brandt vs. Kessler', 97], ['', 97], ['UFC 2: Teles vs. Prado', 90], ['UFC 1: Almeida vs. Dunne', 60]]);
   eq('statement: every closed bet is in one row of the events, and one only', [stm.events.reduce((a, r) => a + r.all.n, 0), stm.events.reduce((a, r) => a + r.all.pnl, 0), stm.spans[3].all.pnl], [6, 160, 160]);
   eq('statement: whether any bet is a tipster\'s, and nothing closed', [stm.tips, Core.statement([stB[0], stB[3]], NOW).tips, (e => [e.tips, e.events, e.spans.map(r => [r.k, r.all.n, r.all.roi, r.ahead])])(Core.statement([], NOW))], [true, false, [false, [], [['7d', 0, null, null], ['15d', 0, null, null], ['30d', 0, null, null], ['all', 0, null, null]]]]);
+  /* history: found by mutation testing (docs/verificacao.md) */
+  eq('history: the other side of the same fight is not the same single', ids(Core.dupBets(book, [{ fid: 'f3', key: 'ml:b' }], 'single')), []);
+  eq('history: a combo on one fight is held there as its selections joined', Core.exposure([hb('c1', 'multi', 'open', 10, 0, [hl('f1', 'ml:a'), hl('f1', 'fm:ko')])], 'f1').held[0].sel, 'sel ml:a + sel fm:ko');
+  eq('history: a unit that is not positive does not count in units', [(t => [t.unitBets, t.units])(Core.openTotals([hb('nu', 'single', 'open', 10, 0, [hl('f1', 'ml:a')], { unit: -10 })])), (r => [r.unitBets, r.units])(Core.byOrigin([hb('nu', 'single', 'won', 10, 20, [hl('f1', 'ml:a')], { unit: -10 })])[0])], [[0, 0], [0, 0]]);
+  const sameHour = [hb('t3', 'single', 'open', 1, 0, [ol('f1', 'e1', 100)], { t: 3 }), hb('t1', 'single', 'open', 1, 0, [ol('f1', 'e1', 100)], { t: 1 }), hb('t2', 'single', 'open', 1, 0, [ol('f1', 'e1', 100)], { t: 2 }), hb('t4', 'single', 'open', 1, 0, [ol('f1', 'e1', 100)], { t: 4 })];
+  eq('open bets: bets on the same fight go in the order they were made', ids(Core.openByEvent(sameHour)[0].bets), ['t1', 't2', 't3', 't4']);
+  eq('open bets: a multiple starts at its first fight on the card, even among fights of the same hour', ids(Core.openByEvent([hb('sB', 'single', 'open', 1, 0, [ol('f2', 'e1', 100)], { t: 1 }), hb('mAB', 'multi', 'open', 1, 0, [ol('f2', 'e1', 100), ol('f1', 'e1', 100)], { t: 2 }), hb('sC', 'single', 'open', 1, 0, [ol('f3', 'e1', 100)], { t: 0 })], fid => ({ f1: 0, f2: 1, f3: 2 })[fid])[0].bets), ['mAB', 'sB', 'sC']);
+  eq('odd drop: no comparison while any selection has no price now, or a price of 1', [Core.copyDrop(null, [{ fid: 'f1', printed: 2, now: 1.9 }, { fid: 'f2', printed: 2, now: 0 }]), Core.copyDrop(null, [{ fid: 'f1', printed: 2, now: 1 }])].map(x => x === null), [true, true]);
+  eq('odd drop: an odd of 1 or less for the whole bet is no odd to compare with', [Core.copyDrop(1, [{ fid: 'f1', printed: 2, now: 1.9 }]), Core.copyDrop(0.5, [{ fid: 'f1', printed: 2, now: 1.9 }])], [-0.05, -0.05]);
+  eq('odd drop: a printed odd of 1 is no printed odd', [Core.copyDrop(null, [{ fid: 'f1', printed: 1, now: 1.5 }, { fid: 'f2', printed: 2, now: 1.9 }]), Core.copyDrop(null, [{ fid: 'f1', printed: 1, now: 1.2 }, { fid: 'f1', printed: 2, now: 2.5 }])], [-0.05, 0.25]);
+  eq('odd drop: a selection with nothing printed is left out of the one that fell the most', Core.copyDrop(null, [{ fid: 'f1', printed: null, now: 2 }, { fid: 'f1', printed: 2, now: 1.9 }]), -0.05);
+  eq('tip: one printed odd among the selections is enough to tell a copy', Core.isTip(hb('pp', 'multi', 'won', 1, 2, [hl('f1', 'ml:a', { printed: 2 }), hl('f2', 'ml:a')])), true);
+  eq('origin: a tipster named "M" is not the person\'s own bets', Core.byOrigin([hb('o1', 'single', 'won', 10, 20, [hl('f1', 'ml:a')]), hb('o2', 'single', 'lost', 10, 0, [hl('f2', 'ml:a')], { from: 'M' })]).map(r => [r.k, r.tip, r.n]), [['', false, 1], ['M', true, 1]]);
+  eq('origin: the odd against the print of each row is of its own bets only', (rs => rs.map(r => [r.tip, r.k, r.edge.n]))(Core.byOrigin([hb('o1', 'single', 'won', 20, 40, [hl('f1', 'ml:a')]), hb('o2', 'single', 'lost', 10, 0, [hl('f2', 'ml:a', { printed: 2.1 })])])), [[false, '', 0], [true, '', 1]]);
+  eq('origin: no new name given is no rename', [Core.renameOrigin(closed, 'Canal A', null).n, Core.renameOrigin(closed, 'Canal A', undefined).n], [0, 0]);
+  eq('period: only text names a period', ids(Core.periodBets(past, ['7d'], NOW).bets).length, 4);
+  eq('period: a bet closed exactly 7 days ago is out of the last 7 days', ids(Core.periodBets([hb('edge', 'single', 'won', 1, 2, [hl('f1', 'ml:a')], { settledAt: NOW - 7 * DAYMS })], '7d', NOW).bets), []);
+  eq('period: the last event is the one of the bet that closed last, wherever it is in the list, and a bet with no time of closing is the oldest', [Core.periodBets([past[2], past[0], past[1], past[3]], 'event', NOW).event, Core.periodBets([past[1], hb('nt', 'single', 'won', 1, 2, [hl('f9', 'ml:a', { eid: 'e9', event: 'UFC 9', date: 99 * DAYMS })], { settledAt: null })], 'event', NOW).event, Core.periodBets([hb('nt', 'single', 'won', 1, 2, [hl('f9', 'ml:a', { eid: 'e9', event: 'UFC 9', date: 99 * DAYMS })], { settledAt: null }), past[1]], 'event', NOW).event], ['UFC 3: Brandt vs. Kessler', 'UFC 2: Teles vs. Prado', 'UFC 2: Teles vs. Prado']);
+  const inOrder = [hb('io', 'multi', 'won', 1, 2, [hl('f2', 'ml:b', { date: 90 * DAYMS }), hl('f5', 'ml:a', { date: 97 * DAYMS })], { settledAt: 98 * DAYMS })]; Core.periodBets(inOrder, 'event', NOW);
+  eq('period: reading the last event leaves the selections of a bet in their order', inOrder[0].legs.map(l => l.fid), ['f2', 'f5']);
+  eq('statement: a bet with no selection is in no row of the events, and the rows of time have no event', [Core.statement([hb('nl', 'single', 'won', 1, 2, [], { settledAt: 99 * DAYMS })], NOW).events, stm.spans.map(r => r.event)], [[], ['', '', '', '']]);
   eq('since: what closed by itself after a moment, with the result by origin', Core.sinceSummary(closed.concat(hb('late', 'single', 'lost', 25, 0, [hl('f1', 'ml:a')], { from: 'Canal A', settledAt: 9000 }), hb('op', 'single', 'open', 5, 0, [hl('f1', 'ml:a')])), 4000),
     { n: 5, pnl: -155, units: 0, unitBets: 0, by: [{ k: 'Canal A', tip: true, n: 3, pnl: 125 }, { k: '', tip: false, n: 1, pnl: 20 }, { k: 'Canal B', tip: true, n: 1, pnl: -300 }] });                 // the cashout is not there: the person did that one
   eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, units: 0, unitBets: 0, by: [] }, 4]);
@@ -635,6 +790,43 @@ export default function cases(Core) {
   eq('a rewrite is never behind the one already known, even with the clock of the device running late', Core.stamp(sys([syb('a', 1)], [], { epoch: 5000 }), sys([], [], { epoch: 5000 }), 2000).epoch, 5001);
   eq('join: the conversions of the side that wins a rewrite; a union otherwise', [Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { conv: [{ t: 2 }] })).state.conv.map(c => c.t), Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { epoch: 5, conv: [{ t: 2 }] })).state.conv.map(c => c.t)], [[1, 2], [2]]);
   eq('state size: what each side holds', Core.stateSize(syPh), { bets: 2, deposits: 2 });
+  eq('retry: an infinite number of failures is no number', Core.retryDelay(8e3, Infinity), 8e3);
+  eq('cloud: the project that ships is a whole one', Core.cloudSet(Core.CLOUD_URL, Core.CLOUD_KEY), true);
+  eq('cloud: nothing before or after the address or the key', [Core.cloudSet('xhttps://abcdefghijkl.supabase.co', 'sb_publishable_abcdefghij'), Core.cloudSet('https://abcdefghijkl.supabase.co.evil.com', 'sb_publishable_abcdefghij'), Core.cloudSet('https://abcdefghijkl.supabase.co', 'xsb_publishable_abcdefghij'), Core.cloudSet('https://abcdefghijkl.supabase.co', 'sb_publishable_abcdefghij!')], [false, false, false, false]);
+  eq('cloud: a key that only contains the new prefix is an old-format one', Core.cloudHeaders('xsb_publishable_abc', null).Authorization, 'Bearer xsb_publishable_abc');
+  eq('cloud: an e-mail with a longer domain, and nothing after it', [Core.isEmail('ana@exemplo.com'), Core.isEmail('ana@x.com y')], [true, false]);
+  /* the join: found by mutation testing (docs/verificacao.md) */
+  const pick2 = (x, y) => [Core.mergeStates(sys([x]), sys([y])).state.bets[0], Core.mergeStates(sys([y]), sys([x])).state.bets[0]];
+  eq('join: of two open copies of a bet, the one changed later, in either order', pick2(syb('o', 1, { u: 50, stake: 10 }), syb('o', 1, { u: 70, stake: 20 })).map(b => b.stake), [20, 20]);
+  eq('join: of two closed copies of a bet, the one changed later, in either order', pick2(syb('o', 1, { status: 'won', payout: 20, settledAt: 90, u: 90 }), syb('o', 1, { status: 'won', payout: 25, settledAt: 80, u: 95 })).map(b => b.payout), [25, 25]);
+  eq('join: a copy with no mark is older than one with a mark', pick2(syb('o', 1, { stake: 10 }), syb('o', 1, { u: 5, stake: 20 })).map(b => b.stake), [20, 20]);
+  eq('join: two closed copies with no marks, the one settled later, in either order; no time of settling is the oldest', [pick2(syb('o', 1, { status: 'won', payout: 20, settledAt: 90 }), syb('o', 1, { status: 'won', payout: 25, settledAt: 95 })).map(b => b.payout), pick2(syb('o', 1, { status: 'won', payout: 20 }), syb('o', 1, { status: 'won', payout: 25, settledAt: 95 })).map(b => b.payout)], [[25, 25], [25, 25]]);
+  const dep = { t: 10000, v: 1 };       // a later deposit makes the side with the older copy of the bet the one that wins the join
+  eq('join: the copy changed later is kept even from the side with the older activity', [Core.mergeStates(sys([syb('o', 1, { u: 50, stake: 10 })], [dep]), sys([syb('o', 1, { u: 70, stake: 20 })])).state.bets[0].stake, Core.mergeStates(sys([syb('o', 1, { u: 70, stake: 20 })]), sys([syb('o', 1, { u: 50, stake: 10 })], [dep])).state.bets[0].stake], [20, 20]);
+  eq('join: with no marks, the copy settled later is kept even from the side with the older activity', [Core.mergeStates(sys([syb('o', 1, { status: 'won', payout: 20, settledAt: 90 })], [dep]), sys([syb('o', 1, { status: 'won', payout: 25, settledAt: 95 })])).state.bets[0].payout, Core.mergeStates(sys([syb('o', 1, { status: 'won', payout: 25, settledAt: 95 })]), sys([syb('o', 1, { status: 'won', payout: 20 })], [dep])).state.bets[0].payout], [25, 25]);
+  eq('join: on an exact tie of marks, the copy of this device is kept', [Core.mergeStates(sys([syb('o', 1, { u: 5, stake: 10 })]), sys([syb('o', 1, { u: 5, stake: 20 })])).state.bets[0].stake, Core.mergeStates(sys([syb('o', 1, { stake: 10 })]), sys([syb('o', 1, { stake: 20 })])).state.bets[0].stake], [10, 10]);
+  const curWin = (x, y) => [Core.mergeStates(x, y).state.cur || 'BRL', Core.mergeStates(y, x).state.cur || 'BRL'];
+  eq('two currencies with the same last activity: the same one is kept in either order, also when one never named its currency', [curWin(sys([syb('a', 10, { u: 10 })], [], { cur: 'EUR' }), sys([syb('b', 10, { u: 10 })], [], { cur: 'USD' })), curWin(sys([syb('a', 10, { u: 10 })]), sys([syb('b', 10, { u: 10 })], [], { cur: 'USD' }))], [['USD', 'USD'], ['USD', 'USD']]);
+  const lastBy = (lhs, rhs) => curWin(sys(lhs[0], lhs[1], { ...lhs[2], cur: 'USD' }), sys(rhs[0], rhs[1], { ...rhs[2], cur: 'EUR' }));
+  eq('two currencies: the later activity is a bet settled, a bet placed, a deposit or a conversion, even with no marks', [lastBy([[syb('a', 1, { status: 'won', payout: 1, settledAt: 50 })]], [[syb('b', 40)]]), lastBy([[syb('a', 60)]], [[syb('b', 40, { status: 'won', payout: 1, settledAt: 50 })]]), lastBy([[], [{ t: 70, v: 1 }]], [[syb('b', 40)]]), lastBy([[], [], { conv: [{ t: 80 }] }], [[], [{ t: 75, v: 1 }]])], [['USD', 'USD'], ['USD', 'USD'], ['USD', 'USD'], ['USD', 'USD']]);
+  const lastBy2 = (lhs, rhs) => curWin(sys(lhs[0], lhs[1], { cur: 'USD' }), sys(rhs[0], rhs[1], { cur: 'EUR' }));
+  eq('two currencies: the later activity by the bets, the other way round', [lastBy2([[syb('a', 40)]], [[syb('b', 1, { status: 'won', payout: 1, settledAt: 50 })]]), lastBy2([[syb('a', 40, { status: 'won', payout: 1, settledAt: 50 })]], [[syb('b', 60)]])], [['EUR', 'EUR'], ['EUR', 'EUR']]);
+  eq('join: after a rewrite, what the other side made at the very moment of the rewrite is from before it', Core.mergeStates(sys([syb('x', 2800, { u: 2800 })]), syReset).state.bets.map(b => b.id), ['n']);
+  eq('join: after a rewrite, a deposit both sides have is kept once and not counted as left out', (j => [j.state.deposits.map(d => d.v), j.dropped])(Core.mergeStates(sys([], [{ t: 50, v: 1000 }]), sys([], [{ t: 50, v: 1000 }], { epoch: 2800 }))), [[1000], 0]);
+  eq('join: conversions of one side only, and none on the side that wins a rewrite', [Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [])).state.conv, Core.mergeStates(sys([], []), sys([], [], { conv: [{ t: 1 }] })).state.conv, Object.prototype.hasOwnProperty.call(Core.mergeStates(sys([], [], { conv: [{ t: 1 }] }), sys([], [], { epoch: 5 })).state, 'conv')], [[{ t: 1 }], [{ t: 1 }], false]);
+  eq('join: conversions in order of time, the latest 20', (c => [c.length, c[0].t, c[19].t])(Core.mergeStates(sys([], [], { conv: [5, 1, 9, 3, 7, 11, 13, 15, 17, 19, 21, 23, 25].map(t => ({ t })) }), sys([], [], { conv: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24].map(t => ({ t })) })).state.conv), [20, 6, 25]);
+  eq('join: deposits and bets in order of time', (s => [s.deposits.map(d => d.t), s.bets.map(b => b.id)])(Core.mergeStates(sys([syb('c', 30), syb('a', 10)], [{ t: 30, v: 1 }, { t: 10, v: 1 }]), sys([syb('b', 20)], [{ t: 20, v: 1 }])).state), [[10, 20, 30], ['a', 'b', 'c']]);
+  const setFrom = (l, r) => Core.mergeStates(sys([], [], l), sys([], [], r)).state.unitPct;
+  eq('join: the settings changed later; on a tie, and with no mark on either side, those of this device', [setFrom({ unitPct: 1 }, { unitPct: 2, setAt: 5 }), setFrom({ unitPct: 1, setAt: 5 }, { unitPct: 2 }), setFrom({ unitPct: 1, setAt: 5 }, { unitPct: 2, setAt: 5 }), setFrom({ unitPct: 1 }, { unitPct: 2 })], [2, 1, 1, 1]);
+  eq('join: no mark of settings, and no setting neither side has, is made up', Object.keys(Core.mergeStates(sys([], []), sys([], [])).state).sort(), ['bets', 'deposits', 'v']);
+  eq('stamp: a bet saved with no mark keeps the time it was settled as its mark while it does not change', Core.stamp(sys([syb('s', 10, { status: 'won', payout: 20, settledAt: 40 })]), sys([syb('s', 10, { status: 'won', payout: 20, settledAt: 40 })]), 99).bets[0].u, 40);
+  eq('stamp: one deposit gone of two is a rewrite', Core.stamp(sys([], [{ t: 1, v: 5 }, { t: 2, v: 7 }]), sys([], [{ t: 1, v: 5 }]), 300).epoch, 300);
+  eq('first meeting: going up or summing can always join', [Core.firstMeet(syServer, null).canJoin, Core.firstMeet(syServer, sys([syb('a', 100)])).canJoin], [true, true]);
+  eq('first meeting: deposits that differ, or histories that only overlap, are asked about', [Core.firstMeet(sys([], [{ t: 1, v: 5 }]), sys([], [{ t: 2, v: 7 }])).how, Core.firstMeet(sys([syb('a', 100), syb('z', 300)]), syServer).how], ['ask', 'ask']);
+  eq('"Juntar os dois" keeps the later of the two rewrites, whichever side had it', [Core.joinBoth(sys([], [], { epoch: 9000 }), sys([], [], { epoch: 10 })).state.epoch, Core.joinBoth(sys([], [], { epoch: 10 }), sys([], [], { epoch: 9000 })).state.epoch, Core.joinBoth(sys([]), sys([], [], { epoch: 9000 })).state.epoch, Core.joinBoth(sys([], [], { epoch: 9000 }), sys([])).state.epoch], [9000, 9000, 9000, 9000]);
+  eq('same state: the order of bets and deposits aside; different deposits, or numbers run together, are not the same', [Core.sameState(sys([syb('b', 1), syb('a', 2), syb('c', 3)], [{ t: 2, v: 1 }, { t: 1, v: 1 }]), sys([syb('c', 3), syb('a', 2), syb('b', 1)], [{ t: 1, v: 1 }, { t: 2, v: 1 }])), Core.sameState(sys([syb('a', 2), syb('c', 3), syb('b', 1)]), sys([syb('b', 1), syb('c', 3), syb('a', 2)])), Core.sameState(sys([], [{ t: 1, v: 1 }]), sys([], [{ t: 1, v: 2 }])), Core.sameState(sys([], [], { x: [1, 23] }), sys([], [], { x: [12, 3] }))], [true, true, false, false]);
+  eq('same state: a field left undefined is the same as no field', Core.sameState(sys([], [], { theme: undefined }), sys([], [])), true);
+  eq('same state: lists inside lists are told apart', Core.sameState(sys([], [], { x: [[1], [2]] }), sys([], [], { x: [[1, 2]] })), false);
   /* the server copy: how a call is signed, and what is typed to log in */
   eq('cloud: a new-format key goes only in apikey; the token, once there is one, in Authorization', [Core.cloudHeaders('sb_publishable_abc', null), Core.cloudHeaders('sb_publishable_abc', 'tok')], [{ apikey: 'sb_publishable_abc', 'Content-Type': 'application/json' }, { apikey: 'sb_publishable_abc', 'Content-Type': 'application/json', Authorization: 'Bearer tok' }]);
   eq('cloud: an old-format key (a token itself) stands in for the token while there is none; a secret key never goes as a token', [Core.cloudHeaders('eyJold', null).Authorization, Core.cloudHeaders('eyJold', 'tok').Authorization, Core.cloudHeaders('sb_secret_x', null).Authorization], ['Bearer eyJold', 'Bearer tok', undefined]);
@@ -692,5 +884,24 @@ export default function cases(Core) {
   eq('search: nothing typed, only spaces or signs, or a name nobody has', [found(''), found('   '), found('.-'), found(undefined), found('zzz')], [[], [], [], [], []]);
   eq('tip: empty', tip("  \n ").problems, [{ code: 'empty' }]);
   eq('tip: a name inside another word is not a match', tip("Almeidas x Dunnes\nvence").problems, [{ code: 'nofight' }]);
+  /* the latest fights, the card and the usage counts: found by mutation testing (docs/verificacao.md) */
+  eq('form: a fight with no round, or a time that is not a time, has no length; one that ended at 0:00 of a round does', [Core.fightSeconds({ round: 0, time: 30 }), Core.fightSeconds({ round: 2, time: -5 }), Core.fightSeconds({ round: 2, time: 0 })], [null, null, 300]);
+  eq('cache: every way a fight can end that the app knows is read back', ['ko', 'sub', 'dec', 'nc', 'draw', 'unknown'].map(method => !!Core.readPastFight(fcF({ method }))), [true, true, true, true, true, true]);
+  eq('cache: a won, a lost and a fight nobody won are read back; a text of the longest size is kept', [Core.readPastFight(fcF({ won: true })).won, Core.readPastFight(fcF({ won: false })).won, Core.readPastFight(fcF({ won: null })).won, Core.readPastFight(fcF({ id: 'x'.repeat(40) })).id.length], [true, false, null, 40]);
+  eq('cache: an infinite date, a description or a time that is not text or a number is not a fight', [Core.readPastFight(fcF({ date: Infinity })), Core.readPastFight(fcF({ desc: 123 })), Core.readPastFight(fcF({ time: 'x' }))], [null, null, null]);
+  eq('cache: a fight with no description has no description field', Object.prototype.hasOwnProperty.call(Core.readPastFight(fcF({ desc: undefined })), 'desc'), false);
+  eq('cache: nothing is not a list of fights, and as many fights as allowed is one', [Core.readForm(null), Core.readForm({ ts: 5, fights: Array(10).fill(fcF()) }).fights.length, Core.readForms(null)], [null, 10, {}]);
+  eq('cache: a row that is nothing, or whose time of reading is not text, is skipped', Core.formRows([null, { athlete: '10', fetched_at: 1760659200000, data: { fights: [fcF()] } }], ['10'], fcNow, fcTtl), {});
+  eq('cache: a clock exactly five minutes ahead is let through; a reading exactly a week old is not', Object.keys(Core.formRows([fcRow('10', new Date(fcNow + 5 * 60e3).toISOString(), [fcF()]), fcRow('20', new Date(fcNow - fcTtl).toISOString(), [fcF()])], ['10', '20'], fcNow, fcTtl)), ['10']);
+  eq('cache: two rows of the same athlete keep the later reading whichever comes first', Core.formRows([fcRow('10', '2026-10-16T00:00:00Z', [fcF()]), fcRow('10', '2026-10-15T00:00:00Z', [])], ['10'], fcNow, fcTtl)['10'].fights.length, 1);
+  eq('country: the name of a country is given without the spaces around it', Core.countries([lf('1', ' Brazil ', ' Peru')]).map(c => c.name), ['Brazil', 'Peru']);
+  eq('country: what the table knows a name by, with spaces around it', Core.countryCode(' Brazil '), 'BR');
+  eq('search: the two names are not run together', found('aco'), []);       // "Almeida" + "Connor"
+  eq('cards: an event exactly five days old the source never marked as over has left', cids(Core.cardsToShow([cev('five', -5), cev('a', 6)], NOWC)), ['a']);
+  eq('usage: a saved log with days that are nothing, or with a day in another shape, reads as empty', [Core.usageRead({ days: null }).days, Core.usageRead({ days: { 'x2026-10-11': { peak: 1, k: { board: { n: 1 } } }, '2026-10-11x': { peak: 1, k: { board: { n: 1 } } } } }).days], [{}, {}]);
+  eq('usage: what is nothing inside a saved day is dropped, and the rest of it stands', Core.usageRead({ days: { '2026-10-11': { peak: 2, k: null, h: null }, '2026-10-12': { peak: 1, k: { board: null, odds: { n: Infinity } }, h: { 3: null, 4: { n: 1, k: null } } } } }).days, { '2026-10-11': { peak: 2, k: {} }, '2026-10-12': { peak: 1, k: {}, h: { 4: { n: 1, err: 0, bytes: 0, peak: 0, k: {} } } } });
+  eq('usage: hour 23 is an hour', [Object.keys(ulog([hcall('board', 23, 10)]).days['2026-10-11'].h), Object.keys(Core.usageRead({ days: { '2026-10-11': { peak: 1, k: {}, h: { 23: { n: 1 } } } } }).days['2026-10-11'].h)], [['23'], ['23']]);
+  eq('usage: only the latest thirty days are kept, whatever the order they were saved in', Object.keys(Core.usageRead({ days: Object.fromEntries(Array.from({ length: 31 }, (_, i) => [uday(30 - i), { peak: 1, k: { board: { n: 1 } } }])) }).days).sort()[0], uday(1));
+  eq('usage: the slowest call stays the slowest, and the peak of an hour stays its peak, when quieter ones come after', (l => [l.days['2026-10-11'].k.board.max, l.days['2026-10-11'].h[21].peak])(ulog([hcall('board', 21, 1), hcall('board', 21, 1), hcall('board', 21, 1), { ...hcall('board', 21, 1, true, T0 + MINU), ms: 300 }, { ...hcall('board', 21, 1, true, T0 + 2 * MINU), ms: 5 }])), [300, 3]);
   return { n, fails };
 }
