@@ -43,7 +43,13 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 var(--font-body);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;overflow-x:hidden}
 button{font:inherit;color:inherit;border:0;background:none;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:inherit}
 input,textarea{font:inherit;color:inherit}
-button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+/* the browser's own grey for a hint inside a field falls below 4.5:1 on these backgrounds (WCAG AA); the muted text of the app does not */
+::placeholder{color:var(--muted);opacity:1}
+button:focus-visible,input:focus-visible,textarea:focus-visible,label[role=button]:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.panel:focus{outline:none}
+/* a target the size of a finger (44 px) around controls drawn smaller than that: the drawing stays as it is, the area that takes the tap grows */
+.x,.sync button,.chip.mine,.hint button,.msg button,.impop .via button,.impop .fix button,.impop .fixed button{position:relative}
+.x::after,.sync button::after,.chip.mine::after,.hint button::after,.msg button::after,.impop .via button::after,.impop .fix button::after,.impop .fixed button::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
 [hidden]{display:none!important}
 h1,h2,h3,h4,p{margin:0}
 .wrap{max-width:720px;margin:0 auto;padding-inline:16px}
@@ -113,7 +119,8 @@ main{padding-block:14px calc(160px + env(safe-area-inset-bottom,0px))}
 .opt{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:46px;padding:8px 10px;border-radius:8px;background:var(--surface2);min-width:0}
 .opt .ol{font-size:13px;line-height:1.2;min-width:0;overflow-wrap:break-word}
 .opt .ov{font-weight:700;font-size:15px;white-space:nowrap}
-.opt .est{font-style:normal;font-weight:500;color:var(--muted);margin-right:2px}
+/* on the tinted options the muted grey falls just under 4.5:1, and the mark of an estimated odd has to be read */
+.opt .est{font-style:normal;font-weight:500;color:color-mix(in srgb,var(--muted) 60%,var(--fg));margin-right:2px}
 .opt.on{background:var(--gold-bg);color:var(--on-gold)}
 .opt.on .est{color:inherit}
 .opt[disabled]{opacity:.55;cursor:default}
@@ -405,4 +412,5 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .opedit .segm{flex:1 1 150px}
 .impall{border-top:2px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
 .dep{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
-.toast{position:fixed;left:16px;right:16px;top:calc(66px + env(safe-area-inset-top,0px));z-index:60;margin:0 auto;max-width:520px;background:var(--fg);color:var(--bg);border-radius:10px;padding:12px 14px;font-weight:600;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+/* the toast only says something: it never takes a tap meant for what is under it */
+.toast{position:fixed;left:16px;right:16px;pointer-events:none;top:calc(66px + env(safe-area-inset-top,0px));z-index:60;margin:0 auto;max-width:520px;background:var(--fg);color:var(--bg);border-radius:10px;padding:12px 14px;font-weight:600;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.3)}

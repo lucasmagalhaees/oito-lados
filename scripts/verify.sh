@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One command that answers "is this still correct?".
-#   scripts/verify.sh           types + build + docs + core + keep-alive routine + server check self-test + database schema + unit + contract + production-check self-test + end-to-end (both themes) + settling with late answers + offline and update (service worker) + code coverage minimums
+#   scripts/verify.sh           types + build + docs + core + keep-alive routine + server check self-test + database schema + unit + contract + production-check self-test + end-to-end (both themes) + settling with late answers + offline and update (service worker) + accessibility (both themes) + damaged data + code coverage minimums
 #   scripts/verify.sh --quick   types + build + docs + core + keep-alive routine + server check self-test + database schema + unit + contract + production-check self-test (a few seconds; what the Stop hook runs)
 # Every test runs against dist/, what the build produces and what ships. The one exception is `core`: the same cases as
 # `unit`, run in Node against src/core built by itself, to show the core stands without a page.
@@ -70,6 +70,8 @@ if [ "$full" -eq 1 ]; then
   run e2e-light python3 tests/e2e.py light
   run settle    python3 tests/settle.py
   run pwa       python3 tests/pwa.py
+  run a11y      python3 tests/a11y.py
+  run robust    python3 tests/robust.py
   run coverage  python3 tests/cov.py --min-functions 95 --min-chars 90
 fi
 

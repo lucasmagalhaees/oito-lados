@@ -49,6 +49,8 @@ O que cada peça do harness cobre:
 | `tests/settle.py` | A aposta só fechar certo quando a ESPN responde tudo de uma vez: resultado que atrasa, ou que vem com um nome que o app não conhece |
 | `tests/pwa.py` | Dizer que o app abre sem internet e avisa de versão nova sem nunca ter visto acontecer |
 | `tests/cov.py` (cobertura medida pelo navegador) | Achar que está testado sem estar |
+| `tests/a11y.py` | Texto com contraste baixo, botão sem nome, campo sem rótulo, alvo de toque pequeno ou foco que some, sem ninguém notar |
+| `tests/robust.py` | Um estado, um backup, uma linha do servidor ou um cache estragado (ou de outra versão) derrubar todas as telas |
 | `tests/keepalive.mjs`, `tests/schema_check.sh` | A rotina diária deixar entrar quem não é o cron, e o banco deixar alguém ler ou escrever a linha de outro |
 | `tests/cloud_live.py` (workflow `Servidor`, no PR que mexe no servidor e toda semana) | O projeto do Supabase de verdade estar desligado, sem o schema ou com as regras abertas, e o código achar que está tudo certo |
 | `scripts/check_production.py` (workflow `Produção`, depois de cada merge) | CI verde e deploy feito, mas a produção servindo outra versão |
@@ -77,6 +79,8 @@ O que cada peça do harness cobre:
 - `tests/settle.py`: a liquidação pela interface com a ESPN simulada segurando respostas: resultado que atrasa e resultado com nome desconhecido.
 - `tests/pwa.py`: o service worker de ponta a ponta, com a página servida por um servidor local: abrir sem conexão e trocar de versão.
 - `tests/cov.py`: cobertura de código da página gerada, medida pelo próprio navegador durante os testes.
+- `tests/a11y.py`: acessibilidade em 393 px, nos dois temas, em todas as telas: contraste, nomes, rótulos, área de toque e foco do teclado.
+- `tests/robust.py`: dados estragados ou de versão antiga no aparelho, num backup e no servidor.
 - `tests/package.json`: cópias locais do que o app busca na jsDelivr (os arquivos do leitor de imagem e a fonte das bandeiras), para os testes rodarem sem internet.
 - CI em `.github/workflows/ci.yml`: roda tudo isso (menos o ao vivo) em cada PR e em cada push na `main`.
 - `.claude/settings.json` + `.claude/hooks/verify-on-stop.sh`: hook de parada do Claude Code.
@@ -210,7 +214,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | Módulo | O que tem |
 |---|---|
 | `src/app/state.ts` | `S` (carteira e apostas), `D` (cache da ESPN), `U` (as chamadas à ESPN contadas neste aparelho), `ui`, `slip`, `imp`, gravação no `localStorage`. `S` é substituído só por `setS`. Também o tema (`applyTheme`), os pares de cor dos cantos (`CORNER_SETS`, `cornerSet`) e `settingsOf`, a lista única do que é configuração |
-| `src/app/format.ts` | Moeda da banca, datas pt-BR, categorias de peso, `esc`, e os acessos ao DOM (`$`, `part`, `valOf`, `blurField`) |
+| `src/app/format.ts` | Moeda da banca, datas pt-BR, categorias de peso, `esc`, e os acessos ao DOM (`$`, `part`, `valOf`, `blurField`, e `keepFocus`, que devolve o foco do teclado ao mesmo botão depois de uma repintura) |
 | `src/app/api.ts` | `getJSON` (toda chamada passa por ele, dizendo para que é, e é contada), `loadBoard`, `loadOdds`, `loadResults`, `fetchTd`, e `loadForm`, que busca as últimas lutas de uma lista de lutadores |
 | `src/app/fx.ts` | `FX` (cotação guardada) e `loadFx` |
 | `src/app/settle.ts` | `legOut`, `settle`, `resultText` |
@@ -220,7 +224,7 @@ Sem DOM, sem rede e sem armazenamento (conferido pelo `docs_check.py`). É o que
 | `src/app/import.ts` | Copiar aposta: leitor de imagem, a lista de apostas lidas (`runImport`, `importImages`, `renderImport`), o que cada item vira agora (`impResolve`: seleções, correções, avisos), `importToSlip` e `placeAll`, que faz várias de uma vez |
 | `src/app/sync.ts` | `sync`, `schedule`, `pickEvent`, `weekEvent` (o card da semana) e `preloadForm`, que adianta as últimas lutas de quem está nele |
 | `src/app/helpers.ts` | `wallet`, `statsOf` (os números de um conjunto de apostas encerradas), `priceOf`, `slipCalc`, `groupsOf` e `payoutOf` (o preço por luta e o que uma stake devolve, do jeito que o cupom calcula), `exposureNotes`, valor do cupom em dinheiro e em unidades |
-| `src/app/render.ts` | `render` e as três telas, a lista de lutas que se repinta sozinha debaixo da busca (`paintList`), cupom (`renderSheet`, `slipSummary`), gráfico, `place` e as duas partes dele que o lote também usa (`recheck`, `writeBets`) |
+| `src/app/render.ts` | `render` e as três telas, a lista de lutas que se repinta sozinha debaixo da busca (`paintList`), cupom (`renderSheet`, `slipSummary`), a folha de baixo (`paintPanel`, que o cupom e a tela de copiar usam), gráfico, `place` e as duas partes dele que o lote também usa (`recheck`, `writeBets`) |
 | `src/app/events.ts` | Um listener delegado por `data-act`, depósito e troca de moeda |
 | `src/app/update.ts` | Registro do service worker, aviso de versão nova (`initUpdates`, `applyUpdate`, `checkNow`) e `builtFrom`, o commit da página |
 | `src/app/cloud.ts` | A sincronização: o login com e-mail e senha (`signIn`, `signOut`), a cópia no servidor (`syncNow`, `queueSync`, `resolveFirst` para o primeiro encontro de dois históricos), `initCloud`, o cartão da Carteira (`cloudHtml`) e as últimas lutas guardadas no servidor (`cloudForms`, `keepForms`) |
@@ -234,7 +238,7 @@ Os módulos de `src/app/` se importam em círculo (a tela chama ações, ações
 
 `window.__OL` expõe `{Core, D, ui, slip, imp, sync, settle, settling, S, FX}` para teste.
 
-Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando. A exceção é o campo de busca da tela de Lutas: com o foco nele, `render()` repinta só a lista de lutas (`#list`), e o campo fica como está.
+Renderização é `innerHTML` a partir do estado. Toda string vinda da ESPN passa por `esc()`. `render()` não repinta a tela se o foco estiver num campo dela, para não derrubar o que a pessoa está digitando. A exceção é o campo de busca da tela de Lutas: com o foco nele, `render()` repinta só a lista de lutas (`#list`), e o campo fica como está. Uma repintura troca todos os botões daquela parte; quem usa teclado não perde o lugar porque `keepFocus` devolve o foco ao botão equivalente (mesmo `data-act` e mesmos `data-*`). Abrir a folha de baixo (cupom ou copiar aposta) leva o foco para ela, e ela diz o que é (`aria-label`).
 
 ### Estado no `localStorage`
 
@@ -262,6 +266,8 @@ Configuração nova entra em `settingsOf` (`src/app/state.ts`): é o que um "Zer
 `cash`: só em aposta encerrada por cashout: `{ kind: 'refund'|'market', full, chance }`, o retorno possível e a chance usados na oferta.
 
 `unit`: quanto valia uma unidade quando a aposta foi feita. O resultado em unidades do histórico usa esse valor, não a unidade de hoje.
+
+**Na carga, só entra o que as telas conseguem desenhar** (`soundBet`, `soundDeposit`, `soundEvent` em `src/app/state.ts`): aposta sem stake, sem seleção, ou com seleção sem `fid`, `key` ou `date`; depósito sem valor ou sem instante; e evento ou luta do cache em outro formato ficam de fora. Antes, um item desses derrubava todas as telas, e o app não abria mais. A mesma conferência vale para o backup restaurado e para a cópia do servidor. O que fica de fora não é guardado à parte.
 
 O saldo **não é guardado**: é sempre `depósitos − soma das stakes + soma dos payouts`. Não criar campo de saldo.
 
@@ -500,7 +506,7 @@ Pedido do Lucas em 11/10/2026 (D81): baixar um arquivo que possa ser mandado pel
 - **Salvar:** "Salvar backup em arquivo" monta um arquivo `oito-lados-backup-AAAA-MM-DD-HHMM.json` (`backupName`) com tudo o que está em `oitolados.v1`, mais `app` e `savedAt` (`backupText`). Onde a página pode entregar um arquivo à folha de compartilhamento do aparelho (`navigator.canShare` com `files`), ela abre: dali o arquivo vai para o Telegram, para os Arquivos ou para onde a pessoa quiser. Fechar a folha sem escolher não faz nada. Onde não pode, ou se o compartilhamento falha, o arquivo é baixado.
 - **Restaurar:** "Restaurar de um arquivo" abre o seletor de arquivos. O arquivo escolhido é lido e **mostrado antes**: o nome, quando foi salvo, quantas apostas (e quantas abertas) e quanto foi depositado (`peekBackup`). Só o toque em "Restaurar e substituir tudo" troca o que está no aparelho (`restoreFrom`); "Cancelar" não muda nada. Arquivo que não é um backup dá aviso e não muda nada.
 - **Texto:** "Copiar como texto" e "Colar um texto" continuam, em botões menores. É o mesmo conteúdo do arquivo; um backup feito de um jeito restaura pelo outro.
-- **O que volta:** depósitos, apostas, conversões de moeda e as configurações (`settingsOf`). `seen` vai para agora. O cache da ESPN não faz parte do backup.
+- **O que volta:** depósitos, apostas, conversões de moeda e as configurações (`settingsOf`). Aposta ou depósito estragado no arquivo fica de fora, como na carga (seção "Estado no `localStorage`"). `seen` vai para agora. O cache da ESPN não faz parte do backup.
 - **Limite conhecido:** o Telegram entrega o arquivo de volta como um anexo; para restaurar é preciso salvá-lo nos Arquivos do aparelho e escolher de lá. O app não recebe o arquivo direto do Telegram.
 
 ## Uso da ESPN (contagem no aparelho)
@@ -592,6 +598,8 @@ Legenda dos cantos (D35): com os mercados de uma luta abertos, uma faixa com os 
 
 Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Esses dois lados têm marca própria (D34, revista pela D41): `Core.overUnder(key)` devolve `'o'` ou `'u'` para `tot` e `td`, e a opção é montada como a de um lutador (barra lateral e fundo leve), mas em tons neutros (`--over` mais forte, `--under` mais claro) e com uma seta (▲ no +, ▼ no −). São neutros de propósito: + e − não pertencem a lutador nenhum, e com três pares de cor nos cantos qualquer cor ali bateria com algum par. A mesma seta marca a seleção no cupom, na tela de copiar aposta e na lista de apostas. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
 
+Acessibilidade (conferida por `tests/a11y.py`): texto com contraste AA (4,5:1) nos dois temas, inclusive o texto de dica dos campos (`::placeholder` no cinza do app, não no do navegador) e o `≈` da odd estimada; todo botão com nome e todo campo com rótulo; o saldo no alto é lido com o valor; o cupom diz qual tipo está ligado (`aria-pressed`). Os botões desenhados menores que um dedo e soltos na tela (o `×`, "Atualizar", o chip de apostas da luta, os botões-link como "trocar" e "desfazer") recebem 44 px de área de toque sem mudar o desenho. Os de 38 px que ficam em fileira (atalhos de valor, escolhas de período, tema e afins) continuam como estão. Os botões que escolhem arquivo ("Escolher fotos", "Restaurar de um arquivo") funcionam também pelo teclado. O aviso que aparece no alto (`#toast`) não segura toque: o que está embaixo dele continua respondendo.
+
 Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-*)`, campos com fonte de 16 px ou mais (evita zoom), metas `apple-mobile-web-app-*`. O Safari pode limpar o `localStorage` de site sem uso por semanas; por isso a Carteira tem backup e restauração, por arquivo e por texto (seção "Backup").
 
 ## Testes
@@ -600,7 +608,7 @@ Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-
 npm ci                       # Vite e TypeScript
 pip install -r tests/requirements.txt && playwright install chromium
 npm ci --prefix tests        # arquivos do leitor de imagem usados pelo e2e
-scripts/verify.sh            # tudo: tipos, build, docs, core, a rotina diária, o schema do banco (se houver Postgres), unit, contract, autoteste da checagem de produção, e2e claro e escuro, settle, pwa e cobertura
+scripts/verify.sh            # tudo: tipos, build, docs, core, a rotina diária, o schema do banco (se houver Postgres), unit, contract, autoteste da checagem de produção, e2e claro e escuro, settle, pwa, acessibilidade, dados estragados e cobertura
 scripts/verify.sh --quick    # sem o e2e (poucos segundos)
 node tests/core.mjs          # os casos do núcleo, sem navegador
 node tests/keepalive.mjs     # a rotina diária (api/keepalive.ts), com a rede trocada
@@ -621,6 +629,10 @@ Os casos são JavaScript, não TypeScript: muitos passam de propósito dados tor
 `contract.py` passa as respostas reais gravadas (ESPN e câmbio) pelos normalizadores, inclusive a lista de lutas de um atleta, três lutas passadas com o `status` de cada uma e o `status` de um empate. `contract_live.py` faz o mesmo contra a API de verdade (ESPN e o serviço de câmbio), e varre até 160 lutas encerradas dos últimos 120 dias para conferir que todo nome de resultado é classificado e que toda luta com vencedor tem o vencedor marcado no placar; lista também os países dos placares, com aviso para o nome que o app não tem bandeira, e os nomes de submission: as chamadas saem do Python, com um user agent que identifica o script e a origem de produção, e cada resposta é conferida também pelo cabeçalho de CORS; o navegador só roda os leitores do app. Saída 0 = a API continua batendo; 1 = uma checagem falhou (a API mudou); 3 = inconclusivo, a máquina não alcançou a ESPN. Aviso é normal quando não há card ou odds publicadas. `--mock` testa o próprio script. No GitHub Actions, falhas e avisos aparecem como anotações na execução.
 
 `docs_check.py` confere links, arquivos citados, constantes, chaves de seleção e o saldo esperado contra o código em `src/`, e também a configuração do build (versões exatas, modo `strict`, núcleo sem DOM, módulos documentados).
+
+`a11y.py` serve a página com o servidor simulado no lugar do Supabase (nomes do mesmo tamanho, para a cobertura continuar valendo por posição) e passa por todas as telas nos dois temas: Lutas, mercados abertos, cupom, copiar aposta, apostas abertas e encerradas, e a Carteira inteira, com o cartão do servidor já logado. Em cada uma mede o contraste de todo texto que não está desligado, procura botão sem nome e campo sem rótulo, e confere com `elementFromPoint` que cada botão recebe o toque no próprio centro e, se é desenhado menor que 44 px, também 22 px em volta (os de fileira, de 38 px, ficam numa lista). Uma vez só, confere o foco depois de repintar, o foco ao abrir a folha de baixo, os botões de arquivo pelo teclado, o toque que passa pelo aviso, o saldo lido com o valor e o mesmo ROI em todos os lugares da Carteira.
+
+`robust.py` abre o app com dez tipos de dado estragado no aparelho (aposta sem seleção, seleção vazia, depósito nulo, cache de outro formato e afins), restaura um backup estragado e entra numa conta cuja linha no servidor tem apostas estragadas. Em todos, as três telas têm que desenhar sem erro e o que está inteiro tem que ficar.
 
 **Cobertura:** com `OL_COVERAGE=1` (o `verify.sh` completo liga sozinho), cada suíte grava quais funções e trechos do script de `dist/index.html` executou, usando a cobertura precisa do V8. `python3 tests/cov.py` junta tudo, lista as funções nunca chamadas (nome e linha da página gerada) e falha abaixo dos mínimos: 95% das funções e 90% do código. Feature nova entra com teste, senão a cobertura cai e o `verify.sh` acusa. Teste que recarrega a página usa `cov.reload(pg)` em vez de `pg.reload()`: a recarga descarta o script, e no GitHub Actions as contagens de antes da recarga se perdiam (cobertura de 91,7% para um código que mede 97,2%). `cov.stop` para a medição e solta a página: com o medidor ainda preso, uma página fechada continuava contando como aberta para o service worker. No `e2e.py`, toda página do app aberta depois da medição principal também é medida (`app_page` e `done`), cada uma com um nome próprio. A página servida com o projeto do Supabase trocado pelo simulado mantém cada caractere no lugar: o endereço e a chave de teste têm o tamanho dos reais, e as constantes vazias levam os espaços que faltam, porque o `cov.py` casa o que foi medido com `dist/index.html` pela posição.
 

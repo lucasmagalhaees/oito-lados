@@ -6,7 +6,6 @@ import type { Currency } from '../core';
 export const $ = <T extends HTMLElement = HTMLElement>(s: string): T | null => document.querySelector<T>(s);
 /** What is typed in a field right now, or '' when the field is not on screen. */
 export const valOf = (sel: string): string => { const el = $<HTMLInputElement>(sel); return el ? el.value : ''; };
-/** Takes the focus off whatever field has it. On iOS a tapped button does not, and a focused field blocks the repaint. */
 /** The name of a country in Portuguese, from the name the source writes in English: the home nations of the United
  *  Kingdom by hand, the rest as the device names the country of that code. A name the app does not know stays as it came. */
 const HOME_NATIONS: Record<string, string> = { gbeng: 'Inglaterra', gbsct: 'Escócia', gbwls: 'País de Gales' };
@@ -18,7 +17,23 @@ export function landName(country: string, code: string): string {
   let name: string | undefined; try { name = regions ? regions.of(code) : undefined; } catch (err) { /* a code the device does not know */ }
   return name && name !== code ? name : country;
 }
-export const blurField = (): void => { const a = document.activeElement; if (a instanceof HTMLElement) a.blur(); };
+/** Takes the focus off whatever field has it. On iOS a tapped button does not, and a focused field blocks the repaint.
+ *  A button keeps it: the repaint gives it back to the same button (`keepFocus`), where the keyboard left it. */
+export const blurField = (): void => { const a = document.activeElement; if (a instanceof HTMLElement && a.matches('input, textarea, select')) a.blur(); };
+/** What tells a control apart from the others after a repaint: its action and the data it carries, as a selector. */
+function controlKey(el: Element | null): string | null {
+  if (!(el instanceof HTMLElement) || !el.dataset.act) return null;
+  return [...el.attributes].filter(a => a.name.startsWith('data-')).map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join('');
+}
+/** Repaints a part of the page and gives the keyboard focus back to the control that had it. A repaint replaces every
+ *  control in that part, and the focus of the one just used would otherwise fall back to the start of the page. */
+export function keepFocus(box: HTMLElement, paint: () => void): void {
+  const had = document.activeElement, key = had && box.contains(had) ? controlKey(had) : null;
+  paint();
+  if (!key || (had && had.isConnected)) return;
+  const again = box.querySelector<HTMLElement>(key);
+  if (again) again.focus({ preventScroll: true });
+}
 /** One of the fixed parts of the page skeleton in index.html. */
 export const part = (id: string): HTMLElement => document.getElementById(id)!;
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -43,8 +58,9 @@ export const signedU = (x: number): string => (x > 0.004 ? '+' : x < -0.004 ? '�
 /** A gain or a result in money and, when there are units behind it, in units too: "+R$ 150,00 · +1,5u". */
 export const signedBoth = (v: number, units: number | null): string => signed(v) + (units == null ? '' : ' · ' + signedU(units));
 export const pctText = (v: unknown): string => String(v).replace('.', ',');
-/** A share as a signed percentage with one decimal: 0.0119 is "+1,2%". */
-export const signedPct = (d: number): string => { const v = Math.round(d * 1000) / 10; return (v > 0 ? '+' : v < 0 ? '−' : '') + pctText(Math.abs(v).toFixed(1)) + '%'; };
+/** A share as a signed percentage with one decimal: 0.0119 is "+1,2%". A half is rounded away from zero on both sides, so a
+ *  loss reads as the gain of the same size does (−5,5% and +5,5%, not −5,4%). */
+export const signedPct = (d: number): string => { const v = Math.sign(d) * Math.round(Math.abs(d) * 1000) / 10; return (v > 0 ? '+' : v < 0 ? '−' : '') + pctText(Math.abs(v).toFixed(1)) + '%'; };
 const nodot = (f: Intl.DateTimeFormat) => ({ format: (t: number): string => f.format(t).replace('.', '') });
 export const dWhen = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
 export const dDay = nodot(new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));

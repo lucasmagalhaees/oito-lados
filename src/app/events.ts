@@ -218,6 +218,9 @@ document.addEventListener('paste', e => {
 });
 document.addEventListener('keydown', e => {
   const id = (e.target as HTMLElement).id, press = (act: string): void => { const b = document.querySelector<HTMLElement>(`[data-act="${act}"]`); if (b) b.click(); };
+  // the buttons that pick a file are labels of a hidden file field: from the keyboard they open the picker as a tap does
+  const t = e.target as HTMLElement;
+  if ((e.key === 'Enter' || e.key === ' ') && t.tagName === 'LABEL' && t.getAttribute('role') === 'button') { e.preventDefault(); t.click(); }
   if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; if (imp.open) closeImport(); else { renderSheet(); render(); } }
   if (e.key === 'Enter' && id === 'unitpct') press('unit');
   if (e.key === 'Enter' && id === 'dep') press('deposit');

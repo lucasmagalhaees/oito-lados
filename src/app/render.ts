@@ -1,7 +1,7 @@
 import { Core } from '../core';
 import { FORM_FIGHTS, formBusy, formFailed, loadBoard, loadOdds, openBets } from './api';
 import { CASH_WHY, cashoutOf } from './cashout';
-import { $, CUR, WEIGHT, dDate, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, landName, money, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
+import { $, CUR, WEIGHT, dDate, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, keepFocus, landName, money, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
 import { canBet, exposureNotes, inUnits, priceOf, setStakeMoney, slipCalc, statsOf, wallet } from './helpers';
 import { renderImport } from './import';
@@ -29,11 +29,13 @@ export function render(): void {
     apostas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M10 8v8" stroke-dasharray="2 2.5"/></svg>',
     carteira: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg>'
   };
-  part('tabs').innerHTML = [['lutas', 'Lutas'], ['apostas', 'Apostas'], ['carteira', 'Carteira']].map(([k, t]) =>
-    `<button class="tab ${ui.tab === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ''}>${ico[k]}${t}${k === 'apostas' && nOpen ? `<span class="badge">${nOpen}</span>` : ''}</button>`).join('');
+  part('bal').closest('button')!.setAttribute('aria-label', `Saldo fictício ${money(w.balance)}: abrir a carteira`);
+  const tabs = part('tabs');
+  keepFocus(tabs, () => { tabs.innerHTML = [['lutas', 'Lutas'], ['apostas', 'Apostas'], ['carteira', 'Carteira']].map(([k, t]) =>
+    `<button class="tab ${ui.tab === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ''}>${ico[k]}${t}${k === 'apostas' && nOpen ? `<span class="badge">${nOpen}</span>` : ''}</button>`).join(''); });
   const v = part('view'), ae = document.activeElement;
   if (!(ae && v.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName))) {       // never yank a field the person is typing in
-    v.innerHTML = sinceHtml() + (ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w));
+    keepFocus(v, () => { v.innerHTML = sinceHtml() + (ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w)); });
     if (ui.tab === 'carteira') bindChart();
   } else if (ae.id === 'q') paintList();          // the search field stays as it is; the fights under it follow
 
@@ -350,7 +352,9 @@ export const STMT_EVENTS = 5;
 const tone = (v: number): string => v > 0.004 ? 'pos' : v < -0.004 ? 'neg' : '';
 // the record of a set of closed bets, the way a fighter's is written: won and lost; voided and cashed-out bets are neither
 const record = (x: BenchSide): string => `${x.won}V ${x.dec - x.won}D`;
-const roiText = (x: BenchSide): string => x.roi == null ? '—' : signedPct(x.roi);
+// the return on what was staked, from the money itself: `roi` comes rounded to four places, and rounding it again to one
+// decimal could show 53,9% here and 53,8% in the table below for the same bets
+const roiText = (x: Pick<BenchSide, 'st' | 'pnl'>): string => x.st > 0 ? signedPct(x.pnl / x.st) : '—';
 function stmtHtml(done: Bet[]): string {
   const st = Core.statement(done, Date.now()), all = st.spans[st.spans.length - 1].all;
   // one cell for a side: the result in units, the record and the return on what was staked; a dot marks who is ahead of the two
@@ -378,9 +382,8 @@ function benchHtml(done: Bet[]): string {
     { ...bm.mine, edge: none, name: 'Minhas', cls: 'own' },
     ...(tips.length > 1 ? [{ ...bm.tip, edge: Core.edgeSummary(S.bets.filter(Core.isTip)), name: 'Tipster · todos', cls: 'tipall' }] : []),
     ...tips.map(r => ({ ...r, name: r.k || 'Tipster', cls: 'tipster' }))];
-  const roi = (v: number | null): string => v == null ? '—' : signedPct(v);
   const said = bm.ahead == null ? `Ainda não dá pra comparar: falta aposta encerrada ${bm.mine.st > 0 ? 'de tipster' : 'sua'} nesse período.`
-    : `${bm.ahead === 'mine' ? 'Você está na frente' : bm.ahead === 'tip' ? 'O tipster está na frente' : 'Empate'}: retorno de ${roi(bm.mine.roi)} nas suas apostas e de ${roi(bm.tip.roi)} nas do tipster.`;
+    : `${bm.ahead === 'mine' ? 'Você está na frente' : bm.ahead === 'tip' ? 'O tipster está na frente' : 'Empate'}: retorno de ${roiText(bm.mine)} nas suas apostas e de ${roiText(bm.tip)} nas do tipster.`;
   // the two sides face to face, in units first: the record, the return on what was staked, and the money under them
   const face = (x: BenchSide, name: string, cls: string, lead: boolean): string => `<div class="${cls}${lead ? ' lead' : ''}"><small>${name}${lead ? ' <em>na frente</em>' : ''}</small><b class="${x.n ? tone(x.unitBets ? x.units : x.pnl) : ''}">${x.n ? (x.unitBets ? signedU(x.units) : signed(x.pnl)) : '—'}</b>${x.n ? `<span>${record(x)} · ROI ${roiText(x)}</span><span>${signed(x.pnl)}</span>` : '<span>nenhuma aposta encerrada</span>'}</div>`;
   const faces = `<div class="duel" id="duel">${face(bm.mine, 'Você', 'own', bm.ahead === 'mine')}${face(bm.tip, 'Tipster', 'tipster', bm.ahead === 'tip')}</div>`;
@@ -413,13 +416,12 @@ function vCarteira(w: Wallet): string {
   h += '</section>';
   // the figures cover a period of the closed bets; the balance above and the deposits below never do
   const per = Core.periodBets(w.done, ui.period, Date.now()), pd = per.bets, st = ui.period === 'all' ? w : statsOf(pd);
-  const roi = st.staked ? st.pnl / st.staked * 100 : null;
   h += `<section class="card"><span class="label">Ganhos e perdas · apostas encerradas</span>
     ${w.done.length ? `<div class="segm per" id="period" role="group" aria-label="Período">${(Object.keys(PERIODS) as Period[]).map(k => `<button class="${ui.period === k ? 'on' : ''}" data-act="period" data-m="${k}" aria-pressed="${ui.period === k}">${PERIODS[k]}</button>`).join('')}</div>` : ''}
     ${ui.period === 'event' && per.event ? `<p class="hint" id="periodev">${esc(evLabel({ name: per.event }).main)}: o evento da aposta que fechou por último.</p>` : Core.PERIOD_DAYS[ui.period] ? `<p class="hint" id="periodev">Apostas que fecharam nos últimos ${Core.PERIOD_DAYS[ui.period]} dias.</p>` : ''}
     <div class="pnl ${st.pnl > 0 ? 'pos' : st.pnl < 0 ? 'neg' : ''}">${signed(st.pnl)}</div>
     ${st.unitBets ? `<p class="hint" id="pnlu"><b class="${tone(st.units)}">${signedU(st.units)}</b> em unidades, cada aposta medida pela unidade do dia em que foi feita.</p>` : ''}
-    <div class="kpis"><div><small>Apostado</small><b>${money(st.staked)}</b></div><div><small>Retornado</small><b>${money(st.ret)}</b></div><div><small>ROI</small><b>${roi == null ? '—' : (roi > 0 ? '+' : '') + roi.toFixed(1).replace('.', ',') + '%'}</b></div><div><small>Acerto</small><b>${st.decided ? `${st.won}/${st.decided} · ${Math.round(st.won / st.decided * 100)}%` : '—'}</b></div></div>`;
+    <div class="kpis"><div><small>Apostado</small><b>${money(st.staked)}</b></div><div><small>Retornado</small><b>${money(st.ret)}</b></div><div><small>ROI</small><b>${roiText({ st: st.staked, pnl: st.pnl })}</b></div><div><small>Acerto</small><b>${st.decided ? `${st.won}/${st.decided} · ${Math.round(st.won / st.decided * 100)}%` : '—'}</b></div></div>`;
   if (pd.length) {
     h += `<span class="label">Resultado acumulado, aposta a aposta</span><div class="chart" id="chart"></div>`;
     h += tblHtml('Mercado', breakdown(pd, b => isCombo(b) ? 'Combinada' : b.type === 'multi' ? 'Múltipla' : b.legs[0].cat));
@@ -468,7 +470,7 @@ function vCarteira(w: Wallet): string {
   h += '</section>';
   h += cloudHtml();
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">${signedIn() ? 'Saldo e apostas ficam salvos neste aparelho e numa cópia no servidor. O backup continua valendo: é o que sobra se o servidor sumir.' : 'Saldo e apostas ficam salvos só neste aparelho.'} Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir. O arquivo pode ser mandado pra você mesmo no Telegram ou guardado nos Arquivos.</p>
-    <div class="rowbtns"><button class="btn" data-act="bksave">Salvar backup em arquivo</button><label class="btn ghost" for="bkfile">Restaurar de um arquivo</label><input type="file" id="bkfile" accept="application/json,.json,text/plain,.txt" hidden></div>`;
+    <div class="rowbtns"><button class="btn" data-act="bksave">Salvar backup em arquivo</button><label class="btn ghost" for="bkfile" role="button" tabindex="0">Restaurar de um arquivo</label><input type="file" id="bkfile" accept="application/json,.json,text/plain,.txt" hidden></div>`;
   const rf = ui.restoreFile;
   if (rf) h += `<div class="bkpeek" id="bkpeek"><p><b>${esc(rf.name)}</b></p><p class="hint">${rf.savedAt ? `Salvo em ${esc(dWhen.format(rf.savedAt))}. ` : ''}${rf.bets} ${rf.bets === 1 ? 'aposta' : 'apostas'}${rf.open ? ` (${rf.open} ${rf.open === 1 ? 'aberta' : 'abertas'})` : ''} e ${esc(fmtOf(rf.cur).format(rf.deposited))} depositados. Restaurar troca tudo o que está neste aparelho pelo que está no arquivo.</p><div class="rowbtns"><button class="btn" data-act="bkapply">Restaurar e substituir tudo</button><button class="btn ghost" data-act="bkcancel">Cancelar</button></div></div>`;
   h += `<div class="rowbtns bktext"><button class="btn ghost" data-act="backup">Copiar como texto</button><button class="btn ghost" data-act="restore">${ui.restore ? 'Cancelar' : 'Colar um texto'}</button></div>`;
@@ -485,13 +487,13 @@ function vCarteira(w: Wallet): string {
 
 export function renderSheet(): void {
   if (imp.open) { renderImport(); return; }
-  const sh = part('sheet'); sh.hidden = !ui.sheet;
+  const sh = part('sheet'), opening = sh.hidden === true && ui.sheet; sh.hidden = !ui.sheet;
   if (!ui.sheet) { renderSlipBar(); return; }
   const c = slipCalc();
   let h = `<div class="ph"><h3>Cupom</h3><button class="x" data-act="sheet" aria-label="Fechar cupom">×</button></div>`;
-  if (!c.n) { part('panel').innerHTML = h + '<p class="empty">Cupom vazio.</p>'; return; }
+  if (!c.n) { paintPanel(h + '<p class="empty">Cupom vazio.</p>', 'Cupom de apostas', opening); return; }
   const mname = c.sameFight ? 'Combinada' : 'Múltipla';
-  h += `<div class="segm"><button class="${slip.mode === 'single' ? 'on' : ''}" data-act="mode" data-m="single">${c.n > 1 ? `Simples (${c.n})` : 'Simples'}</button><button class="${slip.mode === 'multi' ? 'on' : ''}" data-act="mode" data-m="multi" ${c.multiOk ? '' : 'disabled'}>${mname}</button></div>`;
+  h += `<div class="segm" role="group" aria-label="Tipo de aposta"><button class="${slip.mode === 'single' ? 'on' : ''}" data-act="mode" data-m="single" aria-pressed="${slip.mode === 'single'}">${c.n > 1 ? `Simples (${c.n})` : 'Simples'}</button><button class="${slip.mode === 'multi' ? 'on' : ''}" data-act="mode" data-m="multi" aria-pressed="${slip.mode === 'multi'}" ${c.multiOk ? '' : 'disabled'}>${mname}</button></div>`;
   h += '<div>';
   for (const g of c.groups) {
     const f = g.f, names = f ? `${f.a.last} x ${f.b.last}` : 'Luta fora do card';
@@ -514,8 +516,15 @@ export function renderSheet(): void {
     ${c.ok ? exposureNotes(slip.sels).map(n => `<p class="hint slipexpo">${esc(n)}</p>`).join('') : ''}
     ${slip.copy ? `<p class="hint" id="slipcopy">Aposta copiada${slip.copy.from ? ` de ${esc(slip.copy.from)}` : ''}: entra como do tipster, com a odd do print guardada.</p>` : ''}
     <div id="slipsum"></div>`;
-  part('panel').innerHTML = h;
-  slipSummary();
+  paintPanel(h, 'Cupom de apostas', opening, slipSummary);
+}
+/** Paints the bottom sheet (the slip, or the copy screen), named for what it holds. Opening it takes the keyboard focus
+ *  into it; a repaint gives the focus back to the control that had it. */
+export function paintPanel(html: string, name: string, opening: boolean, after?: () => void): void {
+  const panel = part('panel');
+  panel.setAttribute('aria-label', name);
+  keepFocus(panel, () => { panel.innerHTML = html; if (after) after(); });
+  if (opening) panel.focus({ preventScroll: true });
 }
 export function slipSummary(): void {
   const c = slipCalc(), el = $('#slipsum'); if (!el) return;

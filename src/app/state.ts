@@ -1,6 +1,6 @@
 import { Core } from '../core';
 import { isCurrency, setFmt } from './format';
-import type { AppState, AthleteStats, CardPart, CornerPair, Currency, Fight, FightEvent, Odds, PastFight, Period, Result, Takedowns, Tip, TipPick, TipStakeIn, UsageLog } from '../core';
+import type { AppState, AthleteStats, Bet, CardPart, Deposit, Leg, CornerPair, Currency, Fight, FightEvent, Odds, PastFight, Period, Result, Takedowns, Tip, TipPick, TipStakeIn, UsageLog } from '../core';
 
 /* ================= persistent state ================= */
 export const LS = {
@@ -9,9 +9,20 @@ export const LS = {
   set(k: string, v: unknown): boolean { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
 };
 export const validState = (s: unknown): s is AppState => !!s && typeof s === 'object' && Array.isArray((s as AppState).deposits) && Array.isArray((s as AppState).bets);
+type Loose = Record<string, unknown>;
+const isObj = (x: unknown): x is Loose => !!x && typeof x === 'object';
+/** A deposit with an amount and a moment, as every version wrote it. */
+export const soundDeposit = (x: unknown): x is Deposit => isObj(x) && Number(x.v) > 0 && Number(x.t) > 0;
+/** A selection the screens can show: every version wrote the fight, the market key and the date of the fight. */
+export const soundLeg = (x: unknown): x is Leg => isObj(x) && typeof x.fid === 'string' && typeof x.key === 'string' && Number.isFinite(Number(x.date));
+/** A bet the screens can show: a stake and at least one selection, every one of them whole. A bet that is not (a damaged
+ *  save, a damaged backup or server row) would stop every screen from drawing, so it is left out wherever a state comes in. */
+export const soundBet = (x: unknown): x is Bet => isObj(x) && Number(x.stake) > 0 && Array.isArray(x.legs) && x.legs.length > 0 && x.legs.every(soundLeg);
+/** A saved state with only the deposits and bets the app can draw. */
+const sound = (s: AppState): AppState => ({ ...s, deposits: s.deposits.filter(soundDeposit), bets: s.bets.filter(soundBet) });
 const saved: unknown = LS.get('oitolados.v1');
 /** Everything the person owns. Other modules read it through the live binding; replacing the whole state goes through setS. */
-export let S: AppState = validState(saved) ? saved : { v: 1, deposits: [], bets: [] };
+export let S: AppState = validState(saved) ? sound(saved) : { v: 1, deposits: [], bets: [] };
 delete (S as { tip?: unknown }).tip;          // the separate setting for copied prints, gone since money-or-units decides it
 // what closed before this moment has been seen: a state from before this existed must not announce its whole history
 if (!(Number(S.seen) > 0)) S.seen = Date.now();
@@ -92,7 +103,12 @@ export interface Data {
   form: Record<string, { ts: number; fights: PastFight[] }>;
 }
 export const D: Data = { events: [], fights: new Map(), odds: {}, results: {}, td: {}, astats: {}, finalSeen: {}, oddsAt: {}, lastSync: 0, from: 0, err: null, unread: {}, form: {} };
-(() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events, odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0, form: Core.readForms(c.form) }); index(); } })();
+/** A fighter, a fight and an event in the shape this version writes them. A cache left by another version can hold
+ *  them in another shape; those are left out (the next read of the board brings them back). */
+const soundFighter = (x: unknown): boolean => isObj(x) && typeof x.id === 'string' && typeof x.last === 'string';
+const soundFight = (x: unknown): boolean => isObj(x) && typeof x.id === 'string' && typeof x.eventId === 'string' && Number.isFinite(x.date) && soundFighter(x.a) && soundFighter(x.b);
+export const soundEvent = (x: unknown): x is FightEvent => isObj(x) && typeof x.id === 'string' && typeof x.name === 'string' && Number.isFinite(x.date) && Array.isArray(x.fights) && x.fights.every(soundFight);
+(() => { const c = LS.get('oitolados.cache.v1'); if (c && Array.isArray(c.events)) { Object.assign(D, { events: c.events.filter(soundEvent), odds: c.odds || {}, results: c.results || {}, td: c.td || {}, astats: c.astats || {}, finalSeen: c.finalSeen || {}, lastSync: c.lastSync || 0, from: c.from || 0, form: Core.readForms(c.form) }); index(); } })();
 /** The calls made to the source, counted on this device (`oitolados.usage.v1`), and the ones made since the page was opened. */
 export const U: UsageLog = Core.usageRead(LS.get('oitolados.usage.v1'));
 export const session: { since: number; log: UsageLog } = { since: Date.now(), log: Core.usageEmpty() };

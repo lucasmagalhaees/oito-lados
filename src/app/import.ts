@@ -2,7 +2,7 @@ import { Core } from '../core';
 import { loadOdds } from './api';
 import { $, dWhen, esc, fo, fu, money, parseMoney, part, pctText, signedBoth, sym } from './format';
 import { canBet, exposureNotes, payoutOf, priceOf, setStakeMoney, setStakeUnits, slipCalc, sum, wallet } from './helpers';
-import { recheck, render, renderSheet, sideDot, toast, writeBets } from './render';
+import { paintPanel, recheck, render, renderSheet, sideDot, toast, writeBets } from './render';
 import { D, S, imp, saveCache, saveS, slip, ui } from './state';
 import type { Bet, Fight, Priced, Pricing, Tip, TipItem, TipPick, TipProblem, TipStake } from '../core';
 import type { SlipCalc } from './helpers';
@@ -256,6 +256,7 @@ function opBlock(o: ImportOp, i: number, many: boolean): string {
   return h + '</div>';
 }
 export function renderImport(): void {
+  const opening = part('sheet').hidden === true;
   part('sheet').hidden = false; part('slipbar').hidden = true;
   const something = !!(imp.text || imp.ops.length || imp.err || imp.from);
   const known = [...new Set(S.bets.map(b => b.from).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -264,7 +265,7 @@ export function renderImport(): void {
     <textarea id="imptext" placeholder="Ex.: Fulano vs. Beltrano · Fulano para vencer a luta · Stake 1 unidade" aria-label="Texto da aposta">${esc(imp.text)}</textarea>
     <div class="field"><span>De quem é</span><input id="impfrom" maxlength="40" autocomplete="off" placeholder="canal ou tipster (opcional)" value="${esc(imp.from)}" aria-label="De quem é a aposta: canal ou tipster"></div>
     ${known.length ? `<div class="quick froms" id="impfroms" role="group" aria-label="Origens já usadas">${known.map(k => `<button class="${imp.from.trim() === k ? 'on' : ''}" data-act="impfromq" data-v="${esc(k)}" aria-pressed="${imp.from.trim() === k}">${esc(k)}</button>`).join('')}</div>` : ''}
-    <div class="rowbtns four"><button class="btn" data-act="imppaste" ${imp.busy ? 'disabled' : ''}>Colar</button><label class="btn ghost" for="impfile">Escolher fotos</label><input type="file" id="impfile" accept="image/*" multiple hidden ${imp.busy ? 'disabled' : ''}><button class="btn ghost" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><button class="btn ghost" data-act="impclear" ${imp.busy || !something ? 'disabled' : ''}>Limpar</button></div>
+    <div class="rowbtns four"><button class="btn" data-act="imppaste" ${imp.busy ? 'disabled' : ''}>Colar</button><label class="btn ghost" for="impfile" role="button" tabindex="0">Escolher fotos</label><input type="file" id="impfile" accept="image/*" multiple hidden ${imp.busy ? 'disabled' : ''}><button class="btn ghost" data-act="impread" ${imp.busy ? 'disabled' : ''}>Ler texto</button><button class="btn ghost" data-act="impclear" ${imp.busy || !something ? 'disabled' : ''}>Limpar</button></div>
     <p class="hint" id="impstatus">${esc(impStatus())}</p>`;
   if (imp.err) h += `<p class="msg" id="imperr">${esc(imp.err)}</p>`;
   if (!imp.busy) {
@@ -286,7 +287,7 @@ export function renderImport(): void {
       h += '</div>';
     }
   }
-  part('panel').innerHTML = h;
+  paintPanel(h, 'Copiar aposta', opening);
 }
 /** What the bet written from this item keeps of its original: who it came from, and the odds it printed. */
 const copyOf = (r: Resolved): CopyMeta => ({ from: imp.from.trim().slice(0, 40), bet: r.tip.odd, sig: r.ok.map(k => k.f.id + '|' + k.it.key).sort().join(','),
