@@ -12,9 +12,11 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mutation": "stryker run"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
     "typescript": "7.0.2",
     "vite": "8.3.3"
   }
