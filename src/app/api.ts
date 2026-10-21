@@ -12,6 +12,7 @@ export const CORE = 'https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc'
 /** One call. `kind` says what it is for, and the call is counted under it (how long it took, how much came back,
  *  whether it failed); null is for a call that is not to ESPN, which is not counted. */
 export async function getJSON(url: string, kind: UsageKind | null, ms?: number): Promise<Json> {
+  if (kind) { const now = Date.now(); calls.push(now); while (calls.length && calls[0] <= now - Core.BG_WINDOW) calls.shift(); }
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 12000), t0 = performance.now();
   let size = 0, ok = false;
   try {
@@ -20,6 +21,15 @@ export async function getJSON(url: string, kind: UsageKind | null, ms?: number):
     const j = JSON.parse(text); ok = true; return j;
   }
   finally { clearTimeout(t); if (kind) record(kind, performance.now() - t0, size, ok); }
+}
+/** When the calls to ESPN of the last minute started: what the background reading waits on (D105). */
+const calls: number[] = [];
+const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
+/** A call made in the background: it waits until the calls of the last minute, whoever made them, leave room for it
+ *  (`Core.roomIn`), so the reading of a whole card never comes on top of what the person is opening. */
+async function inTurn(url: string, kind: UsageKind): Promise<Json> {
+  for (let wait = Core.roomIn(calls, Date.now()); wait > 0; wait = Core.roomIn(calls, Date.now())) await sleep(wait);
+  return getJSON(url, kind);
 }
 export async function pool(jobs: (() => Promise<void>)[], n: number): Promise<void> { let i = 0; const run = async () => { while (i < jobs.length) { const j = jobs[i++]; try { await j(); } catch (e) { /* one failed call must not sink the batch */ } } }; await Promise.all(Array.from({ length: Math.min(n, jobs.length) }, run)); }
 const ATHLETES = 'https://sports.core.api.espn.com/v2/sports/mma/athletes';
@@ -38,7 +48,10 @@ export const formBusy = new Set<string>(), formFailed = new Set<string>();
 /** Whether what is kept of an athlete still stands: read within the week, and with all that is read of a fight today
  *  (the fights kept by a version that did not read how each one ended are read again). */
 export const formFresh = (id: string, now: number): boolean => { const g = D.form[id]; return !!g && now - g.ts < FORM_TTL && g.fights.every(x => typeof x.desc === 'string'); };
-export async function loadForm(ids: string[]): Promise<void> {
+/** The latest fights of these athletes. `background` is for the reading ahead of a whole card (`preloadForm`): its calls
+ *  wait for room in the minute; the details the person opened are read at once. */
+export async function loadForm(ids: string[], background = false): Promise<void> {
+  const get = (url: string): Promise<Json> => (background ? inTurn(url, 'form') : getJSON(url, 'form'));
   const now = Date.now(), todo = [...new Set(ids)].filter(id => id && !formBusy.has(id) && !formFresh(id, now));
   for (const k of Object.keys(D.form)) if (now - D.form[k].ts > FORM_KEEP && !todo.includes(k)) delete D.form[k];
   if (!todo.length) return;
@@ -51,11 +64,11 @@ export async function loadForm(ids: string[]): Promise<void> {
   await pool(rest.map(id => async () => {
     try {
       const had = (D.form[id] && D.form[id].fights) || [], fights: PastFight[] = [];
-      const log = Core.normEventlog(await getJSON(`${ATHLETES}/${id}/eventlog`, 'form')).filter(x => x.played).slice(0, FORM_FIGHTS);
+      const log = Core.normEventlog(await get(`${ATHLETES}/${id}/eventlog`)).filter(x => x.played).slice(0, FORM_FIGHTS);
       for (const it of log) {
         const known = had.find(x => x.id === it.id && x.method !== 'unknown' && typeof x.desc === 'string');
         if (known) { fights.push(known); continue; }
-        const c = await getJSON(it.competition, 'form'), f = Core.normPastFight(c, await getJSON(Core.statusRef(c), 'form'), id);
+        const c = await get(it.competition), f = Core.normPastFight(c, await get(Core.statusRef(c)), id);
         if (!f) throw new Error('not a fight');
         fights.push(f);
       }
@@ -72,12 +85,22 @@ export const openLegs = (): Leg[] => openBets().flatMap(b => b.legs);
 /** How far ahead the board is read: far enough to have the three cards after the one that just ended, a week
  *  without a card included. */
 export const BOARD_AHEAD = 30 * DAY;
-export async function loadBoard(): Promise<void> {
+/** At the pace of a card (D105): the board asked for only covers yesterday to tomorrow (`BOARD_SHORT` on each side of
+ *  now, so a card that goes past midnight is in it), and the full one comes back every `BOARD_FULL` and whenever the
+ *  person asks for it. The full board of 30 days was about 120 kB a call, most of what the app took in on a card night. */
+export const BOARD_SHORT = DAY, BOARD_FULL = 30 * 60e3;
+let fullAt = 0;
+export async function loadBoard(short = false): Promise<void> {
   const now = Date.now();
+  if (short && fullAt && D.events.length && now - fullAt < BOARD_FULL) {
+    const j = await getJSON(`${SITE}/scoreboard?dates=${ymd(now - BOARD_SHORT)}-${ymd(now + BOARD_SHORT)}&limit=100`, 'board');
+    D.events = Core.mergeBoard(D.events, ((j.events || []) as Json[]).map(Core.normEvent).filter(e => e.fights.length));
+    index(); return;
+  }
   const from = Math.min(now - 4 * DAY, ...openLegs().map(l => l.date - DAY));
   const j = await getJSON(`${SITE}/scoreboard?dates=${ymd(from)}-${ymd(now + BOARD_AHEAD)}&limit=100`, 'board');
   D.events = ((j.events || []) as Json[]).map(Core.normEvent).filter(e => e.fights.length).sort((a, b) => a.date - b.date);
-  D.from = from; index();
+  D.from = from; fullAt = now; index();
 }
 export async function loadOdds(eid: string | null, force?: boolean, onlyFids?: string[]): Promise<void> {
   const ev = D.events.find(e => e.id === eid); if (!ev || !eid) return;

@@ -55,3 +55,12 @@ export function findFights(fights: Fight[], query: unknown): Fight[] {
   if (!words.length) return [];
   return fights.filter(f => { const names = plain(f.a.name + ' ' + f.b.name); return words.every(w => names.includes(w)); });
 }
+
+/** The board after a short reading (D105): the events that came in it replace the same events of the last full board,
+ *  the others are kept as they were, in the order of their dates. A short board only asks for the days around now, so
+ *  the cards further ahead it does not bring stay on screen until the next full one. */
+export function mergeBoard<E extends { id: string; date: number }>(kept: E[], fresh: E[]): E[] {
+  const byId = new Map(kept.map(e => [e.id, e] as const));
+  for (const e of fresh) byId.set(e.id, e);
+  return [...byId.values()].sort((a, b) => a.date - b.date);
+}

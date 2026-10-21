@@ -15,7 +15,7 @@ export let nextIn = 0;
 export async function sync(force: boolean): Promise<void> {
   if (busy) return; busy = true;
   try {
-    await loadBoard();
+    await loadBoard(!force && atCardPace(Date.now()));
     D.err = null; fails = 0; D.lastSync = Date.now();
     pickEvent(); render();
     await Promise.all([loadOdds(ui.eventId, force), loadResults()]);
@@ -37,6 +37,11 @@ export function settling(now: number): boolean {
     if (!f || f.state !== 'post' || f.canceled || now - (D.finalSeen[f.id] || now) > 30 * 60e3) return false;
     return !D.results[f.id] || (/^td/.test(l.key) && !(D.td[f.id] && D.td[f.id].final));
   });
+}
+/** Whether the app is asking at the pace of a card: a fight under way, the night of an event, or a bet waiting on a fight
+ *  that is over. Then the board is the short one (D105). */
+export function atCardPace(now: number): boolean {
+  return [...D.fights.values()].some(f => f.state === 'in') || settling(now) || D.events.some(e => !e.completed && now > e.date - H && now < e.date + 12 * H);
 }
 export function schedule(): void {
   clearTimeout(timer);
@@ -75,7 +80,7 @@ export function preloadForm(): void {
   const ids = ev.fights.filter(f => f.state === 'pre' && !f.canceled).flatMap(f => [f.a.id, f.b.id]).filter(id => !formFresh(id, now));
   if (!ids.length) return;
   formAt = now;
-  loadForm(ids).then(() => { saveCache(); render(); });
+  loadForm(ids, true).then(() => { saveCache(); render(); });
 }
 /** The events on screen: the next three cards that are not over (`Core.cardsToShow`), and any card further ahead with a bet still open on it. */
 export const shownEvents = (): FightEvent[] => Core.cardsToShow(D.events, Date.now(), new Set(openLegs().map(l => l.eid)));
