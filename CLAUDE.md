@@ -97,7 +97,7 @@ O que já foi verificado, e o que ainda não foi, está em [`docs/verificacao.md
 1. Saldo fictício: o usuário deposita quanto quiser, quantas vezes quiser.
 2. Odds reais de UFC, atualizadas sozinhas a cada semana, sem redeploy.
 3. Mercados: vencedor, método (KO/TKO, submission, decisão), rounds, quedas.
-4. Aposta simples, múltipla entre lutas e combinada na mesma luta (com preço coerente, não multiplicação).
+4. Aposta simples, múltipla entre lutas e combinada na mesma luta (com preço coerente, não multiplicação). O tipo segue as seleções do cupom: uma é simples, duas ou mais são múltipla (ou combinada, se forem da mesma luta), sem escolha a fazer.
 5. Apostas acompanham a luta ao vivo e fecham sozinhas com o resultado oficial.
 6. Controle de ganhos e perdas: lucro/prejuízo, ROI, acerto, gráfico, quebra por mercado, e a comparação das apostas próprias com as copiadas de tipster (frente a frente, em unidades primeiro, com o cartel, o ROI e quem está na frente), para tudo, para os últimos 7, 15 ou 30 dias ou para o último evento. A lista de apostas pode mostrar só as próprias, só as de tipster ou as de um tipster.
 7. Tem que funcionar bem em tela de celular (393 px de largura).
@@ -324,6 +324,8 @@ O preço vem da probabilidade conjunta em `jointModel`, nunca do produto das odd
 - Conjunta acima de 97% da perna mais difícil: bloqueia como redundante.
 - Se a combinação é exatamente um mercado que já existe (ex.: `ml:a` + `fm:sub` = `mov:a:sub`), paga a odd desse mercado.
 - Nunca paga menos que a melhor perna.
+
+**O tipo segue as seleções** (D104): no cupom, uma seleção é aposta simples e duas ou mais são uma múltipla (ou combinada, se forem todas da mesma luta). Não há botão de simples ou múltipla: o cupom só diz o tipo ("Tipo: Múltipla de 3 seleções"). Uma múltipla que não fecha (combinação impossível ou redundante na mesma luta) não vira apostas simples por conta própria: fica bloqueada até uma seleção sair. A exceção é a aposta copiada de um print que diz "simples" com várias seleções (D43): ela chega ao cupom como várias simples, e tocar numa odd a mais a faz múltipla.
 
 Numa múltipla, cada luta entra uma vez: com a odd da seleção única ou com a odd da combinada. A odd final é o produto entre lutas, arredondado a 2 casas; o pagamento usa a odd arredondada.
 
@@ -600,7 +602,7 @@ Legenda dos cantos (D35): com os mercados de uma luta abertos, uma faixa com os 
 
 Mais e menos de uma linha (rounds e quedas) aparecem como `+2.5` e `−2.5`, com a legenda "+ é mais de, − é menos de" no título do mercado. Esses dois lados têm marca própria (D34, revista pela D41): `Core.overUnder(key)` devolve `'o'` ou `'u'` para `tot` e `td`, e a opção é montada como a de um lutador (barra lateral e fundo leve), mas em tons neutros (`--over` mais forte, `--under` mais claro) e com uma seta (▲ no +, ▼ no −). São neutros de propósito: + e − não pertencem a lutador nenhum, e com três pares de cor nos cantos qualquer cor ali bateria com algum par. A mesma seta marca a seleção no cupom, na tela de copiar aposta e na lista de apostas. Aposta feita antes dessa mudança continua com o texto antigo no histórico, porque o texto é copiado na hora da aposta.
 
-Acessibilidade (conferida por `tests/a11y.py`): texto com contraste AA (4,5:1) nos dois temas, inclusive o texto de dica dos campos (`::placeholder` no cinza do app, não no do navegador) e o `≈` da odd estimada; todo botão com nome e todo campo com rótulo; o saldo no alto é lido com o valor; o cupom diz qual tipo está ligado (`aria-pressed`). Os botões desenhados menores que um dedo e soltos na tela (o `×`, "Atualizar", o chip de apostas da luta, os botões-link como "trocar" e "desfazer") recebem 44 px de área de toque sem mudar o desenho. Os de 38 px que ficam em fileira (atalhos de valor, escolhas de período, tema e afins) continuam como estão. Os botões que escolhem arquivo ("Escolher fotos", "Restaurar de um arquivo") funcionam também pelo teclado. O aviso que aparece no alto (`#toast`) não segura toque: o que está embaixo dele continua respondendo.
+Acessibilidade (conferida por `tests/a11y.py`): texto com contraste AA (4,5:1) nos dois temas, inclusive o texto de dica dos campos (`::placeholder` no cinza do app, não no do navegador) e o `≈` da odd estimada; todo botão com nome e todo campo com rótulo; o saldo no alto é lido com o valor; o cupom diz o tipo da aposta em palavras (D104). Os botões desenhados menores que um dedo e soltos na tela (o `×`, "Atualizar", o chip de apostas da luta, os botões-link como "trocar" e "desfazer") recebem 44 px de área de toque sem mudar o desenho. Os de 38 px que ficam em fileira (atalhos de valor, escolhas de período, tema e afins) continuam como estão. Os botões que escolhem arquivo ("Escolher fotos", "Restaurar de um arquivo") funcionam também pelo teclado. O aviso que aparece no alto (`#toast`) não segura toque: o que está embaixo dele continua respondendo.
 
 Cuidados de iPhone já aplicados: `viewport-fit=cover` com `env(safe-area-inset-*)`, campos com fonte de 16 px ou mais (evita zoom), metas `apple-mobile-web-app-*`. O Safari pode limpar o `localStorage` de site sem uso por semanas; por isso a Carteira tem backup e restauração, por arquivo e por texto (seção "Backup").
 

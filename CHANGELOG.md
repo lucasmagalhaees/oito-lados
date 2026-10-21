@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.27.0] - 2026-10-21
+
+### Alterado
+- O cupom não pergunta mais se é simples ou múltipla: uma seleção é simples, duas ou mais são múltipla (ou combinada, se forem da mesma luta). Uma múltipla que não fecha fica bloqueada com o motivo, em vez de virar apostas simples.
+
 ## [0.26.2] - 2026-10-18
 
 ### Adicionado

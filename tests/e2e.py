@@ -317,7 +317,9 @@ with sync_playwright() as p:
     def bet(sels, stake, mode='single'):
         for s in sels: pick(*s)
         pg.click('#slipbtn')
-        if mode=='multi': pg.click('[data-act=mode][data-m=multi]')
+        # the kind follows the selections (D104): one is a single, more than one a multiple
+        assert txt('#slipkind') == ('Tipo: Simples' if len(sels) == 1 else 'Tipo: Múltipla de %d seleções' % len(sels) if len({f for f, _ in sels}) > 1 else 'Tipo: Combinada na mesma luta · %d seleções' % len(sels)), txt('#slipkind')
+        assert (mode == 'multi') == (len(sels) > 1), 'more than one selection is always a multiple'
         pg.fill('#stake', stake)
         if mode=='multi': shot('s3-slip.png')
         pg.click('[data-act=place]'); pg.wait_for_selector('.bet'); pg.click('.tabbar [data-tab=lutas]')
@@ -755,11 +757,10 @@ with sync_playwright() as p:
     pg.click('.tabbar [data-tab=lutas]')
     # five selections in one multiple (two of the fights with a combination) is a long shot: the slip suggests a fraction of a unit
     for fid, key in (('f1', 'ml:a'), ('f2', 'ml:a'), ('f2', 'dist:yes'), ('f3', 'ml:a'), ('f3', 'tot:o:3.5')): pick(fid, key)
-    pg.click('#slipbtn'); pg.wait_for_selector('#stake'); pg.click('[data-act=mode][data-m=multi]')
+    pg.click('#slipbtn'); pg.wait_for_selector('#stake'); assert txt('#slipkind') == 'Tipo: Múltipla de 5 seleções' and pg.locator('[data-act=mode]').count() == 0, 'five selections are a multiple, with nothing to switch'
     assert pg.locator('#slipsug button').all_inner_texts() == ['0,2u', '0,3u', '0,4u'] and 'de 5 seleções: stake sugerida de 0,2u a 0,4u' in txt('#panel'), txt('#panel')
     pg.click('#slipsug [data-u="0.3"]'); assert pg.input_value('#stake') == '30' and 'R$ 30,00 · 0,3u' in txt('#slipsum'), (pg.input_value('#stake'), txt('#slipsum'))
-    pg.click('[data-act=mode][data-m=single]'); assert pg.locator('#slipsug').count() == 0, 'five singles are five bets, not a long shot'
-    pg.click('[data-act=mode][data-m=multi]'); pg.click('#panel [data-act=unpick] >> nth=4'); assert pg.locator('#slipsug').count() == 0, 'four selections get no suggestion'
+    pg.click('#panel [data-act=unpick] >> nth=4'); assert pg.locator('#slipsug').count() == 0, 'four selections get no suggestion'
     pg.fill('#stake', '')
     while pg.evaluate('window.__OL.slip.sels.length'): pg.click('#panel [data-act=unpick] >> nth=0')            # the last one closes the slip
     pick('f1', 'ml:a'); pg.click('#slipbtn')
@@ -810,15 +811,16 @@ with sync_playwright() as p:
     bet([('f1','ml:a'),('f2','dist:yes'),('f3','tot:o:3.5')], '50', 'multi')   # 1.67*1.44*1.83
     bet([('f1','td:o:2.5')], '20')                                # 3 TDs -> wins
     bet([('f3','mov:a:sub')], '10')                               # wins @4.00
-    bet([('f2','rnd:1'),('f3','wr:b:1')], '5')                    # two singles, both lose
+    bet([('f2','rnd:1')], '5'); bet([('f3','wr:b:1')], '5')       # two singles, one at a time (D104), both lose
     bet([('f2','ml:a')], '30')                                    # loses
-    bet([('f1','tda:b:no'),('f3','td:u:1.5')], '10')              # f1 b has 1 TD -> loses ; f3 3 TDs -> loses
+    bet([('f1','tda:b:no')], '10'); bet([('f3','td:u:1.5')], '10')  # f1 b has 1 TD -> loses ; f3 3 TDs -> loses
     bet([('f3','fm:sub'),('f3','tot:o:1.5')], '10', 'multi')       # sub in R4 -> wins at the combo price
     bet([('f1','fm:ko'),('f1','tot:o:1.5'),('f2','ml:b')], '10', 'multi')   # f1 KO R2 3:12 -> over 1.5 ok ; f2 b wins -> wins
     pick('f3','dist:yes'); pick('f3','tot:u:1.5'); pg.click('#slipbtn'); pg.wait_for_timeout(100)
-    print('impossible combo ->', pg.inner_text('.combo.bad'), '| multi disabled:', pg.get_attribute('[data-act=mode][data-m=multi]', 'disabled') is not None)
+    print('impossible combo ->', pg.inner_text('.combo.bad'))
+    pg.fill('#stake', '10'); assert pg.get_attribute('[data-act=place]', 'disabled') is not None and 'não fecham uma múltipla' in txt('[data-act=place]'), ('a multiple that cannot happen is not placed, and is not turned into two singles either', txt('#slipsum'))
     shot('s8-combo-bad.png'); pg.click('[data-act=unpick][data-key="dist:yes"]'); pg.click('[data-act=unpick][data-key="tot:u:1.5"]')
-    pick('f3','fm:ko'); pick('f3','tot:o:1.5'); pick('f2','ml:a'); pg.click('#slipbtn'); pg.click('[data-act=mode][data-m=multi]'); pg.fill('#stake','25'); shot('s9-combo.png')
+    pick('f3','fm:ko'); pick('f3','tot:o:1.5'); pick('f2','ml:a'); pg.click('#slipbtn'); pg.fill('#stake','25'); shot('s9-combo.png')
     pg.click('[data-act=unpick][data-key="fm:ko"]'); pg.click('[data-act=unpick][data-key="tot:o:1.5"]'); pg.click('[data-act=unpick][data-key="ml:a"]')
     bet([('f1','ml:a'),('f3','ml:a')], '10', 'multi')                  # both win @1.67 x 1.80 -> 30.10; used below to check cashout after the first fight
     bet([('f1','ml:a'),('f3','ml:b')], '10', 'multi')                  # cashed out below at market value once the first fight has won
