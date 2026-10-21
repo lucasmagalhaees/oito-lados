@@ -13,7 +13,7 @@ import { applyUpdate, checkNow } from './update';
 import { copyUsage, resetUsage, saveUsageFile } from './usage';
 import { resolveFirst, signIn, signOut, syncNow, typedEmail, typedPass } from './cloud';
 import type { Currency, Period } from '../core';
-import type { Slip, Ui } from './state';
+import type { Ui } from './state';
 
 /* ================= events ================= */
 // The currency is chosen where the money comes in. Picking another one only shows what the deposit will do;
@@ -106,9 +106,14 @@ document.addEventListener('click', e => {
     if (i >= 0) slip.sels.splice(i, 1);
     else { slip.sels = slip.sels.filter(s => !(s.fid === fid && s.key.split(':')[0] === g)); slip.sels.push({ fid, key }); }
     if (!slip.sels.length) slip.copy = null;
+    slip.mode = slip.sels.length > 1 ? 'multi' : 'single';         // more than one selection is a multiple (D104)
     ui.msg = ''; render();
   }
-  else if (a === 'unpick') { slip.sels = slip.sels.filter(s => !(s.fid === d.fid && s.key === d.key)); ui.msg = ''; if (!slip.sels.length) { ui.sheet = false; slip.copy = null; } renderSheet(); render(); }
+  else if (a === 'unpick') {
+    slip.sels = slip.sels.filter(s => !(s.fid === d.fid && s.key === d.key)); ui.msg = '';
+    // singles brought from a print that says "simples" stay singles; anything else follows the count (D104)
+    if (!(slip.copy && slip.mode === 'single')) slip.mode = slip.sels.length > 1 ? 'multi' : 'single';
+    if (!slip.sels.length) { ui.sheet = false; slip.copy = null; } renderSheet(); render(); }
   else if (a === 'sheet') { ui.sheet = !ui.sheet; ui.msg = ''; renderSheet(); }
   else if (a === 'imp') { imp.open = true; imp.err = ''; imp.msg = ''; ui.sheet = false; renderImport(); }
   else if (a === 'impclose') { if (!imp.busy) closeImport(); }
@@ -133,7 +138,6 @@ document.addEventListener('click', e => {
   else if (a === 'impforce') forceFor(Number(d.op));
   else if (a === 'impfixtext') { if (!imp.busy && !imp.placing) fixText(Number(d.op)); }
   else if (a === 'impfromq') setFrom(d.v || '');
-  else if (a === 'mode') { slip.mode = d.m as Slip['mode']; renderSheet(); }
   else if (a === 'stq') { const bal = wallet().balance, n = slip.mode === 'multi' ? 1 : Math.max(1, slip.sels.length); const v = d.v === 'max' ? Math.floor(bal / n * 100) / 100 : parseMoney(slip.stake) + Number(d.v); setStakeMoney(v); showStake(); ui.msg = ''; slipSummary(); }
   else if (a === 'stu') { if (wallet().unit > 0) { setStakeUnits(Number(d.u)); showStake(); ui.msg = ''; slipSummary(); } }
   else if (a === 'stakein') { S.stakeIn = d.m === 'units' ? 'units' : 'money'; saveS(); if (inUnits()) setStakeUnits(Core.parseUnits(slip.units)); ui.msg = ''; blurField(); renderSheet(); render(); toast(S.stakeIn === 'units' ? 'O cupom passa a pedir o valor em unidades.' : 'O cupom passa a pedir o valor em dinheiro.'); }

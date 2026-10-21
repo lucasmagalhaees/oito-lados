@@ -201,7 +201,7 @@ with sync_playwright() as p:
             # the bottom sheet takes the focus when it opens, and says what it holds
             pg.focus('#slipbtn'); pg.keyboard.press('Enter'); pg.wait_for_timeout(200)
             check(pg.evaluate('document.activeElement && document.activeElement.id') == 'panel' and pg.get_attribute('#panel', 'aria-label') == 'Cupom de apostas', ('the slip takes the focus', pg.evaluate('document.activeElement.id')))
-            check(kept('#panel [data-act=mode][data-m=multi]') and pg.get_attribute('#panel [data-act=mode][data-m=multi]', 'aria-pressed') == 'true', 'the kind of bet says which one is on, and keeps the focus')
+            check(pg.locator('#panel [data-act=mode]').count() == 0 and pg.inner_text('#slipkind').startswith('Tipo: '), ('the kind of bet is said in words, with nothing to switch (D104)', pg.inner_text('#panel')[:200]))
             pg.keyboard.press('Escape'); pg.wait_for_timeout(150)
             pg.click('.tabbar [data-tab=lutas]'); pg.click('[data-act=imp]'); pg.wait_for_timeout(200)
             check(pg.get_attribute('#panel', 'aria-label') == 'Copiar aposta' and pg.evaluate('document.activeElement.id') == 'panel', ('the copy screen is named for what it is', pg.get_attribute('#panel', 'aria-label')))

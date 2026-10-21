@@ -34,7 +34,7 @@ with sync_playwright() as p:
     def bet(sels, stake, multi=False):
         for fid, key in sels: pg.click(f'[data-act=pick][data-fid="{fid}"][data-key="{key}"]')
         pg.click('#slipbtn'); pg.wait_for_selector('#stake')
-        if multi: pg.click('[data-act=mode][data-m=multi]')
+        assert ('Múltipla' in pg.inner_text('#slipkind')) == multi, pg.inner_text('#slipkind')         # the kind follows the selections (D104)
         k = pg.evaluate('window.__OL.S.bets.length')
         pg.fill('#stake', stake); pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length === {k + 1}')
         pg.click('.tabbar [data-tab=lutas]')

@@ -52,7 +52,7 @@ export function showStake(): void { const a = $<HTMLInputElement>('#stake'), b =
 /** The selections of one fight in the slip. Two or more are priced together, as a same-fight combo. */
 export interface SlipGroup { fid: string; f: Fight | undefined; rs: Resolved[]; ok?: boolean; odd?: number; combo?: boolean; why?: 'impossible' | 'redundant'; same?: string }
 export interface SlipCalc {
-  rs: Resolved[]; ok: boolean; groups: SlipGroup[]; multiOk: boolean; sameFight: boolean; stake: number; n: number; odd: number;
+  rs: Resolved[]; ok: boolean; resolved: boolean; groups: SlipGroup[]; multiOk: boolean; sameFight: boolean; stake: number; n: number; odd: number;
   total: number; ret: number; balance: number; unit: number; unitPct: number;
 }
 /** Selections by fight, each fight with its price: the odd of a lone selection, or the one of the same-fight combo. */
@@ -80,13 +80,17 @@ export function slipCalc(): SlipCalc {
   const rs = resolveSlip(), ok = rs.length > 0 && rs.every(r => r.ok), n = rs.length;
   const groups = groupsOf(rs);
   const multiOk = ok && n >= 2 && groups.every(g => g.ok);
-  if (slip.mode === 'multi' && !multiOk) slip.mode = 'single';
+  // the kind of bet follows the selections (D104): one is a single, two or more a multiple. A multiple that does not
+  // close (a same-fight pair that cannot happen together, or where one already makes the other) is not turned into
+  // singles behind the person's back: it cannot be placed until a selection is taken out.
+  if (n < 2) slip.mode = 'single';
+  const blocked = ok && slip.mode === 'multi' && !multiOk;
   const w = wallet();
   const stake = inUnits() ? Core.r2(slip.unitsN * w.unit) : parseMoney(slip.stake);     // in units, the amount follows the unit of right now
   const odd = multiOk ? Core.r2(groups.reduce((p, g) => p * g.odd!, 1)) : (ok && n === 1 ? rs[0].x!.odd : 0);
   const total = slip.mode === 'multi' ? stake : Core.r2(stake * n);
   const ret = !ok ? 0 : slip.mode === 'multi' ? Core.r2(stake * odd) : Core.r2(sum(rs, r => stake * r.x!.odd));
-  return { rs, ok, groups, multiOk, sameFight: groups.length === 1 && n > 1, stake, n, odd, total, ret, balance: w.balance, unit: w.unit, unitPct: w.unitPct };
+  return { rs, ok: ok && !blocked, resolved: ok, groups, multiOk, sameFight: groups.length === 1 && n > 1, stake, n, odd, total, ret, balance: w.balance, unit: w.unit, unitPct: w.unitPct };
 }
 
 /** What a new bet meets in the fights it touches: the money already at stake there in open bets, and the open bets it

@@ -64,6 +64,7 @@ Formato de cada item: **contexto**, **decisão**, **descartado**, **consequênci
 33. Em 17/10/2026, às 10:59, o login trocado para e-mail e senha (D100).
 34. Em 17/10/2026, entre 11:01 e 11:30, o que a revisão do PR #35 achou foi corrigido (D102).
 35. Em 17/10/2026, as últimas lutas guardadas também no servidor (D103).
+36. Em 21/10/2026, às 19:20, o tipo da aposta passa a seguir as seleções do cupom (D104).
 
 ## D1. Dinheiro fictício e marca própria
 
@@ -1138,6 +1139,15 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **O banco nunca segura a ESPN:** sem login, fora do ar ou demorando mais de 5 s, o app lê da ESPN como antes. Gravar não faz ninguém esperar.
 - **Nada do banco entra sem conferência:** cada linha passa por `Core.formRows` (o lutador pedido, as lutas com os campos certos e de tamanho são, lidas há menos de 7 dias) e o banco recusa linha grande demais ou lutador com caracteres estranhos. A mesma conferência passou a valer para o que está guardado no aparelho.
 - **Não verificado:** a tabela no projeto real, que o Lucas precisa criar com o SQL do PR.
+
+## D104. O tipo da aposta segue as seleções do cupom
+
+- **Contexto (21/10/2026, 19:20):** "quando eu selecionar mais de uma opção, já fica claro que é múltipla; se for uma simples eu vou selecionar uma opção apenas e apostar".
+- **Decisão:** sai o botão "Simples / Múltipla" do cupom. Uma seleção é aposta simples; duas ou mais são múltipla, ou combinada se forem todas da mesma luta. O cupom diz o tipo em palavras.
+- **Consequências:**
+  - Várias apostas simples de uma vez pelo cupom deixam de existir: cada simples é feita sozinha.
+  - Uma múltipla que não fecha (seleções da mesma luta que não podem acontecer juntas, ou em que uma já garante a outra) fica bloqueada com o motivo, em vez de virar apostas simples sem a pessoa pedir. Antes o cupom trocava para simples sozinho.
+- **Não muda:** o print que diz "simples" com várias seleções continua virando várias simples (D43), e a tela de copiar mantém a escolha entre múltipla e simples de cada item (D46). Esse caminho chega ao cupom com o tipo do print; tocar numa odd a mais faz dele uma múltipla.
 
 ## Pendências em 10/10/2026
 

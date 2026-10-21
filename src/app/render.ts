@@ -493,7 +493,8 @@ export function renderSheet(): void {
   let h = `<div class="ph"><h3>Cupom</h3><button class="x" data-act="sheet" aria-label="Fechar cupom">×</button></div>`;
   if (!c.n) { paintPanel(h + '<p class="empty">Cupom vazio.</p>', 'Cupom de apostas', opening); return; }
   const mname = c.sameFight ? 'Combinada' : 'Múltipla';
-  h += `<div class="segm" role="group" aria-label="Tipo de aposta"><button class="${slip.mode === 'single' ? 'on' : ''}" data-act="mode" data-m="single" aria-pressed="${slip.mode === 'single'}">${c.n > 1 ? `Simples (${c.n})` : 'Simples'}</button><button class="${slip.mode === 'multi' ? 'on' : ''}" data-act="mode" data-m="multi" aria-pressed="${slip.mode === 'multi'}" ${c.multiOk ? '' : 'disabled'}>${mname}</button></div>`;
+  const kind = slip.mode === 'multi' ? (c.sameFight ? `Combinada na mesma luta · ${c.n} seleções` : `Múltipla de ${c.n} seleções`) : c.n > 1 ? `${c.n} apostas simples, como no print` : 'Simples';
+  h += `<p class="hint" id="slipkind">Tipo: <b>${kind}</b></p>`;
   h += '<div>';
   for (const g of c.groups) {
     const f = g.f, names = f ? `${f.a.last} x ${f.b.last}` : 'Luta fora do card';
@@ -529,7 +530,8 @@ export function paintPanel(html: string, name: string, opening: boolean, after?:
 export function slipSummary(): void {
   const c = slipCalc(), el = $('#slipsum'); if (!el) return;
   let why = '';
-  if (!c.ok) why = 'Tem seleção com mercado fechado.';
+  if (!c.resolved) why = 'Tem seleção com mercado fechado.';
+  else if (!c.ok) why = 'Essas seleções não fecham uma múltipla. Tira uma.';
   else if (c.stake < 1) why = `Aposta mínima de ${money(1)}.`;
   else if (c.total > c.balance + 0.004) why = 'Saldo insuficiente.';
   el.innerHTML = `<dl class="sum">${slip.mode === 'multi' ? `<dt>Odd da ${c.sameFight ? 'combinada' : 'múltipla'}</dt><dd>${c.ok ? fo(c.odd) : '—'}</dd>` : ''}<dt>Total apostado</dt><dd>${money(c.total)}${c.unit > 0 && c.total > 0 ? ' · ' + fu(c.total / c.unit) : ''}</dd><dt>Retorno possível</dt><dd class="big">${money(c.ret)}</dd><dt>Ganho possível</dt><dd id="slipgain">${c.ok && c.total > 0 ? signedBoth(c.ret - c.total, c.unit > 0 ? (c.ret - c.total) / c.unit : null) : '—'}</dd><dt>Saldo disponível</dt><dd>${money(c.balance)}</dd></dl>
@@ -575,8 +577,7 @@ export async function place(): Promise<void> {
   ui.placing = false;
   if (!reached) { ui.msg = 'Sem conexão com a ESPN. Não deu pra confirmar as odds, tenta de novo.'; renderSheet(); return; }
   const c = slipCalc();
-  if (!c.ok) { ui.msg = 'Uma das lutas já começou ou saiu do card.'; renderSheet(); render(); return; }
-  if (slip.mode !== mode) { ui.msg = 'Essa combinação não está mais disponível com as odds novas.'; renderSheet(); render(); return; }
+  if (!c.ok) { ui.msg = c.resolved ? 'Essa combinação não está mais disponível com as odds novas.' : 'Uma das lutas já começou ou saiu do card.'; renderSheet(); render(); return; }
   if (c.rs.some(r => Math.abs(r.x!.odd - shown.get(r.s.fid + '|' + r.s.key)!) > 0.001) || (mode === 'multi' && Math.abs(c.odd - before.odd) > 0.001)) { ui.msg = 'As odds mudaram. Confere os valores novos e confirma de novo.'; renderSheet(); render(); return; }
   if (c.total > c.balance + 0.004) { renderSheet(); return; }
   const made = writeBets(c, slip.mode, Date.now(), '', slip.copy);
