@@ -2,10 +2,10 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [0.27.1] - 2026-10-25
+## [0.27.2] - 2026-10-25
 
 ### Alterado
-- Em noite de card o placar pedido à ESPN é só o dos dias em volta (bem menor); o completo vem a cada 30 min. A busca das últimas lutas em segundo plano não passa de 60 chamadas por minuto.
+- O service worker termina de guardar fontes e leitor de imagem antes de parar. Mínimo de cobertura sobe para 97% das funções.
 
 ## [0.27.0] - 2026-10-21
 

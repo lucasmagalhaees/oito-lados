@@ -72,7 +72,7 @@ if [ "$full" -eq 1 ]; then
   run pwa       python3 tests/pwa.py
   run a11y      python3 tests/a11y.py
   run robust    python3 tests/robust.py
-  run coverage  python3 tests/cov.py --min-functions 95 --min-chars 90
+  run coverage  python3 tests/cov.py --min-functions 97 --min-chars 90
 fi
 
 if [ "$fail" -eq 0 ]; then echo "verify: tudo passou"; else echo "verify: HÁ FALHAS. Não declare que funciona."; fi
