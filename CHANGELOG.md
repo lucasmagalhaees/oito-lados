@@ -2,11 +2,10 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [0.28.0] - 2026-10-25
+## [0.27.2] - 2026-10-25
 
-### Adicionado
-- O cupom começado à mão já vem com o valor da última aposta.
-- No cupom, a seleção cuja odd mudou desde a escolha mostra a odd de antes, com seta para cima ou para baixo.
+### Alterado
+- O service worker termina de guardar fontes e leitor de imagem antes de parar. Mínimo de cobertura sobe para 97% das funções.
 
 ## [0.27.0] - 2026-10-21
 

@@ -312,7 +312,7 @@ check('production workflow runs the check on pushes to main', 'scripts/check_pro
 check('verify.sh self-tests the production check', 'check_production.py --selftest' in read('scripts/verify.sh'))
 fxs = sorted(p.name for p in (ROOT / 'tests' / 'fixtures' / 'fx').glob('*.json'))
 check('every recorded exchange-rate sample is listed in its README', bool(fxs) and all(f'`{n}`' in read('tests/fixtures/fx/README.md') for n in fxs), fxs)
-check('verify.sh enforces the coverage minimums the spec states', '--min-functions 95 --min-chars 90' in read('scripts/verify.sh') and '95% das funções' in spec and '90% do código' in spec)
+check('verify.sh enforces the coverage minimums the spec states', '--min-functions 97 --min-chars 90' in read('scripts/verify.sh') and '97% das funções' in spec and '90% do código' in spec)
 
 # 5e. the build: one self-contained page, exact versions, strict types, and a host that builds the same way
 pkg = json.loads(read('package.json'))
