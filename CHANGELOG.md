@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.27.2] - 2026-10-25
+
+### Alterado
+- O service worker termina de guardar fontes e leitor de imagem antes de parar. Mínimo de cobertura sobe para 97% das funções.
+
 ## [0.27.0] - 2026-10-21
 
 ### Alterado

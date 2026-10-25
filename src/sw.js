@@ -33,7 +33,8 @@ self.addEventListener('fetch', event => {
       const hit = await cache.match(req);
       if (hit) return hit;
       const res = await fetch(req);
-      if (res.ok) cache.put(req, res.clone());
+      // the copy is written before the worker may stop: the next visit without a connection finds it there
+      if (res.ok) event.waitUntil(cache.put(req, res.clone()));
       return res;
     }));
   }
