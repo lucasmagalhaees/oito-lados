@@ -414,3 +414,8 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .dep{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
 /* the toast only says something: it never takes a tap meant for what is under it */
 .toast{position:fixed;left:16px;right:16px;pointer-events:none;top:calc(66px + env(safe-area-inset-top,0px));z-index:60;margin:0 auto;max-width:520px;background:var(--fg);color:var(--bg);border-radius:10px;padding:12px 14px;font-weight:600;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+
+/* the odd of a selection moved since it was picked (shown in the slip) */
+.sel .o .moved{display:block;font-size:12px;font-weight:600}
+.sel .o .moved.up{color:var(--win)}
+.sel .o .moved.down{color:var(--loss)}

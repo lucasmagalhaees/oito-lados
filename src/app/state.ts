@@ -139,7 +139,8 @@ export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'o
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */
 export interface CopyMeta { from: string; bet: number | null; sig: string; legs: Record<string, number> }
-export interface Slip { sels: { fid: string; key: string }[]; mode: 'single' | 'multi'; stake: string; units: string; unitsN: number; copy: CopyMeta | null }
+/** `odd0`: the odd when the selection was picked, to show in the slip when it has moved since. */
+export interface Slip { sels: { fid: string; key: string; odd0?: number }[]; mode: 'single' | 'multi'; stake: string; units: string; unitsN: number; copy: CopyMeta | null }
 export const slip: Slip = { sels: [], mode: 'single', stake: '', units: '', unitsN: 0, copy: null };
 /** The "copy a bet" sheet. */
 /** One bet read in the copy screen: from the text field, or from one picture. */

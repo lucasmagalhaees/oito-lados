@@ -1149,6 +1149,11 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - Uma múltipla que não fecha (seleções da mesma luta que não podem acontecer juntas, ou em que uma já garante a outra) fica bloqueada com o motivo, em vez de virar apostas simples sem a pessoa pedir. Antes o cupom trocava para simples sozinho.
 - **Não muda:** o print que diz "simples" com várias seleções continua virando várias simples (D43), e a tela de copiar mantém a escolha entre múltipla e simples de cada item (D46). Esse caminho chega ao cupom com o tipo do print; tocar numa odd a mais faz dele uma múltipla.
 
+## D106. Melhorias de fluxo propostas em 24/10/2026
+
+- **Contexto (25/10/2026, 08:37):** "faz todos", sobre a lista de 14 melhorias. Feitos aqui: o cupom com o valor da última aposta e o aviso de odd que mudou desde a escolha.
+- **Não feito:** o ícone do app (item 12): o iPhone já usa o `apple-touch-icon` e o título do `index.html`; o `manifest.json` só mudaria algo no Android e no computador.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
