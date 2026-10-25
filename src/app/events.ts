@@ -3,7 +3,7 @@ import { loadForm, loadOdds } from './api';
 import { backupText, pickBackupFile, restoreFrom, saveBackupFile } from './backup';
 import { $, CUR, blurField, fmtOf, isCurrency, money, parseMoney, pctText, valOf } from './format';
 import { loadFx } from './fx';
-import { inUnits, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
+import { inUnits, priceOf, setStakeMoney, setStakeUnits, showStake, wallet } from './helpers';
 import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, pickOpen, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
 import { paintList, place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
@@ -12,7 +12,7 @@ import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import { copyUsage, resetUsage, saveUsageFile } from './usage';
 import { resolveFirst, signIn, signOut, syncNow, typedEmail, typedPass } from './cloud';
-import type { Currency, Period } from '../core';
+import type { Bet, Currency, Period } from '../core';
 import type { Ui } from './state';
 
 /* ================= events ================= */
@@ -104,7 +104,13 @@ document.addEventListener('click', e => {
     const i = slip.sels.findIndex(s => s.fid === fid && s.key === key);
     if (!slip.sels.length) slip.copy = null;                     // a slip started by hand is not a copy of anything
     if (i >= 0) slip.sels.splice(i, 1);
-    else { slip.sels = slip.sels.filter(s => !(s.fid === fid && s.key.split(':')[0] === g)); slip.sels.push({ fid, key }); }
+    else {
+      const first = !slip.sels.length, f = D.fights.get(fid), p = f ? priceOf(f) : null, x = p && p.map[key];
+      slip.sels = slip.sels.filter(s => !(s.fid === fid && s.key.split(':')[0] === g)); slip.sels.push({ fid, key, ...(x ? { odd0: x.odd } : {}) });
+      // a slip started by hand opens with the value of the last bet (in units when the setting is units)
+      const last = first && !slip.stake && !slip.unitsN ? S.bets.reduce<Bet | null>((m, b) => (!m || b.t > m.t ? b : m), null) : null;
+      if (last) { if (inUnits() && last.unit && last.unit > 0) setStakeUnits(Core.r2(last.stake / last.unit)); else setStakeMoney(last.stake); }
+    }
     if (!slip.sels.length) slip.copy = null;
     slip.mode = slip.sels.length > 1 ? 'multi' : 'single';         // more than one selection is a multiple (D104)
     ui.msg = ''; render();

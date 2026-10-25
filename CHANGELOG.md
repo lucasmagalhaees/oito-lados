@@ -2,6 +2,12 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.28.0] - 2026-10-25
+
+### Adicionado
+- O cupom começado à mão já vem com o valor da última aposta.
+- No cupom, a seleção cuja odd mudou desde a escolha mostra a odd de antes, com seta para cima ou para baixo.
+
 ## [0.27.0] - 2026-10-21
 
 ### Alterado

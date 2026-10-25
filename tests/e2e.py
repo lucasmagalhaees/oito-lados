@@ -9,6 +9,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mock_espn import PHASE, FX, ESPN, CLOUD, HUNG, handle, calls, local_cdn, cdn_calls, CDN_DOWN, ocr_files_installed, PRINT_HTML, SLIP_HTML, ACCA_HTML, LIST_HTML, TIP_TEXT
 import base64
 import cov
+window_money = lambda t: float(t.replace('.', '').replace(',', '.')) if t else 0.0
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -315,14 +316,20 @@ with sync_playwright() as p:
     assert pg.locator('#panel .sel .ou.o').count() == 1, 'the over in the slip carries its arrow'
     shot('s18-cores.png'); pg.click('#panel [data-act=unpick]'); pg.click('#panel [data-act=unpick]')
     def bet(sels, stake, mode='single'):
+        prev = pg.evaluate('(() => { const b = window.__OL.S.bets; return b.length && !window.__OL.slip.sels.length && !window.__OL.slip.stake && window.__OL.S.stakeIn !== "units" ? b.reduce((m, x) => x.t > m.t ? x : m).stake : null; })()')
         for s in sels: pick(*s)
         pg.click('#slipbtn')
+        if prev: assert window_money(pg.input_value('#stake')) == prev, ('a slip started by hand opens with the value of the last bet', pg.input_value('#stake'), prev)
         # the kind follows the selections (D104): one is a single, more than one a multiple
         assert txt('#slipkind') == ('Tipo: Simples' if len(sels) == 1 else 'Tipo: Múltipla de %d seleções' % len(sels) if len({f for f, _ in sels}) > 1 else 'Tipo: Combinada na mesma luta · %d seleções' % len(sels)), txt('#slipkind')
         assert (mode == 'multi') == (len(sels) > 1), 'more than one selection is always a multiple'
         pg.fill('#stake', stake)
         if mode=='multi': shot('s3-slip.png')
         pg.click('[data-act=place]'); pg.wait_for_selector('.bet'); pg.click('.tabbar [data-tab=lutas]')
+    # the odd of a selection that moved since it was picked says so in the slip, up or down
+    pick('f1', 'ml:a'); pg.evaluate('(() => { window.__OL.slip.sels[0].odd0 = 1.5; })()'); pg.click('#slipbtn'); pg.wait_for_selector('#panel .sel')
+    assert pg.inner_text('#panel .sel .moved') == '▲ era 1.50' and 'up' in pg.get_attribute('#panel .sel .moved', 'class'), pg.inner_text('#panel .sel')
+    pg.click('#panel [data-act=unpick]')
     tdline = [k for k in pg.evaluate('Object.keys(window.__OL.Core.price(window.__OL.D.fights.get("f1"), window.__OL.D.odds.f1, {}).map)') if k.startswith('td:o:')]
     print('f1 td lines', tdline)
     combos = pg.evaluate("""() => { const {Core,D} = window.__OL; const f = D.fights.get('f3'); const p = Core.price(f, D.odds.f3, {a:D.astats[f.a.id], b:D.astats[f.b.id]}); const J = p.J;

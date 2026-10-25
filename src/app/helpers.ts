@@ -36,7 +36,7 @@ export function priceOf(f: Fight): Pricing | null {
   const p = Core.price(f, o, statsFor(f)); priced.set(f.id, { sig, p }); return p;
 }
 /** One selection of the slip against what can be bet on right now. `ok` means it has a price. */
-export interface Resolved { s: { fid: string; key: string }; f: Fight | undefined; x: Priced | null | undefined; ok: boolean }
+export interface Resolved { s: { fid: string; key: string; odd0?: number }; f: Fight | undefined; x: Priced | null | undefined; ok: boolean }
 export function resolveSlip(): Resolved[] {
   return slip.sels.map(s => {
     const f = D.fights.get(s.fid), p = f && canBet(f) ? priceOf(f) : null, x = p && p.map[s.key];
