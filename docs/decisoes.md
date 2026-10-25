@@ -1149,6 +1149,11 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
   - Uma múltipla que não fecha (seleções da mesma luta que não podem acontecer juntas, ou em que uma já garante a outra) fica bloqueada com o motivo, em vez de virar apostas simples sem a pessoa pedir. Antes o cupom trocava para simples sozinho.
 - **Não muda:** o print que diz "simples" com várias seleções continua virando várias simples (D43), e a tela de copiar mantém a escolha entre múltipla e simples de cada item (D46). Esse caminho chega ao cupom com o tipo do print; tocar numa odd a mais faz dele uma múltipla.
 
+## D105. Placar curto em noite de card e abertura espaçada
+
+- **Contexto (21/10/2026, 20:34):** depois de ler o arquivo do "Uso da ESPN" (o placar de 30 dias era 72% dos bytes do dia do card; pico de 90 chamadas num minuto na abertura), o Lucas: "pode fazer ambas".
+- **Decisão:** em ritmo de card, o placar é pedido só de ontem a amanhã e o completo a cada 30 min; a leitura em segundo plano espera vaga acima de 60 chamadas por minuto.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |

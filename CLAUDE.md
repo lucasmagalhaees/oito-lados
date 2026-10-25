@@ -558,7 +558,8 @@ Pedido do Lucas em 17/10/2026 (D98, feito na D99): a mesma banca no iPhone e no 
 
 ## Sincronização
 
-- `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 30 dias à frente (`BOARD_AHEAD`): o bastante para ter os três cards seguintes ao que acabou, mesmo com uma semana sem evento no meio.
+- `loadBoard`: placar de 4 dias atrás (ou 1 dia antes da aposta aberta mais antiga) até 30 dias à frente (`BOARD_AHEAD`): o bastante para ter os três cards seguintes ao que acabou, mesmo com uma semana sem evento no meio. **Em ritmo de card** (luta ao vivo, noite de evento ou aposta esperando resultado; `atCardPace`), o placar pedido é só de ontem a amanhã (`BOARD_SHORT`), juntado ao último completo por `Core.mergeBoard`; o completo volta a cada 30 min (`BOARD_FULL`), na abertura e no Atualizar (D105).
+- **Leitura em segundo plano** (D105): as chamadas do adiantamento das últimas lutas esperam vaga quando o app já fez 60 chamadas à ESPN no último minuto (`Core.roomIn`, `BG_CAP`). O que a pessoa abre nunca espera.
 - `loadOdds`: por evento, só lutas `pre`, no máximo a cada 5 min; forçado no botão Atualizar e antes de aceitar aposta.
 - `loadResults` (D93): o resultado de uma luta encerrada é pedido uma vez, e só onde é usado: num card que está na tela, ou para fechar uma aposta aberta. Card encerrado não está na tela (D91), então dele só se pede o resultado das lutas com aposta.
 - Intervalo do laço: 8 s enquanto uma aposta aberta espera por uma luta que já acabou (o resultado, ou as quedas fecharem; `settling`), por até 30 min depois de a luta aparecer como encerrada; 15 s com luta ao vivo, 30 s em noite de evento, 120 s no resto. Para com a aba oculta e sincroniza na volta. Uma página restaurada da memória (`pageshow`) e a volta da conexão (`online`) também sincronizam, se a última sincronização foi há mais de 5 s.
