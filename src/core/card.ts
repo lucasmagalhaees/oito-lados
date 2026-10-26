@@ -28,6 +28,14 @@ export function cardSoon(ev: FightEvent | undefined, now: number): { first: numb
   return first - now <= CARD_SOON && now < main + 12 * 3600e3 ? { first, main } : null;
 }
 
+/** The starred fights still to happen (or happening) on the events given, the soonest first, with how long until each
+ *  starts (D108). A fight that is over or canceled is left out; one under way has `in` at or below zero. */
+export function favsAhead(events: FightEvent[], favs: string[], now: number): { f: Fight; ev: FightEvent; in: number }[] {
+  const want = new Set(favs), out: { f: Fight; ev: FightEvent; in: number }[] = [];
+  for (const ev of events) for (const f of ev.fights) if (want.has(f.id) && !f.canceled && f.state !== 'post') out.push({ f, ev, in: f.date - now });
+  return out.sort((a, b) => a.f.date - b.f.date || b.f.idx - a.f.idx);
+}
+
 /** How many cards still to come are shown, and how old an event the source never marks as over can be and still be shown. */
 export const NEXT_CARDS = 3, RECENT_CARD = 5 * 24 * 3600e3;
 /** The events the fights screen offers, of the ones the source lists (given in the order of their dates): the next

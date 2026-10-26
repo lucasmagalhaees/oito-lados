@@ -427,3 +427,9 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .fh .star { background: none; border: 0; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 2px; cursor: pointer; position: relative; }
 .fh .star::after { content: ''; position: absolute; inset: -14px; }
 .fh .star.on { color: var(--gold); }
+/* the starred fights still to come, with how long until each (D108) */
+.favs { margin-top: 10px; }
+.favrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); text-align: left; cursor: pointer; font: inherit; }
+.favrow small { display: block; color: var(--muted); font-size: 14px; }
+.favrow .eta { color: var(--gold); font-weight: 700; white-space: nowrap; }
+.favrow .eta.live { color: var(--live); }

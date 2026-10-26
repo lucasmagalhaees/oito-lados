@@ -1161,6 +1161,12 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Favoritas:** cada luta tem uma estrela. As marcadas ficam em `S.favs` (no máximo 200, `FAV_MAX`), são configuração (voltam com o backup, sobrevivem ao "Zerar" e sincronizam entre aparelhos), e o card na tela ganha o botão "★ Favoritas (N)", ao lado das partes do card, que mostra só elas. O filtro ligado não é guardado.
 - **Resumo do card:** quando nenhuma aposta do último card apostado está aberta, o alto da aba Apostas diz "Fechou o card", com quantas apostas, o cartel, o resultado em dinheiro e em unidades, o ROI e, havendo aposta própria e de tipster, os dois lados (`Core.cardRecap`, a mesma linha do extrato em unidades). Fica até 3 dias depois da última luta do card (`RECAP_DAYS`). Não tem botão de fechar: some sozinho.
 
+## D108. Quanto falta para as lutas favoritas
+
+- **Contexto (26/10/2026, 11:55):** "queria um upcoming fights ou how many ETA to your favorite fights".
+- **Como ficou:** no alto da tela de Lutas, logo abaixo da faixa do dia do card, o quadro "★ Suas favoritas" lista as lutas com estrela que ainda não acabaram, nos cards que estão na tela, a mais próxima em cima (`Core.favsAhead`): os dois sobrenomes, o card, o dia e a hora, e quanto falta ("em 45 min", "em 3 h 20 min", "em 5 d 4 h") ou "ao vivo". Mostra as 5 primeiras (`FAVS_AHEAD`) e diz quantas mais há. O toque abre o card da luta já com o filtro "★ Favoritas"; um país escolhido no filtro continua valendo (D87), e aí aparecem as favoritas daquele país.
+- **Limite:** o tempo que falta é recalculado a cada repintura da tela, que acontece em cada sincronização (de 8 s a 120 s, conforme o momento). Pode ficar até 2 min atrasado longe do card. Luta com estrela num card que não está na tela não aparece.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |

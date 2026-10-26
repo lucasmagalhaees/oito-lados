@@ -688,6 +688,11 @@ export default function cases(Core) {
   const sev = (dates, extra) => Object.assign({ id: 'e', name: 'UFC', date: dates[0], completed: false, fights: dates.map((d, i) => ({ id: 'f' + i, date: d })) }, extra || {});
   const HR = 3600e3;
   eq('card day: the first fight and the main card, from CARD_SOON before it until 12 h after the main card', [Core.cardSoon(sev([10 * HR, 13 * HR]), 10 * HR - Core.CARD_SOON), Core.cardSoon(sev([10 * HR, 13 * HR]), 25 * HR - 1)], [{ first: 10 * HR, main: 13 * HR }, { first: 10 * HR, main: 13 * HR }]);
+  // the starred fights still to come, soonest first (D108)
+  const fx = (id, date, extra) => Object.assign({ id, date, idx: 0, state: 'pre', canceled: false }, extra || {});
+  const fevs = [{ id: 'e1', fights: [fx('a', 300), fx('b', 100, { state: 'post' }), fx('c', 200, { canceled: true })] }, { id: 'e2', fights: [fx('d', 50, { state: 'in' }), fx('e', 400)] }];
+  eq('favorites ahead: only the starred, not over nor canceled, the soonest first, with the time left', Core.favsAhead(fevs, ['a', 'b', 'c', 'd'], 100).map(x => [x.f.id, x.ev.id, x.in]), [['d', 'e2', -50], ['a', 'e1', 200]]);
+  eq('favorites ahead: none starred, or none on the cards', [Core.favsAhead(fevs, [], 0), Core.favsAhead([], ['a'], 0)], [[], []]);
   eq('card day: not before, not after, not for a card marked over, not with no fights or no event', [Core.cardSoon(sev([10 * HR]), 10 * HR - Core.CARD_SOON - 1), Core.cardSoon(sev([10 * HR]), 22 * HR), Core.cardSoon(sev([10 * HR], { completed: true }), 10 * HR), Core.cardSoon(sev([]), 0), Core.cardSoon(undefined, 0)], [null, null, null, null, null]);
   /* the latest fights of an athlete (invented answers, in the shape of the recorded ones) */
   const logOf = items => ({ events: { items } }), refTo = id => ({ $ref: 'http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/9/competitions/' + id + '?lang=en' });

@@ -139,9 +139,12 @@ with sync_playwright() as p:
     assert 'card principal às' in txt('#cardday') and 'Nenhuma aposta nele ainda.' in txt('#cardday'), txt('#cardday')
     pg.click('#list .star >> nth=0'); assert pg.evaluate('window.__OL.S.favs.length') == 1 and pg.get_attribute('#list .star >> nth=0', 'aria-pressed') == 'true'
     assert pg.locator('#parts [data-act=favonly]').inner_text() == '★ Favoritas (1)', pg.locator('#parts button').all_inner_texts()
+    assert pg.locator('#favsahead .favrow').count() == 1 and pg.locator('#favsahead .eta').inner_text() in ('ao vivo', 'começando') or pg.locator('#favsahead .eta').inner_text().startswith('em '), txt('#favsahead')
+    pg.click('#favsahead .favrow'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
+    pg.click('#parts [data-act=favonly]'); assert nfights() == 3
     pg.click('#parts [data-act=favonly]'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
     pg.click('#parts button >> nth=0'); assert nfights() == 3
-    pg.click('#list .star.on'); assert pg.evaluate('window.__OL.S.favs') is None and pg.locator('#parts [data-act=favonly]').count() == 0
+    pg.click('#list .star.on'); assert pg.evaluate('window.__OL.S.favs') is None and pg.locator('#parts [data-act=favonly]').count() == 0 and pg.locator('#favsahead').count() == 0
     # a fight is found by a piece of a fighter's name, whatever the accents and the case, and the field keeps the focus while the list changes
     focused = lambda: pg.evaluate('document.activeElement && document.activeElement.id')
     pg.click('#q'); pg.keyboard.type('TÉLES')

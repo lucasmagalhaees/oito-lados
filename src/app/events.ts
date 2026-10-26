@@ -89,7 +89,7 @@ document.addEventListener('click', e => {
   const q = $<HTMLInputElement>('#q');
   if (q && document.activeElement === q && a !== 'qclear' && !b.closest('#list')) q.blur();
   if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
-  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
+  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; if (d.fav) { ui.fav = true; ui.part = null; } blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
   else if (a === 'land') { ui.land = ui.land === d.c ? null : d.c || null; render(); }          // a country of the card on screen: a second tap lets go of it
   else if (a === 'fav' && d.fid) { const id = d.fid, l = favs(), on = l.includes(id); S.favs = on ? l.filter(x => x !== id) : [...l, id].slice(-FAV_MAX); if (!S.favs.length) delete S.favs; saveS(); render(); }   // a star on a fight (D107)
   else if (a === 'favonly') { ui.fav = !ui.fav; render(); }

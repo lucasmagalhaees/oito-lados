@@ -8,6 +8,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). 
 - Faixa do dia do card na tela de Lutas: quando começa, a hora do card principal e o que está em jogo nele (D107).
 - Estrela nas lutas e filtro "★ Favoritas" no card (D107).
 - Resumo do último card no alto da aba Apostas, quando ele fecha (D107).
+- Quadro "★ Suas favoritas" com quanto falta para cada luta com estrela (D108).
 
 ## [0.27.2] - 2026-10-25
 

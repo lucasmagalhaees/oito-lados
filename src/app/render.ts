@@ -1,7 +1,7 @@
 import { Core } from '../core';
 import { FORM_FIGHTS, formBusy, formFailed, loadBoard, loadOdds, openBets } from './api';
 import { CASH_WHY, cashoutOf } from './cashout';
-import { $, CUR, WEIGHT, dDate, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, keepFocus, landName, money, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
+import { $, CUR, WEIGHT, dDate, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, keepFocus, landName, money, untilText, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
 import { canBet, exposureNotes, inUnits, priceOf, setStakeMoney, slipCalc, statsOf, wallet } from './helpers';
 import { renderImport } from './import';
@@ -74,6 +74,15 @@ function cardDayHtml(): string {
   const times = `${now < when.first ? `Começa às ${dTime.format(when.first)} · ` : ''}card principal às ${dTime.format(when.main)}`;
   return `<div class="cardday" id="cardday"><b>${top}: ${esc(evLabel(ev).main)}</b><span>${times}</span><span>${ob.length ? `${ob.length} ${ob.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ${money(stake)} em jogo` : 'Nenhuma aposta nele ainda.'}</span></div>`;
 }
+/** The starred fights still to come, across the cards on screen, with how long until each (D108). A tap opens its card
+ *  with only the starred fights shown. */
+export const FAVS_AHEAD = 5;
+function favsAheadHtml(evs: FightEvent[]): string {
+  const all = Core.favsAhead(evs, favs(), Date.now()); if (!all.length) return '';
+  const row = (x: { f: Fight; ev: FightEvent; in: number }): string => `<button class="favrow" data-act="event" data-id="${esc(x.ev.id)}" data-fav="1"><span><b>${esc(x.f.a.last)} x ${esc(x.f.b.last)}</b><small>${esc(evLabel(x.ev).main)} · ${esc(dWhen.format(x.f.date))}</small></span><span class="eta${x.f.state === 'in' ? ' live' : ''}">${x.f.state === 'in' ? 'ao vivo' : untilText(x.in)}</span></button>`;
+  const more = all.length > FAVS_AHEAD ? `<p class="hint">e mais ${all.length - FAVS_AHEAD}</p>` : '';
+  return `<div class="favs" id="favsahead"><div class="seg label">★ Suas favoritas</div>${all.slice(0, FAVS_AHEAD).map(row).join('')}${more}</div>`;
+}
 function vLutas(): string {
   const evs = shownEvents();
   if (!evs.length) return D.err
@@ -84,7 +93,7 @@ function vLutas(): string {
   const priced = ev.fights.map(f => D.odds[f.id]).find(Boolean), book = priced ? priced.book : undefined;
   const info = D.err ? `Sem conexão com a ESPN · dados de ${D.lastSync ? dTime.format(D.lastSync) : '—'}${nextIn ? ` · nova tentativa em ${waitText(nextIn)}` : ''}` : `${book ? 'Odds ' + esc(book) + ' via ESPN' : 'Dados ESPN'} · atualizado às ${dTime.format(D.lastSync || Date.now())}`;
   let h = `<div class="events">${chips}</div><div class="sync"><span>${info}</span><button data-act="refresh">${busy ? 'Atualizando…' : 'Atualizar'}</button></div>`;
-  h += cardDayHtml();
+  h += cardDayHtml() + favsAheadHtml(evs);
   h += `<button class="btn ghost block" data-act="imp" style="margin-top:10px">Copiar aposta de um print ou texto</button>`;
   if (!S.deposits.length) h += `<div class="cta"><p><b>Saldo fictício zerado.</b> Coloca quanto quiser pra começar a simular.</p><button class="btn" data-act="tab" data-tab="carteira">Depositar</button></div>`;
   // finding a fight by a fighter's name, across the events on screen; the list under the field is repainted by itself
@@ -123,17 +132,18 @@ function sectionsHtml(e: FightEvent, part: CardPart | null, only?: Set<string>):
 /** What goes under the search field: the fights found, event by event, or the card of the event on screen with the
  *  buttons that show one part of it. */
 function listHtml(ev: FightEvent, evs: FightEvent[]): string {
-  const q = ui.q.trim(), land = ui.land || '';
+  const q = ui.q.trim(), land = ui.land || '', starred = new Set(favs());
   if (q || land) {
     // what was typed is looked for in every event; a country is looked for on the card on screen only. With both, a
     // fight has to pass both, on that card
     let n = 0, h = '';
     const what = `${q ? ` com "${esc(q)}"` : ''}${land ? ` · ${landLabel(land)}` : ''}`;
     for (const e of land ? [ev] : [ev, ...evs.filter(x => x.id !== ev.id)]) {
-      const named = q ? Core.findFights(e.fights, q) : e.fights, hits = land ? Core.fromCountry(named, land) : named; if (!hits.length) continue;
-      n += hits.length;
+      const named = q ? Core.findFights(e.fights, q) : e.fights, hits = land ? Core.fromCountry(named, land) : named;
+      const shown = ui.fav ? hits.filter(f => starred.has(f.id)) : hits; if (!shown.length) continue;   // the starred only, when that filter is on (D108)
+      n += shown.length;
       const name = `${esc(evLabel(e).main)} · ${esc(dDay.format(e.date))}`;
-      h += (e.id === ev.id ? `<div class="seg label qev">${name}</div>` : `<button class="seg label qev" data-act="event" data-id="${esc(e.id)}" data-keep="1">${name} · abrir este card ›</button>`) + sectionsHtml(e, null, new Set(hits.map(f => f.id)));
+      h += (e.id === ev.id ? `<div class="seg label qev">${name}</div>` : `<button class="seg label qev" data-act="event" data-id="${esc(e.id)}" data-keep="1">${name} · abrir este card ›</button>`) + sectionsHtml(e, null, new Set(shown.map(f => f.id)));
     }
     return `<p class="hint" id="qinfo">${n ? `${n} ${n > 1 ? 'lutas' : 'luta'}${what}${land ? ', neste card' : evs.length > 1 ? `, nos ${evs.length} eventos carregados` : ''}.` : `Nenhuma luta${what} ${land ? 'neste card' : 'nos eventos carregados'}.`}</p>` + h;
   }
