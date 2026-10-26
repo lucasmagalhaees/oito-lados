@@ -419,3 +419,11 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .sel .o .moved{display:block;font-size:12px;font-weight:600}
 .sel .o .moved.up{color:var(--win)}
 .sel .o .moved.down{color:var(--loss)}
+
+/* the day of the card and the summary of the card that closed (D107) */
+.cardday, .recap { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--gold); background: var(--surface); }
+.cardday span, .recap span { color: var(--muted); font-size: 14px; }
+.recap span .pos { color: var(--win); } .recap span .neg { color: var(--loss); }
+.fh .star { background: none; border: 0; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 2px; cursor: pointer; position: relative; }
+.fh .star::after { content: ''; position: absolute; inset: -14px; }
+.fh .star.on { color: var(--gold); }

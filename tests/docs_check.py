@@ -158,7 +158,7 @@ check('the wallet sets the person\'s own bets against the tipsters\'', "r.k || '
 hist = read('src/core/history.ts'); rnd = read('src/app/render.ts'); unit_src = read('tests/unit.cases.mjs')
 check('a warning keeps a bet out of the batch until the person says so', "const held = (dups.length > 0 || !!twin || low) && !o.force;" in imp_src and "&& !held;" in imp_src and 'sem aviso pendente' in spec and '"Apostar mesmo assim"' in spec)
 check('the odd floor offers what the spec says, and is off until chosen', '[0, 3, 5, 10].map(' in rnd and 'x === 3 || x === 5 || x === 10' in html and 'entre desligada, 3%, 5% e 10%' in spec and "copyDrop?: 3 | 5 | 10" in html)
-check('the odd floor is a setting: kept by a reset and by a backup', "isDrop(o.copyDrop) ? { copyDrop: o.copyDrop }" in html and '`unitPct`, `stakeIn`, `theme`, `corners` e `copyDrop`' in spec)
+check('the odd floor is a setting: kept by a reset and by a backup', "isDrop(o.copyDrop) ? { copyDrop: o.copyDrop }" in html and '`unitPct`, `stakeIn`, `theme`, `corners`, `copyDrop` e `favs`' in spec)
 check('only open bets make a bet "already placed"', "const open = bets.filter(b => b.status === 'open');" in hist and 'Aposta encerrada não conta' in spec)
 check('the periods in days go by when the bet closed', "(b.settledAt || 0) > now - days * 24 * 3600e3" in hist and "PERIOD_DAYS: Readonly<Record<string, number>> = { '7d': 7, '15d': 15, '30d': 30 }" in hist and 'contam pela data em que a aposta fechou' in spec)
 check('the five periods are the ones the spec names', "{ all: 'Tudo', '7d': '7 dias', '15d': '15 dias', '30d': '30 dias', event: 'Último evento' }" in rnd and '"Tudo", "7 dias", "15 dias", "30 dias" ou "Último evento"' in spec)

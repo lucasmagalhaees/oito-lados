@@ -74,11 +74,16 @@ export function cleanCorners(c: unknown): AppState['corners'] {
 }
 /** The settings in a saved state, cleaned. They are what a reset keeps and what comes back with a backup: a new
  *  setting goes here once, instead of in each of those places. */
+/** The starred fights, whatever was stored. */
+export const favs = (): string[] => Array.isArray(S.favs) ? S.favs.filter(x => typeof x === 'string') : [];
+/** How many starred fights are kept: the oldest go first (D107). */
+export const FAV_MAX = 200;
 export const isDrop = (x: unknown): x is NonNullable<AppState['copyDrop']> => x === 3 || x === 5 || x === 10;
-export function settingsOf(s: unknown): Pick<AppState, 'unitPct' | 'stakeIn' | 'theme' | 'corners' | 'copyDrop'> {
+export function settingsOf(s: unknown): Pick<AppState, 'unitPct' | 'stakeIn' | 'theme' | 'corners' | 'copyDrop' | 'favs'> {
   const o = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>, corners = cleanCorners(o.corners);
   return { unitPct: Core.unitPct(o.unitPct), ...(o.stakeIn === 'units' ? { stakeIn: 'units' as const } : {}),
-    ...(o.theme === 'light' || o.theme === 'dark' ? { theme: o.theme } : {}), ...(corners ? { corners } : {}), ...(isDrop(o.copyDrop) ? { copyDrop: o.copyDrop } : {}) };
+    ...(o.theme === 'light' || o.theme === 'dark' ? { theme: o.theme } : {}), ...(corners ? { corners } : {}), ...(isDrop(o.copyDrop) ? { copyDrop: o.copyDrop } : {}),
+    ...(Array.isArray(o.favs) && o.favs.length ? { favs: o.favs.filter((x): x is string => typeof x === 'string' && x.length < 40).slice(-FAV_MAX) } : {}) };
 }
 /** Light, dark, or whatever the device asks for (no attribute): the stylesheet does the rest. */
 export function applyTheme(): void {
@@ -127,6 +132,8 @@ export interface Ui {
   period: Period;
   /** The country the fights screen is filtered by, as the source writes it (null shows every fight). */
   land: string | null;
+  /** Only the starred fights of the card on screen (D107); not kept between openings. */
+  fav: boolean;
   /** Whether the statement shows every event, or the latest ones only. */
   stmtAll: boolean;
   /** A backup file that was picked, read and not applied yet: what it holds is shown first. */
@@ -134,7 +141,7 @@ export interface Ui {
   /** What is typed in the search of the fights screen, and the part of the card it shows (null shows all of it). */
   q: string; part: CardPart | null;
 }
-export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, usage: null, usageHours: false, orgFrom: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null, stmtAll: false, land: null };
+export const ui: Ui = { tab: 'lutas', eventId: null, open: new Set(), filter: 'open', sheet: false, reset: false, restore: false, backup: null, usage: null, usageHours: false, orgFrom: null, dep: '', placing: false, msg: '', cash: null, cashing: false, cashMsg: '', depCur: null, fxBusy: false, fxMsg: '', fxRate: null, origin: null, period: 'all', q: '', part: null, restoreFile: null, stmtAll: false, land: null, fav: false };
 /** The bet slip. The stake is kept as money text, as units text and as the exact number of units behind it. */
 /** What a copied bet carries from its original into the bet that is written: who it came from and the odds it printed
  *  (of each selection, by `fid|key`, and of the whole bet, which only holds for exactly the selections in `sig`). */

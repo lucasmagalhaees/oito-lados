@@ -1,6 +1,6 @@
 /* ---------- the card of an event: its parts, and finding a fight by a fighter's name ---------- */
 import { plain } from './tip';
-import type { Fight } from './types';
+import type { Fight, FightEvent } from './types';
 
 /** The parts of a card. The source only says when each fight starts, so the parts come from the hours: the fights of
  *  the latest hour are the main card, the ones of the earliest of three or more hours the early prelims, the rest the
@@ -15,6 +15,17 @@ export function cardSections(fights: Fight[]): CardSection[] {
     part: i === 0 ? 'main' : i === times.length - 1 && times.length > 2 ? 'early' : 'prelims',
     date: t, fights: fights.filter(f => f.date === t).sort((a, b) => b.idx - a.idx)
   }));
+}
+
+/** How long before its first fight a card counts as "today", for the reminder at the top of the fights (D107). */
+export const CARD_SOON = 18 * 3600e3;
+/** When a card not yet over starts within CARD_SOON (or is under way): the time of its first fight and of the main
+ *  card (the latest time on it). Null otherwise. Goes by the source's mark of a finished event, never by the date alone,
+ *  except that 12 h after the main card it is no longer "today". */
+export function cardSoon(ev: FightEvent | undefined, now: number): { first: number; main: number } | null {
+  if (!ev || ev.completed || !ev.fights.length) return null;
+  const times = ev.fights.map(f => f.date), first = Math.min(...times), main = Math.max(...times);
+  return first - now <= CARD_SOON && now < main + 12 * 3600e3 ? { first, main } : null;
 }
 
 /** How many cards still to come are shown, and how old an event the source never marks as over can be and still be shown. */

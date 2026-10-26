@@ -176,6 +176,15 @@ export function statement(done: Bet[], now: number): { spans: StatementRow[]; ev
 /** What closed by itself after a moment: how many bets, the result (in money, and in units for the `unitBets` of them
  *  that have a unit), and the same by whose the bets are (the person's own, and each tipster). A cashout is left out:
  *  the person did that one and saw it. */
+/** How many days after its last fight the summary of a card stays at the top of the bets (D107). */
+export const RECAP_DAYS = 3;
+/** The summary of the latest card the person bet on, once none of its bets is open: the same row the statement has
+ *  for it. Null when that card is older than RECAP_DAYS, still has a bet open, or there is none. */
+export function cardRecap(bets: Bet[], now: number): StatementRow | null {
+  const done = bets.filter(b => b.status !== 'open'), row = statement(done, now).events.find(r => r.k !== '*');
+  if (!row || row.date < now - RECAP_DAYS * 864e5) return null;
+  return bets.some(b => b.status === 'open' && b.legs.some(l => l.eid === row.k)) ? null : row;
+}
 export function sinceSummary(bets: Bet[], since: unknown): { n: number; pnl: number; units: number; unitBets: number; by: { k: string; tip: boolean; n: number; pnl: number }[] } {
   const t = Number(since) || 0, closed = bets.filter(b => (b.status === 'won' || b.status === 'lost' || b.status === 'void') && (b.settledAt || 0) > t);
   const m = new Map<string, { k: string; tip: boolean; n: number; pnl: number }>();
