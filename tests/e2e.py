@@ -135,6 +135,16 @@ with sync_playwright() as p:
     pg.click('#parts [data-p=prelims]'); assert nfights() == 2 and secs() == ['prelims'] and pg.get_attribute('#parts [data-p=prelims]', 'aria-pressed') == 'true' and 'DUNNE' not in txt('#list').upper()
     shot('s39-preliminares.png')
     pg.click('#parts button >> nth=0'); assert nfights() == 3 and pg.get_attribute('#parts button >> nth=0', 'aria-pressed') == 'true'
+    # the day of the card: a reminder at the top, and a fight starred and shown alone (D107)
+    assert 'card principal às' in txt('#cardday') and 'Nenhuma aposta nele ainda.' in txt('#cardday'), txt('#cardday')
+    pg.click('#list .star >> nth=0'); assert pg.evaluate('window.__OL.S.favs.length') == 1 and pg.get_attribute('#list .star >> nth=0', 'aria-pressed') == 'true'
+    assert pg.locator('#parts [data-act=favonly]').inner_text() == '★ Favoritas (1)', pg.locator('#parts button').all_inner_texts()
+    assert pg.locator('#favsahead .favrow').count() == 1 and pg.locator('#favsahead .eta').inner_text() in ('ao vivo', 'começando') or pg.locator('#favsahead .eta').inner_text().startswith('em '), txt('#favsahead')
+    pg.click('#favsahead .favrow'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
+    pg.click('#parts [data-act=favonly]'); assert nfights() == 3
+    pg.click('#parts [data-act=favonly]'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
+    pg.click('#parts button >> nth=0'); assert nfights() == 3
+    pg.click('#list .star.on'); assert pg.evaluate('window.__OL.S.favs') is None and pg.locator('#parts [data-act=favonly]').count() == 0 and pg.locator('#favsahead').count() == 0
     # a fight is found by a piece of a fighter's name, whatever the accents and the case, and the field keeps the focus while the list changes
     focused = lambda: pg.evaluate('document.activeElement && document.activeElement.id')
     pg.click('#q'); pg.keyboard.type('TÉLES')
@@ -903,6 +913,8 @@ with sync_playwright() as p:
     for s in st: print('  ', s)
     print('final balance', bal())
     assert bal().replace('\xa0', ' ') == 'R$ 1.609,59', bal()
+    # the card is over and none of its bets is open: its summary at the top of the bets (D107)
+    pg.click('.tabbar [data-tab=apostas]'); assert txt('#recap').startswith('Fechou o card:') and 'aposta' in txt('#recap'), txt('#recap')
     n3 = newly(); assert n3[0] >= 3 and n3[1] == 3 and said(n3[0]) in txt('#since') and 'Canal do Zé: 3, ' in txt('#since') and f'Minhas: {n3[0] - 3}, ' in txt('#since'), (n3, txt('#since'))
     # copies that came with no name are just the tipster's
     pg.evaluate('(() => { window.__named = window.__OL.S.bets.filter(b => b.from === "Canal do Zé"); window.__named.forEach(b => { b.__c = b.copied; delete b.from; b.copied = true; }); })()'); pg.click('.tabbar [data-tab=carteira]')

@@ -419,3 +419,17 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .sel .o .moved{display:block;font-size:12px;font-weight:600}
 .sel .o .moved.up{color:var(--win)}
 .sel .o .moved.down{color:var(--loss)}
+
+/* the day of the card and the summary of the card that closed (D107) */
+.cardday, .recap { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--gold); background: var(--surface); }
+.cardday span, .recap span { color: var(--muted); font-size: 14px; }
+.recap span .pos { color: var(--win); } .recap span .neg { color: var(--loss); }
+.fh .star { background: none; border: 0; color: var(--muted); font-size: 18px; line-height: 22px; min-width: 22px; margin: 4px 0 0 4px; padding: 0; cursor: pointer; position: relative; }
+.fh .star::after { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+.fh .star.on { color: var(--gold); }
+/* the starred fights still to come, with how long until each (D108) */
+.favs { margin-top: 10px; }
+.favrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 44px; margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg); text-align: left; cursor: pointer; font: inherit; }
+.favrow small { display: block; color: var(--muted); font-size: 14px; }
+.favrow .eta { color: var(--gold); font-weight: 700; white-space: nowrap; }
+.favrow .eta.live { color: var(--live); }

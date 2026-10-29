@@ -1,14 +1,14 @@
 import { Core } from '../core';
 import { FORM_FIGHTS, formBusy, formFailed, loadBoard, loadOdds, openBets } from './api';
 import { CASH_WHY, cashoutOf } from './cashout';
-import { $, CUR, WEIGHT, dDate, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, keepFocus, landName, money, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
+import { $, CUR, WEIGHT, dDate, dDay, dTime, dWhen, dateBR, esc, fmtOf, fo, fu, isCurrency, keepFocus, landName, money, untilText, monthYear, part, pctText, rateText, signed, signedBoth, signedPct, signedU, sym, symbolOf } from './format';
 import { FX } from './fx';
 import { canBet, exposureNotes, inUnits, priceOf, setStakeMoney, slipCalc, statsOf, wallet } from './helpers';
 import { renderImport } from './import';
 import { repeatable } from './repeat';
 import { legOut, resultText } from './settle';
-import { CORNER_SETS, D, S, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
-import { busy, nextIn, shownEvents } from './sync';
+import { CORNER_SETS, D, S, favs, bankEmpty, cornerSet, cornerSetOf, cornersAttr, imp, saveCache, saveS, slip, ui } from './state';
+import { busy, nextIn, shownEvents, weekEvent } from './sync';
 import { builtFrom, canUpdate } from './update';
 import { usageHtml, waitText } from './usage';
 import { cloudHtml, signedIn } from './cloud';
@@ -65,6 +65,24 @@ export function evLabel(e: Pick<FightEvent, 'name'>): { top: string; main: strin
   const pre = (i > 0 ? e.name.slice(0, i) : e.name).replace(/^Dana White's /, ''), post = i > 0 ? e.name.slice(i + 1).trim() : '';
   return { top: post ? pre : 'UFC', main: post || pre };
 }
+/** On the day of the next card: when it starts, when the main card starts, and what is already riding on it (D107). */
+function cardDayHtml(): string {
+  const ev = weekEvent(), now = Date.now(), when = Core.cardSoon(ev, now); if (!ev || !when) return '';
+  const day = (t: number): string => new Date(t).toDateString(), ob = openBets().filter(b => b.legs.some(l => l.eid === ev.id));
+  const stake = ob.reduce((a, b) => a + b.stake, 0);
+  const top = now >= when.first ? 'Card rolando' : day(when.first) === day(now) ? 'Hoje tem card' : 'Amanhã tem card';
+  const times = `${now < when.first ? `Começa às ${dTime.format(when.first)} · ` : ''}card principal às ${dTime.format(when.main)}`;
+  return `<div class="cardday" id="cardday"><b>${top}: ${esc(evLabel(ev).main)}</b><span>${times}</span><span>${ob.length ? `${ob.length} ${ob.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ${money(stake)} em jogo` : 'Nenhuma aposta nele ainda.'}</span></div>`;
+}
+/** The starred fights still to come, across the cards on screen, with how long until each (D108). A tap opens its card
+ *  with only the starred fights shown. */
+export const FAVS_AHEAD = 5;
+function favsAheadHtml(evs: FightEvent[]): string {
+  const all = Core.favsAhead(evs, favs(), Date.now()); if (!all.length) return '';
+  const row = (x: { f: Fight; ev: FightEvent; in: number }): string => `<button class="favrow" data-act="event" data-id="${esc(x.ev.id)}" data-fav="1"><span><b>${esc(x.f.a.last)} x ${esc(x.f.b.last)}</b><small>${esc(evLabel(x.ev).main)} · ${esc(dWhen.format(x.f.date))}</small></span><span class="eta${x.f.state === 'in' ? ' live' : ''}">${x.f.state === 'in' ? 'ao vivo' : untilText(x.in)}</span></button>`;
+  const more = all.length > FAVS_AHEAD ? `<p class="hint">e mais ${all.length - FAVS_AHEAD}</p>` : '';
+  return `<div class="favs" id="favsahead"><div class="seg label">★ Suas favoritas</div>${all.slice(0, FAVS_AHEAD).map(row).join('')}${more}</div>`;
+}
 function vLutas(): string {
   const evs = shownEvents();
   if (!evs.length) return D.err
@@ -75,6 +93,7 @@ function vLutas(): string {
   const priced = ev.fights.map(f => D.odds[f.id]).find(Boolean), book = priced ? priced.book : undefined;
   const info = D.err ? `Sem conexão com a ESPN · dados de ${D.lastSync ? dTime.format(D.lastSync) : '—'}${nextIn ? ` · nova tentativa em ${waitText(nextIn)}` : ''}` : `${book ? 'Odds ' + esc(book) + ' via ESPN' : 'Dados ESPN'} · atualizado às ${dTime.format(D.lastSync || Date.now())}`;
   let h = `<div class="events">${chips}</div><div class="sync"><span>${info}</span><button data-act="refresh">${busy ? 'Atualizando…' : 'Atualizar'}</button></div>`;
+  h += cardDayHtml() + favsAheadHtml(evs);
   h += `<button class="btn ghost block" data-act="imp" style="margin-top:10px">Copiar aposta de um print ou texto</button>`;
   if (!S.deposits.length) h += `<div class="cta"><p><b>Saldo fictício zerado.</b> Coloca quanto quiser pra começar a simular.</p><button class="btn" data-act="tab" data-tab="carteira">Depositar</button></div>`;
   // finding a fight by a fighter's name, across the events on screen; the list under the field is repainted by itself
@@ -113,24 +132,29 @@ function sectionsHtml(e: FightEvent, part: CardPart | null, only?: Set<string>):
 /** What goes under the search field: the fights found, event by event, or the card of the event on screen with the
  *  buttons that show one part of it. */
 function listHtml(ev: FightEvent, evs: FightEvent[]): string {
-  const q = ui.q.trim(), land = ui.land || '';
+  const q = ui.q.trim(), land = ui.land || '', starred = new Set(favs());
   if (q || land) {
     // what was typed is looked for in every event; a country is looked for on the card on screen only. With both, a
     // fight has to pass both, on that card
     let n = 0, h = '';
     const what = `${q ? ` com "${esc(q)}"` : ''}${land ? ` · ${landLabel(land)}` : ''}`;
     for (const e of land ? [ev] : [ev, ...evs.filter(x => x.id !== ev.id)]) {
-      const named = q ? Core.findFights(e.fights, q) : e.fights, hits = land ? Core.fromCountry(named, land) : named; if (!hits.length) continue;
-      n += hits.length;
+      const named = q ? Core.findFights(e.fights, q) : e.fights, hits = land ? Core.fromCountry(named, land) : named;
+      const shown = ui.fav ? hits.filter(f => starred.has(f.id)) : hits; if (!shown.length) continue;   // the starred only, when that filter is on (D108)
+      n += shown.length;
       const name = `${esc(evLabel(e).main)} · ${esc(dDay.format(e.date))}`;
-      h += (e.id === ev.id ? `<div class="seg label qev">${name}</div>` : `<button class="seg label qev" data-act="event" data-id="${esc(e.id)}" data-keep="1">${name} · abrir este card ›</button>`) + sectionsHtml(e, null, new Set(hits.map(f => f.id)));
+      h += (e.id === ev.id ? `<div class="seg label qev">${name}</div>` : `<button class="seg label qev" data-act="event" data-id="${esc(e.id)}" data-keep="1">${name} · abrir este card ›</button>`) + sectionsHtml(e, null, new Set(shown.map(f => f.id)));
     }
     return `<p class="hint" id="qinfo">${n ? `${n} ${n > 1 ? 'lutas' : 'luta'}${what}${land ? ', neste card' : evs.length > 1 ? `, nos ${evs.length} eventos carregados` : ''}.` : `Nenhuma luta${what} ${land ? 'neste card' : 'nos eventos carregados'}.`}</p>` + h;
   }
+  const fv = new Set(favs().filter(id => ev.fights.some(f => f.id === id)));
+  if (!fv.size) ui.fav = false;
+  const favChip = fv.size ? `<button class="${ui.fav ? 'on' : ''}" data-act="favonly" aria-pressed="${ui.fav}">★ Favoritas (${fv.size})</button>` : '';
+  if (ui.fav) return `<div class="quick froms" id="parts" role="group" aria-label="Parte do card"><button data-act="part" aria-pressed="false">Tudo (${ev.fights.length})</button>${favChip}</div>` + sectionsHtml(ev, null, fv);
   const secs = Core.cardSections(ev.fights), parts = [...new Set(secs.map(s => s.part))];
   if (ui.part && !parts.includes(ui.part)) ui.part = null;
   const count = (p: CardPart): number => secs.filter(s => s.part === p).reduce((a, s) => a + s.fights.length, 0);
-  const chips = parts.length > 1 ? `<div class="quick froms" id="parts" role="group" aria-label="Parte do card"><button class="${ui.part == null ? 'on' : ''}" data-act="part" aria-pressed="${ui.part == null}">Tudo (${ev.fights.length})</button>${parts.map(p => `<button class="${ui.part === p ? 'on' : ''}" data-act="part" data-p="${p}" aria-pressed="${ui.part === p}">${PART_SHORT[p]} (${count(p)})</button>`).join('')}</div>` : '';
+  const chips = parts.length > 1 || favChip ? `<div class="quick froms" id="parts" role="group" aria-label="Parte do card"><button class="${ui.part == null ? 'on' : ''}" data-act="part" aria-pressed="${ui.part == null}">Tudo (${ev.fights.length})</button>${parts.map(p => `<button class="${ui.part === p ? 'on' : ''}" data-act="part" data-p="${p}" aria-pressed="${ui.part === p}">${PART_SHORT[p]} (${count(p)})</button>`).join('')}${favChip}</div>` : '';
   return chips + sectionsHtml(ev, ui.part);
 }
 /** Repaints only the list under the search field, so that typing keeps its field, its caret and its keyboard. */
@@ -185,7 +209,8 @@ function fightCard(f: Fight, isMain: boolean): string {
   };
   // what is already riding on this fight, a tap away from the bets themselves
   const ex = Core.exposure(S.bets, f.id), mine = ex.n ? `<button class="chip mine" data-act="tab" data-tab="apostas" data-fid="${esc(f.id)}" aria-label="Ver suas apostas nesta luta">${ex.n} ${ex.n > 1 ? 'apostas' : 'aposta'} · ${money(ex.stake)}${ex.unitBets ? ' · ' + fu(ex.units) : ''}</button>` : '';
-  let h = `<article class="fight"${cornersAttr(f.weight)}><div class="fh">${isMain ? '<span class="tag">Luta principal</span>' : ''}<span>${esc(WEIGHT[f.weight] || f.weight)} · ${f.rounds} rounds</span>${state}${mine}</div>${side('a')}${side('b')}`;
+  const fav = favs().includes(f.id), star = `<button class="star${fav ? ' on' : ''}" data-act="fav" data-fid="${esc(f.id)}" aria-pressed="${fav}" aria-label="${fav ? 'Tirar das favoritas' : 'Marcar como favorita'}: ${esc(f.a.last)} x ${esc(f.b.last)}">${fav ? '★' : '☆'}</button>`;
+  let h = `<article class="fight"${cornersAttr(f.weight)}><div class="fh">${star}${isMain ? '<span class="tag">Luta principal</span>' : ''}<span>${esc(WEIGHT[f.weight] || f.weight)} · ${f.rounds} rounds</span>${state}${mine}</div>${side('a')}${side('b')}`;
   if (f.state === 'post') h += `<div class="result">${esc(resultText(f, res))}</div>`;
   else if (f.state === 'in' && D.td[f.id]) h += `<div class="result">Quedas até agora: ${esc(f.a.last)} ${D.td[f.id].a} · ${esc(f.b.last)} ${D.td[f.id].b}</div>`;
   if (can && p) {
@@ -233,6 +258,13 @@ function totalsHtml(t: OpenTotals, cls: string): string {
   return `<div class="tot ${cls}${wideIf(money(t.stake), money(t.ret), signed(t.gain))}"><p class="hint">${t.n} ${all ? 'apostas' : 'aposta'} · retorno e ganho se ${all ? 'todas baterem' : 'bater'}${u && t.unitBets < t.n ? ` · unidades de ${t.unitBets} delas, as que guardam a unidade` : ''}</p>
     <div><small>Em jogo</small><b class="st">${money(t.stake)}</b>${u ? `<span class="un stu">${fu(t.units)}</span>` : ''}</div><div><small>Retorno</small><b class="rt">${money(t.ret)}</b></div><div><small>Ganho</small><b class="gn">${signed(t.gain)}</b>${u ? `<span class="un gnu">${signedU(t.gainUnits)}</span>` : ''}</div></div>`;
 }
+/** The latest card the person bet on, summed up once none of its bets is open (D107). */
+function recapHtml(): string {
+  const r = Core.cardRecap(S.bets, Date.now()); if (!r) return '';
+  const x = r.all, cls = x.pnl > 0.004 ? 'pos' : x.pnl < -0.004 ? 'neg' : '';
+  const who = r.tip.n && r.mine.n ? `<span>Minhas: ${record(r.mine)}, ${signed(r.mine.pnl)} · Tipster: ${record(r.tip)}, ${signed(r.tip.pnl)}</span>` : '';
+  return `<div class="recap" id="recap"><b>Fechou o card: ${esc(r.event)}</b><span>${x.n} ${x.n > 1 ? 'apostas' : 'aposta'} · ${record(x)} · <span class="${cls}">${signedBoth(x.pnl, x.unitBets ? x.units : null)}</span>${x.roi != null ? ` · ROI ${signedPct(x.roi)}` : ''}</span>${who}</div>`;
+}
 function vApostas(): string {
   // one origin at a time, when any bet has one ('' is the bets with none)
   // the person's own picks apart from the ones copied from a tipster, and one tipster at a time when they have names
@@ -241,7 +273,7 @@ function vApostas(): string {
   const mine = (b: Bet): boolean => ui.origin == null ? true : ui.origin === MINE ? !Core.isTip(b) : ui.origin === TIPS ? Core.isTip(b) : b.from === ui.origin;
   const open = openBets().filter(mine).sort((a, b) => b.t - a.t), done = S.bets.filter(b => b.status !== 'open' && mine(b)).sort((a, b) => (b.settledAt || 0) - (a.settledAt || 0));
   const list = ui.filter === 'open' ? open : done;
-  let h = `<div class="filter"><button class="${ui.filter === 'open' ? 'on' : ''}" data-act="filter" data-f="open">Abertas (${open.length})</button><button class="${ui.filter === 'done' ? 'on' : ''}" data-act="filter" data-f="done">Encerradas (${done.length})</button></div>`;
+  let h = recapHtml() + `<div class="filter"><button class="${ui.filter === 'open' ? 'on' : ''}" data-act="filter" data-f="open">Abertas (${open.length})</button><button class="${ui.filter === 'done' ? 'on' : ''}" data-act="filter" data-f="done">Encerradas (${done.length})</button></div>`;
   const chip = (v: string | null, text: string): string => `<button class="${ui.origin === v ? 'on' : ''}" data-act="origin"${v == null ? '' : ` data-v="${esc(v)}"`} aria-pressed="${ui.origin === v}">${esc(text)}</button>`;
   if (anyTip) h += `<div class="quick froms" id="byorigin" role="group" aria-label="Mostrar as suas apostas ou as copiadas de um tipster">${chip(null, 'Todas')}${chip(MINE, 'Minhas')}${chip(TIPS, 'Tipster')}${names.map(k => chip(k, k)).join('')}</div>`;
   if (!list.length) return h + `<p class="empty">${ui.origin != null ? `Nenhuma aposta ${ui.filter === 'open' ? 'aberta' : 'encerrada'} ${ui.origin === MINE ? 'sua' : ui.origin === TIPS ? 'de tipster' : 'de ' + esc(ui.origin)}.` : ui.filter === 'open' ? 'Nenhuma aposta aberta. Escolhe uma odd em Lutas pra montar o cupom.' : 'Nada encerrado ainda. As apostas fecham sozinhas quando sai o resultado oficial.'}</p>`;

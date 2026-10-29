@@ -678,6 +678,22 @@ export default function cases(Core) {
   eq('since: nothing after that moment, and a moment that was never set', [Core.sinceSummary(closed, 5000), Core.sinceSummary(closed, undefined).n], [{ n: 0, pnl: 0, units: 0, unitBets: 0, by: [] }, 4]);
   eq('since: the result in units too, each bet by the unit it was placed with', (r => [r.n, r.pnl, r.units, r.unitBets])(Core.sinceSummary([hb('w', 'single', 'won', 100, 300, [hl('f1', 'ml:a')], { unit: 50 }), hb('l', 'single', 'lost', 1000, 0, [hl('f2', 'ml:a')], { unit: 500 }),
     hb('n', 'single', 'won', 20, 50, [hl('f3', 'ml:a')]), hb('k', 'single', 'cashed', 60, 90, [hl('f3', 'ml:b')], { unit: 10 })], 0)), [3, -770, 2, 2]);       // +4u and -2u; the bet with no unit only counts in money
+  // the summary of the latest card once none of its bets is open, and only for a few days (D107)
+  const rcW = hb('r1', 'single', 'won', 100, 200, [hl('f1', 'ml:a')], { unit: 50 }), rcL = hb('r2', 'single', 'lost', 50, 0, [hl('f2', 'ml:b')], { unit: 50 });
+  const rcOld = hb('r0', 'single', 'won', 10, 30, [hl('f9', 'ml:a', { eid: 'e0', event: 'UFC 0', date: 50 })]);
+  eq('recap: the latest card, its bets summed up', (r => r && [r.k, r.event, r.all.n, r.all.won, r.all.pnl, r.all.units])(Core.cardRecap([rcW, rcL, rcOld], 100 + 864e5)), ['e1', 'UFC 1: Almeida vs. Dunne', 2, 1, 50, 1]);
+  eq('recap: nothing while a bet on that card is open, nor once the card is older than RECAP_DAYS, nor with no bet', [Core.cardRecap([rcW, hb('r3', 'single', 'open', 10, 0, [hl('f3', 'ml:a')])], 200), Core.cardRecap([rcW], 100 + Core.RECAP_DAYS * 864e5 + 1), Core.cardRecap([], 0)], [null, null, null]);
+  eq('recap: a multi across events is not a card', Core.cardRecap([hb('m', 'multi', 'won', 10, 40, [hl('f1', 'ml:a'), hl('f9', 'ml:a', { eid: 'e2', date: 200 })])], 300), null);
+  // the reminder on the day of a card (D107)
+  const sev = (dates, extra) => Object.assign({ id: 'e', name: 'UFC', date: dates[0], completed: false, fights: dates.map((d, i) => ({ id: 'f' + i, date: d })) }, extra || {});
+  const HR = 3600e3;
+  eq('card day: the first fight and the main card, from CARD_SOON before it until 12 h after the main card', [Core.cardSoon(sev([10 * HR, 13 * HR]), 10 * HR - Core.CARD_SOON), Core.cardSoon(sev([10 * HR, 13 * HR]), 25 * HR - 1)], [{ first: 10 * HR, main: 13 * HR }, { first: 10 * HR, main: 13 * HR }]);
+  // the starred fights still to come, soonest first (D108)
+  const ffx = (id, date, extra) => Object.assign({ id, date, idx: 0, state: 'pre', canceled: false }, extra || {});
+  const fevs = [{ id: 'e1', fights: [ffx('a', 300), ffx('b', 100, { state: 'post' }), ffx('c', 200, { canceled: true })] }, { id: 'e2', fights: [ffx('d', 50, { state: 'in' }), ffx('e', 400)] }];
+  eq('favorites ahead: only the starred, not over nor canceled, the soonest first, with the time left', Core.favsAhead(fevs, ['a', 'b', 'c', 'd'], 100).map(x => [x.f.id, x.ev.id, x.in]), [['d', 'e2', -50], ['a', 'e1', 200]]);
+  eq('favorites ahead: none starred, or none on the cards', [Core.favsAhead(fevs, [], 0), Core.favsAhead([], ['a'], 0)], [[], []]);
+  eq('card day: not before, not after, not for a card marked over, not with no fights or no event', [Core.cardSoon(sev([10 * HR]), 10 * HR - Core.CARD_SOON - 1), Core.cardSoon(sev([10 * HR]), 22 * HR), Core.cardSoon(sev([10 * HR], { completed: true }), 10 * HR), Core.cardSoon(sev([]), 0), Core.cardSoon(undefined, 0)], [null, null, null, null, null]);
   /* the latest fights of an athlete (invented answers, in the shape of the recorded ones) */
   const logOf = items => ({ events: { items } }), refTo = id => ({ $ref: 'http://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/9/competitions/' + id + '?lang=en' });
   eq('event log: nothing, or something that is not a list of fights', [Core.normEventlog(null), Core.normEventlog({}), Core.normEventlog(logOf([{ played: true }, { competition: {} }, null]))], [[], [], []]);

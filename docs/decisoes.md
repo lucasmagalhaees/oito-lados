@@ -1154,6 +1154,19 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Contexto (25/10/2026, 08:37):** "faz todos", sobre a lista de 14 melhorias. Feitos aqui: o cupom com o valor da última aposta e o aviso de odd que mudou desde a escolha.
 - **Não feito:** o ícone do app (item 12): o iPhone já usa o `apple-touch-icon` e o título do `index.html`; o `manifest.json` só mudaria algo no Android e no computador.
 
+## D107. Lembrete do card, lutas favoritas e resumo do card
+
+- **Contexto (26/10/2026):** itens 9, 8 e 11 da lista de melhorias de 24/10/2026 ("faz todos", "continua").
+- **Lembrete:** no alto da tela de Lutas, desde 18 h antes da primeira luta do próximo card (`CARD_SOON`) até ele acabar (ou 12 h depois do card principal), uma faixa diz "Hoje tem card", "Amanhã tem card" ou "Card rolando", a hora da primeira luta e do card principal, e quantas apostas abertas há nele e quanto está em jogo (`Core.cardSoon`). É faixa dentro do app: notificação fora dele é o item 10, que precisa de servidor e de permissão.
+- **Favoritas:** cada luta tem uma estrela. As marcadas ficam em `S.favs` (no máximo 200, `FAV_MAX`), são configuração (voltam com o backup, sobrevivem ao "Zerar" e sincronizam entre aparelhos), e o card na tela ganha o botão "★ Favoritas (N)", ao lado das partes do card, que mostra só elas. O filtro ligado não é guardado.
+- **Resumo do card:** quando nenhuma aposta do último card apostado está aberta, o alto da aba Apostas diz "Fechou o card", com quantas apostas, o cartel, o resultado em dinheiro e em unidades, o ROI e, havendo aposta própria e de tipster, os dois lados (`Core.cardRecap`, a mesma linha do extrato em unidades). Fica até 3 dias depois da última luta do card (`RECAP_DAYS`). Não tem botão de fechar: some sozinho.
+
+## D108. Quanto falta para as lutas favoritas
+
+- **Contexto (26/10/2026, 11:55):** "queria um upcoming fights ou how many ETA to your favorite fights".
+- **Como ficou:** no alto da tela de Lutas, logo abaixo da faixa do dia do card, o quadro "★ Suas favoritas" lista as lutas com estrela que ainda não acabaram, nos cards que estão na tela, a mais próxima em cima (`Core.favsAhead`): os dois sobrenomes, o card, o dia e a hora, e quanto falta ("em 45 min", "em 3 h 20 min", "em 5 d 4 h") ou "ao vivo". Mostra as 5 primeiras (`FAVS_AHEAD`) e diz quantas mais há. O toque abre o card da luta já com o filtro "★ Favoritas"; um país escolhido no filtro continua valendo (D87), e aí aparecem as favoritas daquele país.
+- **Limite:** o tempo que falta é recalculado a cada repintura da tela, que acontece em cada sincronização (de 8 s a 120 s, conforme o momento). Pode ficar até 2 min atrasado longe do card. Luta com estrela num card que não está na tela não aparece.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -1164,6 +1177,7 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Criar a conta pelo app num aparelho, entrar no outro e ver a mesma banca (D99, D100). Depois, desligar "Allow new users to sign up" no Supabase | Lucas |
 | Rodar no SQL Editor a parte `form_cache` do `supabase/schema.sql` (D103) | Lucas |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
+| Ver no iPhone a faixa do dia do card, a estrela das favoritas e o resumo do card no sábado seguinte (D107) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |
 | Mandar as cinco fotos de novo pelo iPhone depois deste PR: ver os acumuladores completados pela foto da lista, com o card de verdade (D45) | Lucas |

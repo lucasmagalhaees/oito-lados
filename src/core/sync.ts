@@ -10,7 +10,7 @@
      after it, in the same currency, is kept. Otherwise a reset would come back from the other device. */
 import type { AppState, Bet, Deposit } from './types';
 
-const SETTINGS = ['unitPct', 'stakeIn', 'theme', 'corners', 'copyDrop'] as const;
+const SETTINGS = ['unitPct', 'stakeIn', 'theme', 'corners', 'copyDrop', 'favs'] as const;
 const settingsJson = (s: AppState): string => JSON.stringify(SETTINGS.map(k => (s as unknown as Record<string, unknown>)[k] ?? null));
 const betJson = (b: Bet): string => { const { u: _u, ...rest } = b; return JSON.stringify(rest); };
 const depKey = (d: Deposit): string => `${d.t}:${d.v}`;

@@ -50,6 +50,13 @@ export const symbolOf = (code: string): string => fmtOf(code).formatToParts(0).f
 export const rateText = (from: string, to: string, rate: number): string => { const [a, b, r]: [string, string, number] = rate < 1 ? [to, from, 1 / rate] : [from, to, rate]; return `${symbolOf(a)} 1 = ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: b, minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(r)}`; };
 export const dateBR = (iso: string): string => iso.split('-').reverse().join('/');
 export const sym = (): string => fmt.formatToParts(0).find(x => x.type === 'currency')!.value;
+/** How long until something starts, in the words of the list of starred fights (D108): minutes under an hour, hours and
+ *  minutes under a day, days and hours past that. */
+export const untilText = (ms: number): string => {
+  if (ms <= 0) return 'começando';
+  const m = Math.ceil(ms / 60e3), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  return m < 60 ? `em ${m} min` : h < 24 ? `em ${h} h${m % 60 ? ` ${m % 60} min` : ''}` : `em ${d} d${h % 24 ? ` ${h % 24} h` : ''}`;
+};
 export const money = (v: number): string => fmt.format(v);
 export const signed = (v: number): string => (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + fmt.format(Math.abs(v));
 export const fo = (o: unknown): string => Number(o).toFixed(2);

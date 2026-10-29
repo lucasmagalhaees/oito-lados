@@ -79,6 +79,8 @@ export interface AppState {
   corners?: { men?: CornerPair; women?: CornerPair };
   /** Copying a bet: leave it out of the batch when the odd of now is more than this many percent below the printed one. Absent: off. */
   copyDrop?: 3 | 5 | 10;
+  /** The fights the person starred, by id (D107): a star on the card and a filter of the card on screen. */
+  favs?: string[];
   /** Until when the person has seen what closed: bets settled after it are summed up in the "since last time" strip. */
   seen?: number;
   /** When the history was last rewritten as a whole (reset, restore, change of currency): two devices on different

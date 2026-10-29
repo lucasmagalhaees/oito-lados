@@ -7,7 +7,7 @@ import { inUnits, priceOf, setStakeMoney, setStakeUnits, showStake, wallet } fro
 import { clearImport, closeImport, dropOp, editFor, fixText, forceFor, importImages, importToSlip, modeFor, openFor, pasteClip, pickFor, pickOpen, placeAll, renderImport, runImport, setFrom, stakeFor, stepFor, swapFor, uneditFor, unitsFor, unpickFor } from './import';
 import { paintList, place, render, renderSheet, slipSummary, toast } from './render';
 import { doCashout, repeatBet } from './repeat';
-import { D, S, applyTheme, bankEmpty, cleanCorners, curNow, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui } from './state';
+import { D, FAV_MAX, S, applyTheme, bankEmpty, cleanCorners, curNow, favs, imp, isDrop, saveCache, saveS, setCurrency, setS, settingsOf, slip, ui } from './state';
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import { copyUsage, resetUsage, saveUsageFile } from './usage';
@@ -89,9 +89,11 @@ document.addEventListener('click', e => {
   const q = $<HTMLInputElement>('#q');
   if (q && document.activeElement === q && a !== 'qclear' && !b.closest('#list')) q.blur();
   if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
-  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
+  else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; if (d.fav) { ui.fav = true; ui.part = null; } blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
   else if (a === 'land') { ui.land = ui.land === d.c ? null : d.c || null; render(); }          // a country of the card on screen: a second tap lets go of it
-  else if (a === 'part') { ui.part = d.p === 'main' || d.p === 'prelims' || d.p === 'early' ? d.p : null; render(); }
+  else if (a === 'fav' && d.fid) { const id = d.fid, l = favs(), on = l.includes(id); S.favs = on ? l.filter(x => x !== id) : [...l, id].slice(-FAV_MAX); if (!S.favs.length) delete S.favs; saveS(); render(); }   // a star on a fight (D107)
+  else if (a === 'favonly') { ui.fav = !ui.fav; render(); }
+  else if (a === 'part') { ui.fav = false; ui.part = d.p === 'main' || d.p === 'prelims' || d.p === 'early' ? d.p : null; render(); }
   else if (a === 'qclear') { ui.q = ''; if (q) { q.value = ''; q.focus(); } paintList(); }
   else if (a === 'refresh') { sync(true); render(); }
   else if (a === 'more') {
