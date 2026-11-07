@@ -93,6 +93,7 @@ document.addEventListener('click', e => {
   else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; if (d.fav) { ui.fav = true; ui.part = null; } blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
   else if (a === 'land') { ui.land = ui.land === d.c ? null : d.c || null; render(); }          // a country of the card on screen: a second tap lets go of it
   else if (a === 'fav' && d.fid) { const id = d.fid, l = favs(), on = l.includes(id); S.favs = on ? l.filter(x => x !== id) : [...l, id].slice(-FAV_MAX); if (!S.favs.length) delete S.favs; saveS(); render(); }   // a star on a fight (D107)
+  else if (a === 'gofight' && d.fid) { const el = document.querySelector(`#list [data-fid="${CSS.escape(d.fid)}"]`)?.closest('article'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }   // a tile of the card board goes to its fight (D111)
   else if (a === 'favonly') { ui.fav = !ui.fav; render(); }
   else if (a === 'part') { ui.fav = false; ui.part = d.p === 'main' || d.p === 'prelims' || d.p === 'early' ? d.p : null; render(); }
   else if (a === 'qclear') { ui.q = ''; if (q) { q.value = ''; q.focus(); } paintList(); }

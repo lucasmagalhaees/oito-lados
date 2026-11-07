@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.30.1] - 2026-11-07
+
+### Mudado
+- A faixa do dia do card virou um quadro: barra de progresso, "Agora" e "Próxima" lado a lado com o tempo em letra grande, e um toque leva à luta. Nas favoritas, o tempo também em letra grande (D111).
+
 ## [0.30.0] - 2026-11-07
 
 ### Adicionado

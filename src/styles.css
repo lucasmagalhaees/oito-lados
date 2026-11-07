@@ -447,3 +447,29 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .passrow input { flex: 1; min-width: 0; }
 #cloud .btn.block + .btn.block { margin-top: 8px; }
 #cloud .msg { padding: 10px 12px; border: 1px solid var(--loss); border-radius: 8px; font-size: 15px; }
+/* the board of the card on the day (D111): a bar of fights done, the one on now and the next as tiles, the time in big type */
+#cardday { gap: 10px; padding: 14px; }
+#cardday .qtop { display: flex; flex-direction: column; gap: 2px; }
+#cardday .qhead { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+#cardday .qname { font-family: 'Big Shoulders Display', system-ui, sans-serif; font-size: 22px; line-height: 1.1; text-transform: uppercase; color: var(--fg); }
+#cardday .qbar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+#cardday .qbar i { display: block; height: 100%; background: var(--gold); border-radius: 4px; }
+#cardday .qleft, #cardday .qbets { margin: 0; color: var(--muted); font-size: 14px; }
+#cardday .qleft b, #cardday .qbets b { color: var(--fg); }
+#cardday .qtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+#cardday .qtile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 44px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); text-align: left; font: inherit; cursor: pointer; }
+#cardday .qtile.now { border-color: var(--live); }
+#cardday .qtile.next { border-color: var(--gold); }
+#cardday .qlab { display: flex; align-items: center; gap: 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+#cardday .qtile.now .qlab { color: var(--live); }
+#cardday .qlab .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: pulse 1.2s infinite; }
+#cardday .qvs { font-size: 16px; line-height: 1.2; }
+#cardday .qbig { font-family: 'Big Shoulders Display', system-ui, sans-serif; font-size: 30px; line-height: 1; font-weight: 800; }
+#cardday .qtile.now .qbig { color: var(--live); }
+#cardday .qtile.next .qbig { color: var(--gold); }
+#cardday .qsmall { font-size: 13px; color: var(--muted); }
+.favrow { padding: 10px 12px; }
+.favrow .fvs { min-width: 0; }
+.favrow .ahead { color: var(--fg); font-weight: 600; }
+.favrow .eta { display: flex; flex-direction: column; align-items: flex-end; font-family: 'Big Shoulders Display', system-ui, sans-serif; font-size: 26px; line-height: 1; font-weight: 800; }
+.favrow .eta small { font-family: inherit; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
