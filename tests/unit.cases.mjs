@@ -692,6 +692,15 @@ export default function cases(Core) {
   const ffx = (id, date, extra) => Object.assign({ id, date, idx: 0, state: 'pre', canceled: false }, extra || {});
   const fevs = [{ id: 'e1', fights: [ffx('a', 300), ffx('b', 100, { state: 'post' }), ffx('c', 200, { canceled: true })] }, { id: 'e2', fights: [ffx('d', 50, { state: 'in' }), ffx('e', 400)] }];
   eq('favorites ahead: only the starred, not over nor canceled, the soonest first, with the time left', Core.favsAhead(fevs, ['a', 'b', 'c', 'd'], 100).map(x => [x.f.id, x.ev.id, x.in]), [['d', 'e2', -50], ['a', 'e1', 200]]);
+  // where a card stands and about when a fight starts (D110)
+  const MIN = 60e3, SL = Core.FIGHT_SLOT;
+  const qf = (id, idx, date, extra) => Object.assign({ id, idx, date, state: 'pre', canceled: false }, extra || {});
+  const qev = st => ({ id: 'e', fights: [qf('p1', 0, 0, st[0]), qf('p2', 1, 0, st[1]), qf('x', 2, 0, { canceled: true }), qf('m1', 3, 180 * MIN, st[2]), qf('m2', 4, 180 * MIN, st[3])] });
+  eq('queue: before the card, all four to come and the first prelim next', (q => [q.left, q.total, q.live, q.next.id])(Core.cardQueue(qev([{}, {}, {}, {}]))), [4, 4, null, 'p1']);
+  eq('queue: under way, what is left, the one on now and the next', (q => [q.left, q.live.id, q.next.id])(Core.cardQueue(qev([{ state: 'post' }, { state: 'in' }, {}, {}]))), [3, 'p2', 'm1']);
+  eq('queue: over, nothing left', (q => [q.left, q.live, q.next])(Core.cardQueue(qev([{ state: 'post' }, { state: 'post' }, { state: 'post' }, { state: 'post' }]))), [0, null, null]);
+  eq('eta: before the card, the time of its part plus a slot for each fight before it there', [Core.fightEta(qev([{}, {}, {}, {}]), qf('m2', 4, 180 * MIN), -MIN), Core.fightEta(qev([{}, {}, {}, {}]), qf('m1', 3, 180 * MIN), -MIN)], [{ ahead: 3, at: 180 * MIN + SL }, { ahead: 2, at: 180 * MIN }]);
+  eq('eta: card running late, a slot from now for each fight still ahead', Core.fightEta(qev([{ state: 'post' }, { state: 'in' }, {}, {}]), qf('m2', 4, 180 * MIN), 200 * MIN), { ahead: 2, at: 200 * MIN + 2 * SL });
   eq('favorites ahead: none starred, or none on the cards', [Core.favsAhead(fevs, [], 0), Core.favsAhead([], ['a'], 0)], [[], []]);
   eq('card day: not before, not after, not for a card marked over, not with no fights or no event', [Core.cardSoon(sev([10 * HR]), 10 * HR - Core.CARD_SOON - 1), Core.cardSoon(sev([10 * HR]), 22 * HR), Core.cardSoon(sev([10 * HR], { completed: true }), 10 * HR), Core.cardSoon(sev([]), 0), Core.cardSoon(undefined, 0)], [null, null, null, null, null]);
   /* the latest fights of an athlete (invented answers, in the shape of the recorded ones) */

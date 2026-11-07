@@ -11,7 +11,7 @@ import { CORNER_SETS, D, S, favs, bankEmpty, cornerSet, cornerSetOf, cornersAttr
 import { busy, nextIn, shownEvents, weekEvent } from './sync';
 import { builtFrom, canUpdate } from './update';
 import { usageHtml, waitText } from './usage';
-import { cloudHtml, signedIn } from './cloud';
+import { acctState, cloudHtml, cloudMini, signedIn } from './cloud';
 import type { BenchSide, Bet, CardPart, Currency, Fight, FightEvent, Leg, LegState, OriginRow, OpenTotals, Option, Outcome, Period, Side, StatementRow } from '../core';
 import type { Resolved, SlipCalc, Wallet } from './helpers';
 import type { CopyMeta, Slip } from './state';
@@ -30,12 +30,15 @@ export function render(): void {
     carteira: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg>'
   };
   part('bal').closest('button')!.setAttribute('aria-label', `Saldo fictício ${money(w.balance)}: abrir a carteira`);
+  // the account, at the top right (D109): off without a server; a dot says whether it is logged in and syncing
+  const acct = part('acct'), st = acctState();
+  acct.hidden = !st; if (st) { acct.className = `acct ${st.cls}${ui.tab === 'conta' ? ' on' : ''}`; acct.setAttribute('aria-label', st.label); acct.setAttribute('aria-pressed', String(ui.tab === 'conta')); }
   const tabs = part('tabs');
   keepFocus(tabs, () => { tabs.innerHTML = [['lutas', 'Lutas'], ['apostas', 'Apostas'], ['carteira', 'Carteira']].map(([k, t]) =>
     `<button class="tab ${ui.tab === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${ui.tab === k ? 'aria-current="page"' : ''}>${ico[k]}${t}${k === 'apostas' && nOpen ? `<span class="badge">${nOpen}</span>` : ''}</button>`).join(''); });
   const v = part('view'), ae = document.activeElement;
   if (!(ae && v.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName))) {       // never yank a field the person is typing in
-    keepFocus(v, () => { v.innerHTML = sinceHtml() + (ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w)); });
+    keepFocus(v, () => { v.innerHTML = ui.tab === 'conta' ? vConta() : sinceHtml() + (ui.tab === 'lutas' ? vLutas() : ui.tab === 'apostas' ? vApostas() : vCarteira(w)); });
     if (ui.tab === 'carteira') bindChart();
   } else if (ae.id === 'q') paintList();          // the search field stays as it is; the fights under it follow
 
@@ -72,14 +75,22 @@ function cardDayHtml(): string {
   const stake = ob.reduce((a, b) => a + b.stake, 0);
   const top = now >= when.first ? 'Card rolando' : day(when.first) === day(now) ? 'Hoje tem card' : 'Amanhã tem card';
   const times = `${now < when.first ? `Começa às ${dTime.format(when.first)} · ` : ''}card principal às ${dTime.format(when.main)}`;
-  return `<div class="cardday" id="cardday"><b>${top}: ${esc(evLabel(ev).main)}</b><span>${times}</span><span>${ob.length ? `${ob.length} ${ob.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ${money(stake)} em jogo` : 'Nenhuma aposta nele ainda.'}</span></div>`;
+  // where the card stands (D110): fights left, the one on now and the next, with about when it starts
+  const q = Core.cardQueue(ev), vs = (f: Fight): string => `${esc(f.a.last)} x ${esc(f.b.last)}`;
+  const nx = q.next ? Core.fightEta(ev, q.next, now) : null;
+  const queue = `<span id="cardqueue">${q.left < q.total ? `Faltam ${q.left} de ${q.total} lutas` : `${q.total} lutas no card`}${q.live ? ` · Agora: <b>${vs(q.live)}</b>` : ''}${q.next && nx ? ` · Próxima: <b>${vs(q.next)}</b>, ${etaText(nx.at, q.next.date, now)}` : ''}</span>`;
+  return `<div class="cardday" id="cardday"><b>${top}: ${esc(evLabel(ev).main)}</b><span>${times}</span>${queue}<span>${ob.length ? `${ob.length} ${ob.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ${money(stake)} em jogo` : 'Nenhuma aposta nele ainda.'}</span></div>`;
 }
 /** The starred fights still to come, across the cards on screen, with how long until each (D108). A tap opens its card
  *  with only the starred fights shown. */
 export const FAVS_AHEAD = 5;
+/** About when a fight starts: the time of its part of the card when that is all there is, "≈" when fights before it push it later (D110). */
+/** How many fights come before a starred one (D110). */
+const aheadText = (n: number): string => n === 0 ? 'é a próxima luta do card' : n === 1 ? 'falta 1 luta antes dela' : `faltam ${n} lutas antes dela`;
+function etaText(at: number, scheduled: number, now: number): string { return (at > scheduled ? '≈ ' : '') + untilText(at - now); }
 function favsAheadHtml(evs: FightEvent[]): string {
-  const all = Core.favsAhead(evs, favs(), Date.now()); if (!all.length) return '';
-  const row = (x: { f: Fight; ev: FightEvent; in: number }): string => `<button class="favrow" data-act="event" data-id="${esc(x.ev.id)}" data-fav="1"><span><b>${esc(x.f.a.last)} x ${esc(x.f.b.last)}</b><small>${esc(evLabel(x.ev).main)} · ${esc(dWhen.format(x.f.date))}</small></span><span class="eta${x.f.state === 'in' ? ' live' : ''}">${x.f.state === 'in' ? 'ao vivo' : untilText(x.in)}</span></button>`;
+  const now = Date.now(), all = Core.favsAhead(evs, favs(), now); if (!all.length) return '';
+  const row = (x: { f: Fight; ev: FightEvent; in: number }): string => `<button class="favrow" data-act="event" data-id="${esc(x.ev.id)}" data-fav="1"><span><b>${esc(x.f.a.last)} x ${esc(x.f.b.last)}</b><small>${esc(evLabel(x.ev).main)} · ${esc(dWhen.format(x.f.date))}</small>${x.f.state === 'in' ? '' : `<small class="ahead">${aheadText(Core.fightEta(x.ev, x.f, now).ahead)}</small>`}</span><span class="eta${x.f.state === 'in' ? ' live' : ''}">${x.f.state === 'in' ? 'ao vivo' : etaText(Core.fightEta(x.ev, x.f, now).at, x.f.date, now)}</span></button>`;
   const more = all.length > FAVS_AHEAD ? `<p class="hint">e mais ${all.length - FAVS_AHEAD}</p>` : '';
   return `<div class="favs" id="favsahead"><div class="seg label">★ Suas favoritas</div>${all.slice(0, FAVS_AHEAD).map(row).join('')}${more}</div>`;
 }
@@ -264,6 +275,10 @@ function recapHtml(): string {
   const x = r.all, cls = x.pnl > 0.004 ? 'pos' : x.pnl < -0.004 ? 'neg' : '';
   const who = r.tip.n && r.mine.n ? `<span>Minhas: ${record(r.mine)}, ${signed(r.mine.pnl)} · Tipster: ${record(r.tip)}, ${signed(r.tip.pnl)}</span>` : '';
   return `<div class="recap" id="recap"><b>Fechou o card: ${esc(r.event)}</b><span>${x.n} ${x.n > 1 ? 'apostas' : 'aposta'} · ${record(x)} · <span class="${cls}">${signedBoth(x.pnl, x.unitBets ? x.units : null)}</span>${x.roi != null ? ` · ROI ${signedPct(x.roi)}` : ''}</span>${who}</div>`;
+}
+/** The account screen (D109): only the login, or the account and its syncing, with a way back. */
+function vConta(): string {
+  return `<div class="contahead"><button class="btn ghost" data-act="account">‹ Voltar</button><h1>Sua conta</h1></div>` + cloudHtml();
 }
 function vApostas(): string {
   // one origin at a time, when any bet has one ('' is the bets with none)
@@ -500,7 +515,7 @@ function vCarteira(w: Wallet): string {
     <button class="btn ghost block" data-act="orgrename">${froms.length ? 'Renomear' : 'Dar nome'}</button>
     <p class="hint">Toda aposta que entra pelo "Copiar aposta" é do tipster; as que você monta no card são suas. Dar a um tipster o nome de outro junta os dois.</p>`;
   h += '</section>';
-  h += cloudHtml();
+  h += cloudMini();
   h += `<section class="card"><span class="label">Seus dados</span><p class="hint">${signedIn() ? 'Saldo e apostas ficam salvos neste aparelho e numa cópia no servidor. O backup continua valendo: é o que sobra se o servidor sumir.' : 'Saldo e apostas ficam salvos só neste aparelho.'} Guarda um backup de vez em quando: o Safari pode limpar dados de sites que você passa muito tempo sem abrir. O arquivo pode ser mandado pra você mesmo no Telegram ou guardado nos Arquivos.</p>
     <div class="rowbtns"><button class="btn" data-act="bksave">Salvar backup em arquivo</button><label class="btn ghost" for="bkfile" role="button" tabindex="0">Restaurar de um arquivo</label><input type="file" id="bkfile" accept="application/json,.json,text/plain,.txt" hidden></div>`;
   const rf = ui.restoreFile;
@@ -599,6 +614,14 @@ export function writeBets(c: SlipCalc, mode: Slip['mode'], now: number, salt: st
   }
   c.rs.forEach((r, i) => S.bets.push(mk('single', [leg(r)], i, r.x!.odd, null))); return c.n;
 }
+/** After a bet is made, back to the card of its fight, at that fight, ready for the next one (D110). */
+export function backToCard(fid: string | undefined): void {
+  const f = fid ? D.fights.get(fid) : undefined;
+  ui.tab = 'lutas'; ui.filter = 'open'; if (f && shownEvents().some(e => e.id === f.eventId)) ui.eventId = f.eventId;
+  render();
+  const el = f ? document.querySelector(`#list [data-fid="${CSS.escape(f.id)}"]`)?.closest('article') : null;
+  if (el) el.scrollIntoView({ block: 'center' }); else window.scrollTo(0, 0);
+}
 export async function place(): Promise<void> {
   if (ui.placing) return;
   const before = slipCalc();
@@ -612,9 +635,9 @@ export async function place(): Promise<void> {
   if (!c.ok) { ui.msg = c.resolved ? 'Essa combinação não está mais disponível com as odds novas.' : 'Uma das lutas já começou ou saiu do card.'; renderSheet(); render(); return; }
   if (c.rs.some(r => Math.abs(r.x!.odd - shown.get(r.s.fid + '|' + r.s.key)!) > 0.001) || (mode === 'multi' && Math.abs(c.odd - before.odd) > 0.001)) { ui.msg = 'As odds mudaram. Confere os valores novos e confirma de novo.'; renderSheet(); render(); return; }
   if (c.total > c.balance + 0.004) { renderSheet(); return; }
-  const made = writeBets(c, slip.mode, Date.now(), '', slip.copy);
+  const made = writeBets(c, slip.mode, Date.now(), '', slip.copy), fid = slip.sels[0]?.fid;
   saveS(); saveCache();
-  slip.sels = []; slip.copy = null; setStakeMoney(0); slip.mode = 'single'; ui.sheet = false; ui.msg = ''; ui.tab = 'apostas'; ui.filter = 'open';
-  renderSheet(); render(); window.scrollTo(0, 0);
-  toast(made > 1 ? `${made} apostas feitas. Boa sorte.` : 'Aposta feita. Boa sorte.');
+  slip.sels = []; slip.copy = null; setStakeMoney(0); slip.mode = 'single'; ui.sheet = false; ui.msg = '';
+  renderSheet(); backToCard(fid);
+  toast(made > 1 ? `${made} apostas feitas. Estão na aba Apostas.` : 'Aposta feita. Está na aba Apostas.');
 }

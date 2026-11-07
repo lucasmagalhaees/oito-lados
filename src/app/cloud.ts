@@ -71,7 +71,7 @@ async function token(renew = false): Promise<string | null> {
    and a link opened from the e-mail does not reach the app installed on the home screen of the iPhone. So: an account
    with e-mail and password, created in the app, and no e-mail sent at all ("Confirm email" off in the project). */
 const LOGIN_WHY: Record<string, string> = {
-  invalid_credentials: 'E-mail ou senha errados. Se ainda não tem conta, toca em "Criar conta".',
+  invalid_credentials: 'E-mail ou senha errados. Confere os dois e tenta de novo. Se ainda não tem conta, toca em "Criar conta".',
   user_already_exists: 'Esse e-mail já tem conta. Toca em "Entrar", com a senha dela.',
   weak_password: `Senha fraca: usa pelo menos ${Core.MIN_PASSWORD} caracteres.`,
   email_not_confirmed: 'O servidor ainda pede confirmação por e-mail: no Supabase, desliga "Confirm email".',
@@ -89,7 +89,8 @@ export async function signIn(mode: 'in' | 'up', email: string, password: string)
     // with confirmation on, a sign-up answers with the user and no session
     if (mode === 'up' && j && !j.access_token) throw new CloudError(200, 'no session', 'email_not_confirmed');
     takeSession(j, email);
-    pass = ''; cloud.msg = ''; cloud.busy = false;
+    pass = ''; cloud.msg = ''; cloud.busy = false; showPass = false;
+    toast(mode === 'up' ? `Conta criada. Entrou como ${email}.` : `Pronto, entrou como ${email}.`);
     await syncNow();
     return;
   } catch (e) {
@@ -244,13 +245,16 @@ export function initCloud(): void {
 /* ---- the card on the wallet screen ---- */
 export function cloudHtml(): string {
   if (!cloudOn()) return '';
-  let h = '<section class="card" id="cloud"><span class="label">Sincronizar aparelhos</span>';
+  let h = `<section class="card" id="cloud"><span class="label">${sess() && session ? 'Conta e sincronização' : 'Entrar'}</span>`;
   if (!sess() || !session) {
     h += '<p class="hint">Entra com o seu e-mail para ter a mesma banca e as mesmas apostas no celular e no computador. O que está neste aparelho continua aqui, com ou sem conexão.</p>';
-    h += `<div class="field"><span>E-mail</span><input id="cloudemail" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="voce@email.com" value="${esc(cloud.email)}" aria-label="Seu e-mail"></div>
-      <div class="field"><span>Senha</span><input id="cloudpass" type="password" autocomplete="current-password" maxlength="${Core.MAX_PASSWORD}" placeholder="pelo menos ${Core.MIN_PASSWORD} caracteres" value="${esc(pass)}" aria-label="Sua senha"></div>
-      <div class="rowbtns"><button class="btn" data-act="cloudin" ${cloud.busy ? 'disabled' : ''}>${cloud.busy ? 'Entrando…' : 'Entrar'}</button><button class="btn ghost" data-act="cloudup" ${cloud.busy ? 'disabled' : ''}>Criar conta</button></div>
-      <p class="hint">Na primeira vez, "Criar conta". No outro aparelho, "Entrar" com o mesmo e-mail e a mesma senha. Nenhum e-mail é mandado.</p>`;
+    // what went wrong comes first and stands out (D109): wrong password, no connection, an e-mail that is not one
+    if (cloud.msg) h += `<p class="msg" id="cloudmsg" role="alert">${esc(cloud.msg)}</p>`;
+    h += `<div class="field"><span>E-mail</span><input id="cloudemail" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="voce@email.com" value="${esc(cloud.email)}" aria-label="Seu e-mail" enterkeyhint="next"></div>
+      <div class="field"><span>Senha</span><div class="passrow"><input id="cloudpass" type="${showPass ? 'text' : 'password'}" autocomplete="current-password" maxlength="${Core.MAX_PASSWORD}" placeholder="pelo menos ${Core.MIN_PASSWORD} caracteres" value="${esc(pass)}" aria-label="Sua senha" enterkeyhint="go"><button class="btn ghost" data-act="cloudshow" aria-pressed="${showPass}">${showPass ? 'Esconder' : 'Mostrar'}</button></div></div>
+      <button class="btn block" data-act="cloudin" ${cloud.busy ? 'disabled' : ''}>${cloud.busy ? 'Entrando…' : 'Entrar'}</button>
+      <button class="btn ghost block" data-act="cloudup" ${cloud.busy ? 'disabled' : ''}>Criar conta</button>
+      <p class="hint">Na primeira vez, "Criar conta". No outro aparelho, "Entrar" com o mesmo e-mail e a mesma senha. Nenhum e-mail é mandado. O servidor não diz se o e-mail existe: e-mail sem conta e senha errada dão a mesma resposta.</p>`;
   } else if (cloud.ask) {
     const n = (x: { bets: number; deposits: number }): string => `${x.bets} ${x.bets === 1 ? 'aposta' : 'apostas'} e ${x.deposits} ${x.deposits === 1 ? 'depósito' : 'depósitos'}`;
     h += `<p id="cloudask"><b>Este aparelho e o servidor têm históricos diferentes.</b> Aqui: ${n(cloud.ask.here)}. No servidor: ${n(cloud.ask.there)}.</p>
@@ -261,11 +265,27 @@ export function cloudHtml(): string {
     h += `<p class="hint" id="cloudstatus">Entrou como <b>${esc(session.email)}</b>. ${cloud.busy ? 'Sincronizando…' : cloud.at ? `Sincronizado às ${dTime.format(cloud.at)}.` : 'Ainda não sincronizou nesta abertura.'}</p>`;
     h += `<div class="rowbtns"><button class="btn ghost" data-act="cloudsync" ${cloud.busy ? 'disabled' : ''}>Sincronizar agora</button><button class="btn ghost" data-act="cloudout">Sair</button></div>`;
   }
-  if (cloud.err) h += `<p class="msg" id="clouderr">${esc(cloud.err)}</p>`;
-  if (cloud.msg) h += `<p class="hint" id="cloudmsg">${esc(cloud.msg)}</p>`;
+  if (cloud.err) h += `<p class="msg" id="clouderr" role="alert">${esc(cloud.err)}</p>`;
+  if (cloud.msg && sess() && session) h += `<p class="hint" id="cloudmsg">${esc(cloud.msg)}</p>`;
   return h + '</section>';
 }
 /** Keeps the e-mail typed, so a repaint does not lose it. */
 export function typedEmail(v: string): void { cloud.email = v; }
 /** Keeps the password typed in memory, for the same reason; it is never stored. */
 export function typedPass(v: string): void { pass = v; }
+/** Shows or hides the password being typed (D109). */
+let showPass = false;
+export function togglePass(): void { pass = (document.getElementById('cloudpass') as HTMLInputElement | null)?.value ?? pass; showPass = !showPass; render(); }
+/** The button at the top right (D109): what it says and how its dot looks. Null without a server. */
+export function acctState(): { cls: string; label: string } | null {
+  if (!cloudOn()) return null;
+  if (!sess() || !session) return { cls: 'out', label: cloud.err ? 'Conta: entra de novo para sincronizar' : 'Entrar na sua conta' };
+  if (cloud.err) return { cls: 'warn', label: `Conta ${session.email}: ${cloud.err}` };
+  return { cls: 'in', label: `Conta ${session.email}${cloud.at ? `, sincronizado às ${dTime.format(cloud.at)}` : ''}` };
+}
+/** The line on the wallet screen (D109): the login moved to its own screen, opened from the top right. */
+export function cloudMini(): string {
+  if (!cloudOn()) return '';
+  const inn = !!(sess() && session);
+  return `<section class="card" id="cloudmini"><span class="label">Conta</span><p class="hint">${inn ? `Entrou como <b>${esc(session!.email)}</b>.` : 'Entre para ter a mesma banca no celular e no computador.'}</p>${cloud.err ? `<p class="msg" id="clouderr" role="alert">${esc(cloud.err)}</p>` : ''}<button class="btn ghost block" data-act="account">${inn ? 'Abrir a conta' : 'Entrar'}</button></section>`;
+}
