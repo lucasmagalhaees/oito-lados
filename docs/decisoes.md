@@ -1167,6 +1167,22 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Como ficou:** no alto da tela de Lutas, logo abaixo da faixa do dia do card, o quadro "★ Suas favoritas" lista as lutas com estrela que ainda não acabaram, nos cards que estão na tela, a mais próxima em cima (`Core.favsAhead`): os dois sobrenomes, o card, o dia e a hora, e quanto falta ("em 45 min", "em 3 h 20 min", "em 5 d 4 h") ou "ao vivo". Mostra as 5 primeiras (`FAVS_AHEAD`) e diz quantas mais há. O toque abre o card da luta já com o filtro "★ Favoritas"; um país escolhido no filtro continua valendo (D87), e aí aparecem as favoritas daquele país.
 - **Limite:** o tempo que falta é recalculado a cada repintura da tela, que acontece em cada sincronização (de 8 s a 120 s, conforme o momento). Pode ficar até 2 min atrasado longe do card. Luta com estrela num card que não está na tela não aparece.
 
+## D109. O login vira uma tela própria, aberta pelo canto superior direito
+
+- **Contexto (07/11/2026, 18:07):** "n tem feedback nenhum de autenticacao, devia ter pagina só de login, n tem info de senha errada, email n existente, nada, o login devia sair de onde ta e ser disparado por um botao no canto superior direito".
+- **Como ficou:** um botão redondo no canto superior direito, ao lado do saldo, abre a tela "Sua conta" (`ui.tab = 'conta'`, sem aba embaixo), com "‹ Voltar" para a aba de onde veio. Sem login, a tela tem só o formulário: e-mail, senha com "Mostrar", "Entrar" e "Criar conta". Logado, mostra a conta, quando sincronizou, "Sincronizar agora" e "Sair", e a pergunta da primeira vez (D102). Na Carteira fica só uma linha com o e-mail e o botão que abre a tela. Sem servidor configurado, o botão não aparece.
+- **Retorno:** o erro aparece em cima do formulário, numa caixa vermelha lida pelo leitor de tela (`role="alert"`): e-mail inválido, senha curta, e-mail ou senha errados, conta que já existe, sem conexão, muitas tentativas. Entrar ou criar a conta dá um aviso ("Pronto, entrou como…"). O ponto no botão do alto é verde logado, vermelho com erro de sincronização ou sessão vencida, e cinza sem login. "Ir" no teclado, no campo de e-mail ou de senha, entra.
+- **E-mail que não existe:** o Supabase responde igual para e-mail sem conta e senha errada (`invalid_credentials`), de propósito, para ninguém descobrir quais e-mails têm conta. O app não tem como separar os dois e diz isso na tela.
+- **Por que antes parecia não ter retorno:** o aviso ficava no fim do cartão, em cinza pequeno, e o "Ir" do teclado não fazia nada. Não foi visto no iPhone; é a explicação mais provável, não verificada.
+
+## D110. Depois de apostar, de volta ao card; quantas lutas faltam e quando começa a favorita
+
+- **Contexto (07/11/2026, 18:13):** "toda vez q uma aposta eh feita, devia me jogar pra tela do card, facilita pra fazer a proxima e quero o upcoming fights tbm no app, me avisando qnts lutas faltam, a proxima, qnts lutas faltam ate a luta q favoritei, ETA ate a luta favoritada".
+- **Depois de apostar** (pelo cupom ou pelo lote da tela de copiar): o app volta para a tela de Lutas, no card da luta apostada, rolado até ela (`backToCard`). Antes ia para a aba Apostas. O aviso diz que a aposta está na aba Apostas.
+- **Quantas faltam:** a faixa do dia do card (D107) ganha uma linha: "Faltam 9 de 12 lutas", a luta que está rolando ("Agora") e a próxima, com quanto falta para ela (`Core.cardQueue`). Luta cancelada não conta.
+- **Até a favorita:** cada linha do quadro "★ Suas favoritas" (D108) diz quantas lutas faltam antes dela ("faltam 3 lutas antes dela", "é a próxima luta do card") e quanto falta para ela começar (`Core.fightEta`).
+- **A estimativa:** a ESPN só dá uma hora por parte do card, igual para todas as lutas dela. Então o app soma 25 min (`FIGHT_SLOT`) por luta que vem antes na mesma parte e, com o card rolando, 25 min a partir de agora por luta que ainda falta. Vale a mais tardia das duas. Quando a conta empurra a luta para depois da hora da ESPN, o tempo aparece com "≈". Os 25 min são uma média chutada (luta, intervalos e entradas), não medida: dá para acertar depois com os horários de um card de verdade.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |
@@ -1177,6 +1193,8 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 | Criar a conta pelo app num aparelho, entrar no outro e ver a mesma banca (D99, D100). Depois, desligar "Allow new users to sign up" no Supabase | Lucas |
 | Rodar no SQL Editor a parte `form_cache` do `supabase/schema.sql` (D103) | Lucas |
 | Não estavam na lista de 11/10/2026 (D97) e continuam sem confirmação: as outras interpretações do cashout a valor de mercado (D27) e da conversão de moeda (D28); o valor em unidades e o sinal − (D30, D31); completar o acumulador, a origem e a média da odd contra o print (D45 a D48); o que conta como aposta repetida (D49); o item pronto recolhido de início e a aposta nova fora do topo das abertas (D58); a hora da aposta como a hora da luta (D69); em quais telas o ganho aparece (D70); a palavra "Tipster" (D77); as três colunas do extrato e a saída da tabela por evento antiga (D82) | Lucas |
+| Num card de verdade, comparar o "≈ em X" das favoritas com a hora em que a luta começou, para acertar os 25 min por luta (D110) | Lucas |
+| Entrar pela tela nova da conta no iPhone e conferir os avisos de erro (D109) | Lucas |
 | Ver no iPhone a faixa do dia do card, a estrela das favoritas e o resumo do card no sábado seguinte (D107) | Lucas |
 | Dizer se os mercados atrás de um botão, na tela de copiar aposta, ficaram bons de usar no iPhone (D96) | Lucas |
 | Testar o copiar aposta no iPhone com prints reais, agora com várias fotos de uma vez e com o card de verdade (D43, D44) | Lucas |

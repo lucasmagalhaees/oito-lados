@@ -433,3 +433,17 @@ textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:8
 .favrow small { display: block; color: var(--muted); font-size: 14px; }
 .favrow .eta { color: var(--gold); font-weight: 700; white-space: nowrap; }
 .favrow .eta.live { color: var(--live); }
+/* the account button at the top right and its screen (D109) */
+.acct { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; padding: 0; }
+.acct svg { width: 22px; height: 22px; }
+.acct.on { border-color: var(--gold); }
+.acct .dot { position: absolute; right: 4px; top: 4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg); background: var(--muted); }
+.acct.in .dot { background: var(--win); }
+.acct.warn .dot { background: var(--loss); }
+.contahead { display: flex; align-items: center; gap: 12px; margin: 12px 0 4px; }
+.contahead h1 { margin: 0; font-size: 22px; }
+#cloud .msg { margin: 10px 0; }
+.passrow { display: flex; gap: 8px; }
+.passrow input { flex: 1; min-width: 0; }
+#cloud .btn.block + .btn.block { margin-top: 8px; }
+#cloud .msg { padding: 10px 12px; border: 1px solid var(--loss); border-radius: 8px; font-size: 15px; }

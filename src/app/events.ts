@@ -11,7 +11,7 @@ import { D, FAV_MAX, S, applyTheme, bankEmpty, cleanCorners, curNow, favs, imp, 
 import { sync } from './sync';
 import { applyUpdate, checkNow } from './update';
 import { copyUsage, resetUsage, saveUsageFile } from './usage';
-import { resolveFirst, signIn, signOut, syncNow, typedEmail, typedPass } from './cloud';
+import { resolveFirst, signIn, signOut, syncNow, togglePass, typedEmail, typedPass } from './cloud';
 import type { Bet, Currency, Period } from '../core';
 import type { Ui } from './state';
 
@@ -88,7 +88,8 @@ document.addEventListener('click', e => {
   // is: what is tapped in the list under the field repaints that list; anything else lets go of the field first
   const q = $<HTMLInputElement>('#q');
   if (q && document.activeElement === q && a !== 'qclear' && !b.closest('#list')) q.blur();
-  if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
+  if (a === 'account') { if (ui.tab === 'conta') ui.tab = ui.back; else { ui.back = ui.tab; ui.tab = 'conta'; } ui.sheet = false; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }   // the account screen, from the button at the top (D109)
+  else if (a === 'tab') { ui.tab = d.tab as Ui['tab']; ui.sheet = false; ui.reset = false; ui.cash = null; renderSheet(); blurField(); render(); window.scrollTo(0, 0); }
   else if (a === 'event') { ui.eventId = d.id ?? null; if (!d.keep) ui.q = ''; if (d.fav) { ui.fav = true; ui.part = null; } blurField(); render(); loadOdds(ui.eventId, false).then(() => { saveCache(); render(); }); }
   else if (a === 'land') { ui.land = ui.land === d.c ? null : d.c || null; render(); }          // a country of the card on screen: a second tap lets go of it
   else if (a === 'fav' && d.fid) { const id = d.fid, l = favs(), on = l.includes(id); S.favs = on ? l.filter(x => x !== id) : [...l, id].slice(-FAV_MAX); if (!S.favs.length) delete S.favs; saveS(); render(); }   // a star on a fight (D107)
@@ -187,6 +188,7 @@ document.addEventListener('click', e => {
   else if (a === 'cloudin' || a === 'cloudup') signIn(a === 'cloudup' ? 'up' : 'in', valOf('#cloudemail'), valOf('#cloudpass'));
   else if (a === 'cloudsync') syncNow();
   else if (a === 'cloudout') signOut();
+  else if (a === 'cloudshow') togglePass();
   else if (a === 'cloudfirst') resolveFirst(d.c === 'here' ? 'here' : d.c === 'there' ? 'there' : 'join');
   else if (a === 'usagesave') saveUsageFile();
   else if (a === 'usagecopy') copyUsage();
@@ -236,6 +238,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && (ui.sheet || imp.open) && !imp.busy) { ui.sheet = false; if (imp.open) closeImport(); else { renderSheet(); render(); } }
   if (e.key === 'Enter' && id === 'unitpct') press('unit');
   if (e.key === 'Enter' && id === 'dep') press('deposit');
+  if (e.key === 'Enter' && (id === 'cloudemail' || id === 'cloudpass')) { e.preventDefault(); press('cloudin'); }   // "Ir" on the keyboard logs in (D109)
   if (e.key === 'Enter' && id === 'q') { blurField(); render(); }          // "buscar" on the keyboard puts it away; the list is already there
 });
 }

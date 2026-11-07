@@ -139,7 +139,9 @@ with sync_playwright() as p:
     assert 'card principal às' in txt('#cardday') and 'Nenhuma aposta nele ainda.' in txt('#cardday'), txt('#cardday')
     pg.click('#list .star >> nth=0'); assert pg.evaluate('window.__OL.S.favs.length') == 1 and pg.get_attribute('#list .star >> nth=0', 'aria-pressed') == 'true'
     assert pg.locator('#parts [data-act=favonly]').inner_text() == '★ Favoritas (1)', pg.locator('#parts button').all_inner_texts()
-    assert pg.locator('#favsahead .favrow').count() == 1 and pg.locator('#favsahead .eta').inner_text() in ('ao vivo', 'começando') or pg.locator('#favsahead .eta').inner_text().startswith('em '), txt('#favsahead')
+    assert pg.locator('#favsahead .favrow').count() == 1 and pg.locator('#favsahead .eta').inner_text() in ('ao vivo', 'começando') or pg.locator('#favsahead .eta').inner_text().lstrip('≈ ').startswith('em '), txt('#favsahead')
+    assert 'antes dela' in txt('#favsahead') or 'próxima luta do card' in txt('#favsahead'), txt('#favsahead')   # how many fights come first (D110)
+    assert 'lutas' in txt('#cardqueue') and ('Próxima:' in txt('#cardqueue') or 'Agora:' in txt('#cardqueue')), txt('#cardqueue')
     pg.click('#favsahead .favrow'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
     pg.click('#parts [data-act=favonly]'); assert nfights() == 3
     pg.click('#parts [data-act=favonly]'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
@@ -335,7 +337,8 @@ with sync_playwright() as p:
         assert (mode == 'multi') == (len(sels) > 1), 'more than one selection is always a multiple'
         pg.fill('#stake', stake)
         if mode=='multi': shot('s3-slip.png')
-        pg.click('[data-act=place]'); pg.wait_for_selector('.bet'); pg.click('.tabbar [data-tab=lutas]')
+        n_ = pg.evaluate('window.__OL.S.bets.length'); pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length > {n_} && window.__OL.ui.tab === "lutas" && !window.__OL.ui.sheet')   # back to the card, at the fight just bet on (D110)
+        assert pg.evaluate('(fid => !!document.querySelector(`#list [data-fid="${fid}"]`))(window.__OL.S.bets.slice(-1)[0].legs[0].fid)') and 'aba Apostas' in pg.inner_text('#toast')
     # the odd of a selection that moved since it was picked says so in the slip, up or down
     pick('f1', 'ml:a'); pg.evaluate('(() => { window.__OL.slip.sels[0].odd0 = 1.5; })()'); pg.click('#slipbtn'); pg.wait_for_selector('#panel .sel')
     assert pg.inner_text('#panel .sel .moved') == '▲ era 1.50' and 'up' in pg.get_attribute('#panel .sel .moved', 'class'), pg.inner_text('#panel .sel')
@@ -565,6 +568,8 @@ with sync_playwright() as p:
     assert made == [['single', 250, 2.05, 'Canal do Zé', None, [['ml:b', 2.05, 2.05]]], ['single', 150, 2.5, 'Canal do Zé', None, [['ml:b', 2.5, 2.7]]],
                     ['multi', 80, 3.42, 'Canal do Zé', 3.424, [['ml:a', 1.67, 1.67], ['ml:b', 2.05, 2.05]]]], made
     assert '3 apostas feitas' in pg.inner_text('#toast') and bal().replace('\xa0', ' ') == 'R$ 520,00', (pg.inner_text('#toast'), bal())
+    assert pg.evaluate('window.__OL.ui.tab') == 'lutas', 'after the batch, back to the card (D110)'
+    pg.click('.tabbar [data-tab=apostas]')
     # open bets go by event, in the order the fights happen, with what is at stake and what the event can pay
     assert pg.locator('.grp').count() == 1 and 'almeida vs. dunne' in txt('.grp').lower() and txt('.grpsum .hint') == '3 apostas · retorno e ganho se todas baterem', (txt('.grp'), txt('.grpsum'))
     # the event says what is at stake and what it can pay, in money and in units: 512,50 + 375,00 + 273,60 back, and 2,625u + 2,25u + 1,936u of gain
@@ -823,7 +828,7 @@ with sync_playwright() as p:
     pg.click('[data-act=stu][data-u="2"]'); assert pg.input_value('#stake') == '200', pg.input_value('#stake')
     pg.click('[data-act=stu][data-u="1"]'); assert pg.input_value('#stake') == '100', pg.input_value('#stake')
     assert '1u' in pg.inner_text('#slipsum'), pg.inner_text('#slipsum')
-    pg.click('[data-act=place]'); pg.wait_for_selector('.bet'); assert pg.inner_text('.bet .un') == '1u', pg.inner_text('.bet .un')   # wins @1.67 -> 167
+    n_ = pg.evaluate('window.__OL.S.bets.length'); pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length > {n_} && window.__OL.ui.tab === "lutas"'); pg.click('.tabbar [data-tab=apostas]'); pg.wait_for_selector('.bet'); assert pg.inner_text('.bet .un') == '1u', pg.inner_text('.bet .un')   # wins @1.67 -> 167
     pg.click('.tabbar [data-tab=lutas]')
     bet([('f1','ml:a'),('f2','dist:yes'),('f3','tot:o:3.5')], '50', 'multi')   # 1.67*1.44*1.83
     bet([('f1','td:o:2.5')], '20')                                # 3 TDs -> wins
@@ -857,7 +862,7 @@ with sync_playwright() as p:
     pg.click('[data-act=place]'); pg.wait_for_function(f'window.__OL.S.bets.length === {n0 + 1}')
     again = pg.evaluate('(() => { const b = window.__OL.S.bets[window.__OL.S.bets.length - 1]; return [b.id, b.type, b.stake, b.status, b.legs.map(l => l.key).join("+")]; })()')
     assert again[1:] == ['single', 40, 'open', 'ml:b'], again
-    pg.click(f'[data-act=cash][data-id="{again[0]}"]'); pg.click(f'[data-act=docash][data-id="{again[0]}"]')
+    pg.click('.tabbar [data-tab=apostas]'); pg.click(f'[data-act=cash][data-id="{again[0]}"]'); pg.click(f'[data-act=docash][data-id="{again[0]}"]')
     pg.wait_for_function(f'window.__OL.S.bets.find(b => b.id === "{again[0]}").status === "cashed"')
     print('repetir', again[1:], '-> cashout de novo | saldo', bal())
     assert bal() == before.replace('680', '720'), (before, bal())
@@ -1324,16 +1329,18 @@ with sync_playwright() as p:
     # with no project set: no card and no call
     CLOUD.update(log=[]); c0 = served('none'); p0 = app_page(c0); p0.goto(SITE); p0.wait_for_function('window.__OL && window.__OL.S'); p0.click('.tabbar [data-tab=carteira]'); p0.wait_for_timeout(800)
     assert p0.evaluate('(({Core}) => [Core.CLOUD_URL, Core.CLOUD_KEY])(window.__OL)') == ['', ''], 'the page has no project set'
-    assert p0.locator('#cloud').count() == 0 and 'só neste aparelho' in p0.inner_text('#view') and CLOUD['log'] == [], ('no server set: the card does not show and nothing is called', CLOUD['log'])
+    assert p0.locator('#cloud').count() == 0 and p0.locator('#cloudmini').count() == 0 and p0.is_hidden('#acct') and 'só neste aparelho' in p0.inner_text('#view') and CLOUD['log'] == [], ('no server set: the card does not show and nothing is called', CLOUD['log'])
     # and a save is a save on this device only: what is done is kept, and still nothing is sent, not even a moment later
     p0.fill('#dep', '30'); p0.click('[data-act=deposit]'); p0.wait_for_timeout(2600)
     assert p0.evaluate('JSON.parse(localStorage.getItem("oitolados.v1")).deposits.map(d => d.v)') == [30] and CLOUD['log'] == [], ('no server set: the deposit is saved here and goes nowhere', CLOUD['log'])
     done(c0)
+    def conta(p_):   # the account screen, from the button at the top right (D109)
+        if p_.evaluate('window.__OL.ui.tab') != 'conta': p_.click('#acct')
     def device(state):
         c = served(cloud=True)
         pg_ = app_page(c); errs_ = []; pg_.on('pageerror', lambda e: errs_.append(str(e)))
         if state is not None: pg_.add_init_script('if (!sessionStorage.getItem("seeded")) { sessionStorage.setItem("seeded", "1"); localStorage.setItem("oitolados.v1", %s); }' % json.dumps(json.dumps(state)))
-        pg_.goto(SITE); pg_.wait_for_function('window.__OL && window.__OL.S'); pg_.click('.tabbar [data-tab=carteira]'); pg_.wait_for_selector('#cloud')
+        pg_.goto(SITE); pg_.wait_for_function('window.__OL && window.__OL.S'); conta(pg_); pg_.wait_for_selector('#cloud')
         assert pg_.evaluate('(({Core}) => [Core.CLOUD_URL, Core.CLOUD_KEY, Core.cloudSet(Core.CLOUD_URL, Core.CLOUD_KEY)])(window.__OL)') == [TEST_URL, TEST_KEY, True], 'the page talks to the simulated project, never to the real one'
         return c, pg_, errs_
     S_ = lambda pg_: pg_.evaluate('window.__OL.S')
@@ -1344,6 +1351,7 @@ with sync_playwright() as p:
     def said(pg_, text):
         pg_.wait_for_function('t => document.getElementById("cloudmsg") && document.getElementById("cloudmsg").textContent.includes(t)', arg=text)
     def login(pg_, email, pw='senha-boa-123', how='cloudin'):
+        conta(pg_)
         pg_.fill('#cloudemail', email); pg_.fill('#cloudpass', pw); pg_.click(f'[data-act={how}]')
     bet = lambda id_, t, stake: dict(id=id_, t=t, type='single', stake=stake, unit=10, odd=2, sgp={}, status='open', payout=0, settledAt=None,
         legs=[dict(fid='f1', eid='600000001', key='ml:a', market='Vencedor', sel='Lima vence', cat='Vencedor', weight='Lightweight', fight='Lima x Rocha', event='UFC Fight Night', date=now_ms + 86400000, odd=2, src='real')])
@@ -1357,15 +1365,27 @@ with sync_playwright() as p:
     login(phone, 'lucas@exemplo.com', 'curta'); said(phone, 'pelo menos 8 caracteres'); assert CLOUD['log'] == [], 'nothing goes to the server before the form is right'
     login(phone, 'lucas@exemplo.com'); said(phone, 'Se ainda não tem conta')                       # no account yet: "Entrar" says to create one
     assert phone.input_value('#cloudpass') == 'senha-boa-123', 'a failed try keeps what was typed'
+    # the account screen (D109): the error stands out, the button at the top is off-account, "Ir" on the keyboard logs in, the password can be shown
+    assert phone.get_attribute('#cloudmsg', 'role') == 'alert' and 'out' in phone.get_attribute('#acct', 'class') and phone.evaluate('window.__OL.ui.tab') == 'conta'
+    phone.screenshot(path=str(SHOTS / 's58-login-erro.png'))
+    n_ = len(CLOUD['log']); phone.focus('#cloudpass'); phone.keyboard.press('Enter'); phone.wait_for_timeout(800)
+    assert len(CLOUD['log']) > n_ and 'Se ainda não tem conta' in phone.inner_text('#cloudmsg'), 'Enter in the password field logs in'
+    phone.click('[data-act=cloudshow]'); assert phone.get_attribute('#cloudpass', 'type') == 'text' and phone.input_value('#cloudpass') == 'senha-boa-123'
+    phone.click('[data-act=cloudshow]'); assert phone.get_attribute('#cloudpass', 'type') == 'password'
     CLOUD['confirm'] = True; login(phone, 'lucas@exemplo.com', how='cloudup'); said(phone, 'desliga "Confirm email"')
     CLOUD.update(confirm=False, users={}, passwords={})
     login(phone, 'Lucas@Exemplo.com', how='cloudup'); synced(phone)
+    assert 'in' in phone.get_attribute('#acct', 'class').split() and 'Conta lucas@exemplo.com' in phone.get_attribute('#acct', 'aria-label'), phone.get_attribute('#acct', 'aria-label')
+    phone.click('[data-act=account] >> nth=1'); assert phone.evaluate('window.__OL.ui.tab') != 'conta' and phone.locator('#cloudmini').count() in (0, 1)
+    conta(phone)
     assert 'senha-boa-123' not in json.dumps(phone.evaluate('({...localStorage})')), 'the password is not stored on the device'
     assert 'Entrou como' in phone.inner_text('#cloudstatus') and 'Sincronizado às' in phone.inner_text('#cloudstatus'), phone.inner_text('#cloud')
     assert CLOUD['rows']['u1']['bets'][0]['id'] == 'ph1' and CLOUD['rows']['u1']['deposits'] == [dict(t=now_ms - 5000, v=1000)], 'the first device sends its history to an empty server'
     assert all(':' not in m for m, _ in CLOUD['log']), CLOUD['log']
     phone.locator('#cloud').scroll_into_view_if_needed(); phone.screenshot(path=str(SHOTS / 's56-sincronizar.png'))
+    phone.click('.tabbar [data-tab=carteira]'); assert 'lucas@exemplo.com' in phone.inner_text('#cloudmini')   # the wallet keeps one line of the account (D109)
     assert 'numa cópia no servidor' in phone.inner_text('#view') and 'só neste aparelho' not in phone.inner_text('#view'), 'signed in, the data card says a copy is on the server'
+    conta(phone)
     # the computer has a history of its own: the person chooses, and here joins both
     cpc, pc, pc_errs = device(pc_state)
     login(pc, 'lucas@exemplo.com', how='cloudup'); said(pc, 'já tem conta')
@@ -1373,59 +1393,59 @@ with sync_playwright() as p:
     login(pc, 'lucas@exemplo.com'); pc.wait_for_selector('#cloudask')
     assert 'Aqui: 0 apostas e 1 depósito. No servidor: 1 aposta e 1 depósito.' in pc.inner_text('#cloudask') and len(S_(pc)['deposits']) == 1, pc.inner_text('#cloud')
     pc.locator('#cloud').scroll_into_view_if_needed(); pc.screenshot(path=str(SHOTS / 's57-primeira-vez.png'))
-    pc.click('[data-act=cloudfirst][data-c=join]'); synced(pc)
+    conta(pc); pc.click('[data-act=cloudfirst][data-c=join]'); synced(pc)
     assert sorted(d['v'] for d in S_(pc)['deposits']) == [500, 1000] and [x['id'] for x in S_(pc)['bets']] == ['ph1'] and money(pc) == 'R$ 1.400,00', (money(pc), S_(pc))
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [500, 1000], 'and the server has both'
-    phone.click('[data-act=cloudsync]'); phone.wait_for_function('window.__OL.S.deposits.length === 2')
+    conta(phone); phone.click('[data-act=cloudsync]'); phone.wait_for_function('window.__OL.S.deposits.length === 2')
     assert money(phone) == 'R$ 1.400,00', 'the phone gets what the computer had'
     # a deposit on the computer reaches the phone; the copy goes a moment after the save, by itself
-    pc.fill('#dep', '250'); pc.click('[data-act=deposit]'); assert money(pc) == 'R$ 1.650,00'
+    pc.click('.tabbar [data-tab=carteira]'); pc.fill('#dep', '250'); pc.click('[data-act=deposit]'); assert money(pc) == 'R$ 1.650,00'
     pc.wait_for_function('() => true'); pc.wait_for_timeout(2600)
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [250, 500, 1000], 'sent by itself, without a tap'
     phone.evaluate('document.dispatchEvent(new Event("visibilitychange"))'); phone.wait_for_function('window.__OL.S.deposits.length === 3')
     assert money(phone) == 'R$ 1.650,00', 'coming back to the app brings it'
-    before = len(CLOUD['log']); phone.click('[data-act=cloudsync]'); synced(phone)
+    before = len(CLOUD['log']); conta(phone); phone.click('[data-act=cloudsync]'); synced(phone)
     assert [m for m, _ in CLOUD['log'][before:]] == ['GET'], ('a sync with nothing new reads and sends nothing back', CLOUD['log'][before:])
     # the server out of reach: the phone keeps working, says so, and catches up when it is back
     CLOUD['down'] = True
-    phone.fill('#dep', '50'); phone.click('[data-act=deposit]'); assert money(phone) == 'R$ 1.700,00'
+    phone.click('.tabbar [data-tab=carteira]'); phone.fill('#dep', '50'); phone.click('[data-act=deposit]'); assert money(phone) == 'R$ 1.700,00'
     phone.wait_for_selector('#clouderr', timeout=8000); assert 'Sem conexão com o servidor' in phone.inner_text('#clouderr') and 'continua salvo' in phone.inner_text('#clouderr')
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [250, 500, 1000]
-    CLOUD['down'] = False; phone.click('[data-act=cloudsync]'); phone.wait_for_function('!document.getElementById("clouderr")')
+    CLOUD['down'] = False; conta(phone); phone.click('[data-act=cloudsync]'); phone.wait_for_function('!document.getElementById("clouderr")')
     assert sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [50, 250, 500, 1000], 'back: what was done meanwhile goes up'
     # a token about to expire is renewed, with the refresh token used once
     phone.evaluate('(() => { const a = JSON.parse(localStorage.getItem("oitolados.auth.v1")); a.exp = Date.now(); localStorage.setItem("oitolados.auth.v1", JSON.stringify(a)); })()')
-    cov.reload(phone); phone.wait_for_function('window.__OL && window.__OL.S'); phone.click('.tabbar [data-tab=carteira]'); phone.wait_for_selector('#cloudstatus')
+    cov.reload(phone); phone.wait_for_function('window.__OL && window.__OL.S'); conta(phone); phone.wait_for_selector('#cloudstatus')
     phone.wait_for_function('document.getElementById("cloudstatus").textContent.includes("Sincronizado às")')
     assert ('POST', '/auth/v1/token') in CLOUD['log'], 'renewed'
     # a reset on the phone does not come back from the computer
-    phone.click('[data-act=reset]'); phone.click('[data-act=doreset]'); assert money(phone) == 'R$ 0,00'
-    phone.click('[data-act=cloudsync]'); phone.wait_for_timeout(500)
+    phone.click('.tabbar [data-tab=carteira]'); phone.click('[data-act=reset]'); phone.click('[data-act=doreset]'); assert money(phone) == 'R$ 0,00'
+    conta(phone); phone.click('[data-act=cloudsync]'); phone.wait_for_timeout(500)
     assert CLOUD['rows']['u1']['deposits'] == [] and CLOUD['rows']['u1']['epoch'] > now_ms, CLOUD['rows']['u1']
-    pc.click('[data-act=cloudsync]'); pc.wait_for_function('window.__OL.S.deposits.length === 0')
+    conta(pc); pc.click('[data-act=cloudsync]'); pc.wait_for_function('window.__OL.S.deposits.length === 0')
     assert money(pc) == 'R$ 0,00' and CLOUD['rows']['u1']['deposits'] == [], 'the reset reached the computer, and nothing came back'
     # leaving keeps what is on the device, and stops the syncing
-    pc.fill('#dep', '10'); pc.click('[data-act=deposit]'); pc.wait_for_timeout(2600); assert money(pc) == 'R$ 10,00'
+    pc.click('.tabbar [data-tab=carteira]'); pc.fill('#dep', '10'); pc.click('[data-act=deposit]'); pc.wait_for_timeout(2600); assert money(pc) == 'R$ 10,00'
     # leaving with the server out of reach: the token is dropped here all the same, and the failed call to end it there breaks nothing
     CLOUD['down'] = True; before = len(CLOUD['log'])
-    phone.click('[data-act=cloudout]'); assert phone.locator('#cloudemail').count() == 1 and 'continua aqui' in phone.inner_text('#toast')
+    conta(phone); phone.click('[data-act=cloudout]'); assert phone.locator('#cloudemail').count() == 1 and 'continua aqui' in phone.inner_text('#toast')
     phone.wait_for_timeout(300); CLOUD['down'] = False
     assert ('POST', '/auth/v1/logout') in CLOUD['log'][before:] and phone.evaluate('localStorage.getItem("oitolados.auth.v1")') == 'null' and not ph_errs, ('left with the server down', CLOUD['log'][before:], ph_errs)
-    before = len(CLOUD['log']); phone.fill('#dep', '5'); phone.click('[data-act=deposit]'); phone.wait_for_timeout(2600)
+    before = len(CLOUD['log']); phone.click('.tabbar [data-tab=carteira]'); phone.fill('#dep', '5'); phone.click('[data-act=deposit]'); phone.wait_for_timeout(2600)
     assert money(phone) == 'R$ 5,00' and len(CLOUD['log']) == before, 'logged out: nothing is sent'
     # coming back to the same account on a device already joined with it: no question again, the two are simply joined
     login(phone, 'lucas@exemplo.com'); synced(phone)
     assert phone.locator('#cloudask').count() == 0 and money(phone) == 'R$ 15,00' and sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [5, 10], (money(phone), CLOUD['rows']['u1'])
     # a device reset before it ever logged in takes the server history, and never wipes it (found in the review of PR #35)
     c3d, third, t_errs = device(dict(v=1, cur='BRL', seen=now_ms, deposits=[dict(t=now_ms - 9000, v=77)], bets=[]))
-    third.click('[data-act=reset]'); third.click('[data-act=doreset]'); assert money(third) == 'R$ 0,00' and S_(third)['epoch'] > now_ms
+    third.click('.tabbar [data-tab=carteira]'); third.click('[data-act=reset]'); third.click('[data-act=doreset]'); assert money(third) == 'R$ 0,00' and S_(third)['epoch'] > now_ms
     login(third, 'lucas@exemplo.com'); synced(third)
     assert third.locator('#cloudask').count() == 0 and money(third) == 'R$ 15,00' and sorted(d['v'] for d in CLOUD['rows']['u1']['deposits']) == [5, 10], ('the reset device takes the history; the server keeps it', money(third), CLOUD['rows']['u1'])
     # another history in another currency cannot be summed: only "keep one" is offered
     c4d, fourth, f_errs = device(dict(v=1, cur='USD', seen=now_ms, deposits=[dict(t=now_ms - 8000, v=40)], bets=[]))
     login(fourth, 'lucas@exemplo.com'); fourth.wait_for_selector('#cloudask')
     assert fourth.locator('[data-act=cloudfirst][data-c=join]').count() == 0 and 'aqui USD, no servidor BRL' in fourth.inner_text('#cloudcur'), fourth.inner_text('#cloud')
-    fourth.click('[data-act=cloudfirst][data-c=there]'); synced(fourth)
+    conta(fourth); fourth.click('[data-act=cloudfirst][data-c=there]'); synced(fourth)
     assert money(fourth) == 'R$ 15,00' and S_(fourth)['cur'] == 'BRL', ('kept the server history, in its currency', money(fourth))
     assert not t_errs and not f_errs, (t_errs, f_errs)
     for c in (c3d, c4d): done(c)
@@ -1484,9 +1504,9 @@ with sync_playwright() as p:
     # a server and a source that take the call and never answer hold nothing up for good: the app gives up on ESPN after 12 s and
     # on the server after 15 s (CLOUD_TIMEOUT), says so, and comes back as soon as they answer again
     c4h, slow, e4 = signed_in(4); phone_ = slow
-    slow.click('.tabbar [data-tab=carteira]'); slow.wait_for_selector('#cloudstatus'); synced(slow); slow.wait_for_timeout(1000)
+    conta(slow); slow.wait_for_selector('#cloudstatus'); synced(slow); slow.wait_for_timeout(1000)
     ESPN['hang'] = True; CLOUD['hang'] = True; del HUNG[:]; t0 = time.time()
-    slow.evaluate('() => { window.__OL.sync(true); }'); slow.click('[data-act=cloudsync]')
+    slow.evaluate('() => { window.__OL.sync(true); }'); conta(slow); slow.click('[data-act=cloudsync]')
     slow.wait_for_timeout(5000)
     assert HUNG and 'Sincronizando' in slow.inner_text('#cloudstatus') and slow.locator('#clouderr').count() == 0 and not slow.evaluate('window.__OL.D.err'), ('5 s in, both are still being waited for', len(HUNG), slow.inner_text('#cloud'))
     slow.wait_for_function('!!window.__OL.D.err', timeout=15000); espn_after = time.time() - t0
@@ -1496,7 +1516,7 @@ with sync_playwright() as p:
     slow.click('.tabbar [data-tab=lutas]'); assert 'Sem conexão com a ESPN' in slow.locator('.sync span').inner_text(), slow.locator('.sync span').inner_text()
     ESPN['hang'] = False; CLOUD['hang'] = False
     slow.evaluate('window.__OL.sync(true)'); slow.wait_for_function('!window.__OL.D.err')
-    slow.click('.tabbar [data-tab=carteira]'); slow.click('[data-act=cloudsync]'); synced(slow)
+    conta(slow); slow.click('[data-act=cloudsync]'); synced(slow)
     assert slow.locator('#clouderr').count() == 0 and not e4, ('answering again, both are back', e4)
     for r in HUNG:                      # the calls the page gave up on: answered now, so that closing the page leaves no handler waiting
         try: r.abort()

@@ -2,7 +2,7 @@ import { Core } from '../core';
 import { loadOdds } from './api';
 import { $, dWhen, esc, fo, fu, money, parseMoney, part, pctText, signedBoth, sym } from './format';
 import { canBet, exposureNotes, payoutOf, priceOf, setStakeMoney, setStakeUnits, slipCalc, sum, wallet } from './helpers';
-import { paintPanel, recheck, render, renderSheet, sideDot, toast, writeBets } from './render';
+import { backToCard, paintPanel, recheck, render, renderSheet, sideDot, toast, writeBets } from './render';
 import { D, S, imp, saveCache, saveS, slip, ui } from './state';
 import type { Bet, Fight, Priced, Pricing, Tip, TipItem, TipPick, TipProblem, TipStake } from '../core';
 import type { SlipCalc } from './helpers';
@@ -338,7 +338,7 @@ export async function placeAll(): Promise<void> {
   imp.ops = imp.ops.filter(o => !done.has(o) && !refs.has(o)); if (now.some(x => x.o.src === 'text')) imp.text = '';
   slip.sels = []; slip.copy = null; setStakeMoney(0); slip.mode = 'single';
   imp.msg = ''; ui.msg = ''; ui.sheet = false;
-  if (!imp.ops.length) { imp.open = false; ui.tab = 'apostas'; ui.filter = 'open'; renderSheet(); render(); window.scrollTo(0, 0); }
+  if (!imp.ops.length) { imp.open = false; renderSheet(); backToCard(sure[0]?.c.rs[0]?.s.fid); }     // back to the card, as after the coupon (D110)
   else { render(); renderImport(); }                 // what was left out stays on the screen; the balance behind it is the new one
   toast(made > 1 ? `${made} apostas feitas. Boa sorte.` : 'Aposta feita. Boa sorte.');
 }

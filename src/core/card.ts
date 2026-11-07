@@ -36,6 +36,25 @@ export function favsAhead(events: FightEvent[], favs: string[], now: number): { 
   return out.sort((a, b) => a.f.date - b.f.date || b.f.idx - a.f.idx);
 }
 
+/** How long one fight takes on the broadcast, walkouts and all, for the estimate of when a fight starts (D110). */
+export const FIGHT_SLOT = 25 * 60e3;
+const pending = (f: Fight): boolean => !f.canceled && f.state !== 'post';
+/** Where a card stands (D110): how many fights are still to happen of how many, the one on now (if any) and the next.
+ *  The order is the order of the card, first prelim to main event (`idx`). */
+export function cardQueue(ev: FightEvent): { left: number; total: number; live: Fight | null; next: Fight | null } {
+  const fs = ev.fights.filter(f => !f.canceled).sort((a, b) => a.idx - b.idx), rest = fs.filter(pending);
+  const live = rest.find(f => f.state === 'in') || null;
+  return { left: rest.length, total: fs.length, live, next: rest.find(f => f.state === 'pre') || null };
+}
+/** How many fights still come before this one on its card, and about when it starts (D110). The source only gives one
+ *  time for each part of the card, so each fight before it in the same part adds FIGHT_SLOT, and with the card under
+ *  way each fight still ahead (the one on now included) adds FIGHT_SLOT from now. The later of the two is the estimate. */
+export function fightEta(ev: FightEvent, f: Fight, now: number): { ahead: number; at: number } {
+  const before = ev.fights.filter(x => !x.canceled && x.idx < f.idx);
+  const ahead = before.filter(pending).length, inPart = before.filter(x => x.date === f.date).length;
+  return { ahead, at: Math.max(f.date + inPart * FIGHT_SLOT, before.some(x => x.state !== 'pre') || now > f.date ? now + ahead * FIGHT_SLOT : 0) };
+}
+
 /** How many cards still to come are shown, and how old an event the source never marks as over can be and still be shown. */
 export const NEXT_CARDS = 3, RECENT_CARD = 5 * 24 * 3600e3;
 /** The events the fights screen offers, of the ones the source lists (given in the order of their dates): the next

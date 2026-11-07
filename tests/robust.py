@@ -93,7 +93,7 @@ with sync_playwright() as p:
     c.route('**/*', lambda r: own(r) if r.request.url.startswith(SITE.rsplit('/', 1)[0]) or not r.request.url.startswith('http') else handle(r)); c.route('https://cdn.jsdelivr.net/**', local_cdn)
     pg = c.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
     try:
-        pg.goto(SITE); pg.wait_for_function('window.__OL && window.__OL.S'); pg.click('.tabbar [data-tab=carteira]'); pg.wait_for_selector('#cloudemail')
+        pg.goto(SITE); pg.wait_for_function('window.__OL && window.__OL.S'); pg.click('#acct'); pg.wait_for_selector('#cloudemail')
         pg.fill('#cloudemail', 'lucas@exemplo.com'); pg.fill('#cloudpass', 'senha-boa-123'); pg.click('[data-act=cloudin]')
         pg.wait_for_function('() => { const e = document.getElementById("cloudstatus"); return e && e.textContent.includes("Sincronizado às"); }', timeout=10000)
         check([x['id'] for x in pg.evaluate('window.__OL.S.bets')] == ['b0'], ('a device with nothing takes the whole of the server copy, and only that', pg.evaluate('window.__OL.S.bets')))

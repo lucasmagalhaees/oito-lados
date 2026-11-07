@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.30.0] - 2026-11-07
+
+### Adicionado
+- Na faixa do dia do card, quantas lutas faltam, a que está rolando e a próxima; nas favoritas, quantas lutas faltam antes de cada uma e o tempo estimado até ela (D110).
+
+### Mudado
+- Depois de apostar, o app volta ao card da luta apostada, em vez de ir para a aba Apostas (D110).
+- O login sai da Carteira e vira a tela "Sua conta", aberta pelo botão no canto superior direito, com o erro em destaque, "Mostrar" senha e "Ir" no teclado (D109).
+
 ## [0.29.0] - 2026-10-26
 
 ### Adicionado
