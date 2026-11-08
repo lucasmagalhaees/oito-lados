@@ -1183,6 +1183,12 @@ Em 10/10/2026, às 18:37, o Lucas perguntou: "as três últimas lutas, você con
 - **Até a favorita:** cada linha do quadro "★ Suas favoritas" (D108) diz quantas lutas faltam antes dela ("faltam 3 lutas antes dela", "é a próxima luta do card") e quanto falta para ela começar (`Core.fightEta`).
 - **A estimativa:** a ESPN só dá uma hora por parte do card, igual para todas as lutas dela. Então o app soma 25 min (`FIGHT_SLOT`) por luta que vem antes na mesma parte e, com o card rolando, 25 min a partir de agora por luta que ainda falta. Vale a mais tardia das duas. Quando a conta empurra a luta para depois da hora da ESPN, o tempo aparece com "≈". Os 25 min são uma média chutada (luta, intervalos e entradas), não medida: dá para acertar depois com os horários de um card de verdade.
 
+## D111. As próximas lutas viram um quadro, não um parágrafo
+
+- **Contexto (07/11/2026, 20:41), vendo o card ao vivo no iPhone:** "Ficou muito ruim o upcoming fight. [...] tu colocou um parágrafo de texto, cara, não tem destaque nenhum."
+- **Como ficou:** a faixa do dia do card (D107, D110) virou um quadro. Em cima, "Card rolando" (ou "Hoje tem card") em dourado e o nome do card em letra grande. Embaixo, uma barra com as lutas já encerradas, e a linha "Faltam N de M lutas" com a hora do card principal. Em seguida, dois quadros lado a lado: "Agora", em azul com a marca pulsando, com o round e o relógio em letra grande, e "Próxima", em dourado, com o tempo até ela em letra grande ("25 min") e "estimado" quando é estimativa. Tocar num dos quadros rola a lista até aquela luta. Por último, as apostas abertas no card e quanto está em jogo.
+- **Favoritas:** cada linha do quadro "★ Suas favoritas" põe o tempo em letra grande à direita, com "em" ou "em ≈" em cima, e "faltam N lutas antes dela" em destaque.
+
 ## Pendências em 10/10/2026
 
 | Pendência | Quem resolve |

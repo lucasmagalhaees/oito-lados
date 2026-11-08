@@ -139,9 +139,12 @@ with sync_playwright() as p:
     assert 'card principal às' in txt('#cardday') and 'Nenhuma aposta nele ainda.' in txt('#cardday'), txt('#cardday')
     pg.click('#list .star >> nth=0'); assert pg.evaluate('window.__OL.S.favs.length') == 1 and pg.get_attribute('#list .star >> nth=0', 'aria-pressed') == 'true'
     assert pg.locator('#parts [data-act=favonly]').inner_text() == '★ Favoritas (1)', pg.locator('#parts button').all_inner_texts()
-    assert pg.locator('#favsahead .favrow').count() == 1 and pg.locator('#favsahead .eta').inner_text() in ('ao vivo', 'começando') or pg.locator('#favsahead .eta').inner_text().lstrip('≈ ').startswith('em '), txt('#favsahead')
+    eta_ = pg.locator('#favsahead .eta').inner_text()
+    assert pg.locator('#favsahead .favrow').count() == 1 and re.search(r'ao vivo|já já|\d+ (min|h|d)', eta_), eta_   # the time to it in big type (D111)
     assert 'antes dela' in txt('#favsahead') or 'próxima luta do card' in txt('#favsahead'), txt('#favsahead')   # how many fights come first (D110)
-    assert 'lutas' in txt('#cardqueue') and ('Próxima:' in txt('#cardqueue') or 'Agora:' in txt('#cardqueue')), txt('#cardqueue')
+    assert 'lutas' in txt('#cardqueue') and pg.locator('#cardday .qtile').count() >= 1 and pg.locator('#cardday .qbar').count() == 1, txt('#cardday')   # the board of the card (D111)
+    assert pg.locator('#cardday .qtile.next .qbig').count() == 0 or re.search(r'já já|\d+ (min|h|d)', pg.inner_text('#cardday .qtile.next .qbig')), txt('#cardday')
+    pg.locator('#cardday').screenshot(path=str(SHOTS / 's59-quadro-do-card.png')); pg.click('#cardday .qtile >> nth=0')
     pg.click('#favsahead .favrow'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'
     pg.click('#parts [data-act=favonly]'); assert nfights() == 3
     pg.click('#parts [data-act=favonly]'); assert nfights() == 1 and pg.get_attribute('#parts [data-act=favonly]', 'aria-pressed') == 'true'

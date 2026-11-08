@@ -74,23 +74,32 @@ function cardDayHtml(): string {
   const day = (t: number): string => new Date(t).toDateString(), ob = openBets().filter(b => b.legs.some(l => l.eid === ev.id));
   const stake = ob.reduce((a, b) => a + b.stake, 0);
   const top = now >= when.first ? 'Card rolando' : day(when.first) === day(now) ? 'Hoje tem card' : 'Amanhã tem card';
-  const times = `${now < when.first ? `Começa às ${dTime.format(when.first)} · ` : ''}card principal às ${dTime.format(when.main)}`;
-  // where the card stands (D110): fights left, the one on now and the next, with about when it starts
-  const q = Core.cardQueue(ev), vs = (f: Fight): string => `${esc(f.a.last)} x ${esc(f.b.last)}`;
+  // where the card stands (D110, drawn as a board in D111): a bar of the fights done, the one on now and the next as two
+  // tiles, the time to the next in big type; a tile is a button that goes to that fight on the card
+  const q = Core.cardQueue(ev), done = q.total - q.left, pct = q.total ? Math.round(done / q.total * 100) : 0;
   const nx = q.next ? Core.fightEta(ev, q.next, now) : null;
-  const queue = `<span id="cardqueue">${q.left < q.total ? `Faltam ${q.left} de ${q.total} lutas` : `${q.total} lutas no card`}${q.live ? ` · Agora: <b>${vs(q.live)}</b>` : ''}${q.next && nx ? ` · Próxima: <b>${vs(q.next)}</b>, ${etaText(nx.at, q.next.date, now)}` : ''}</span>`;
-  return `<div class="cardday" id="cardday"><b>${top}: ${esc(evLabel(ev).main)}</b><span>${times}</span>${queue}<span>${ob.length ? `${ob.length} ${ob.length > 1 ? 'apostas abertas' : 'aposta aberta'} · ${money(stake)} em jogo` : 'Nenhuma aposta nele ainda.'}</span></div>`;
+  const tile = (f: Fight, kind: 'now' | 'next', big: string, small: string): string => `<button class="qtile ${kind}" data-act="gofight" data-fid="${esc(f.id)}"><span class="qlab">${kind === 'now' ? '<i class="pulse"></i>Agora' : 'Próxima'}</span><b class="qvs">${esc(f.a.last)}<br>x ${esc(f.b.last)}</b><span class="qbig">${big}</span>${small ? `<span class="qsmall">${small}</span>` : ''}</button>`;
+  const tiles = [q.live ? tile(q.live, 'now', q.live.period > 0 ? `R${q.live.period} ${esc(q.live.clock)}` : 'vai começar', '') : '',
+    q.next && nx ? tile(q.next, 'next', nx.at <= now ? 'já já' : untilText(nx.at - now).replace(/^em /, ''), nx.at > q.next.date ? 'estimado' : `às ${dTime.format(q.next.date)}`) : ''].join('');
+  const left = q.left === 0 ? 'Card encerrado' : q.left === q.total ? `${q.total} lutas` : `Faltam <b>${q.left}</b> de ${q.total} lutas`;
+  return `<section class="cardday" id="cardday"><div class="qtop"><span class="qhead">${top}</span><b class="qname">${esc(evLabel(ev).main)}</b></div>
+    <div class="qbar" role="progressbar" aria-label="Lutas encerradas" aria-valuemin="0" aria-valuemax="${q.total}" aria-valuenow="${done}"><i style="width:${pct}%"></i></div>
+    <p class="qleft" id="cardqueue">${left}${now < when.first ? ` · começa às ${dTime.format(when.first)}` : ''} · card principal às ${dTime.format(when.main)}</p>
+    ${tiles ? `<div class="qtiles">${tiles}</div>` : ''}
+    <p class="qbets">${ob.length ? `<b>${ob.length}</b> ${ob.length > 1 ? 'apostas abertas' : 'aposta aberta'} · <b>${money(stake)}</b> em jogo` : 'Nenhuma aposta nele ainda.'}</p></section>`;
 }
 /** The starred fights still to come, across the cards on screen, with how long until each (D108). A tap opens its card
  *  with only the starred fights shown. */
 export const FAVS_AHEAD = 5;
-/** About when a fight starts: the time of its part of the card when that is all there is, "≈" when fights before it push it later (D110). */
 /** How many fights come before a starred one (D110). */
 const aheadText = (n: number): string => n === 0 ? 'é a próxima luta do card' : n === 1 ? 'falta 1 luta antes dela' : `faltam ${n} lutas antes dela`;
-function etaText(at: number, scheduled: number, now: number): string { return (at > scheduled ? '≈ ' : '') + untilText(at - now); }
 function favsAheadHtml(evs: FightEvent[]): string {
   const now = Date.now(), all = Core.favsAhead(evs, favs(), now); if (!all.length) return '';
-  const row = (x: { f: Fight; ev: FightEvent; in: number }): string => `<button class="favrow" data-act="event" data-id="${esc(x.ev.id)}" data-fav="1"><span><b>${esc(x.f.a.last)} x ${esc(x.f.b.last)}</b><small>${esc(evLabel(x.ev).main)} · ${esc(dWhen.format(x.f.date))}</small>${x.f.state === 'in' ? '' : `<small class="ahead">${aheadText(Core.fightEta(x.ev, x.f, now).ahead)}</small>`}</span><span class="eta${x.f.state === 'in' ? ' live' : ''}">${x.f.state === 'in' ? 'ao vivo' : etaText(Core.fightEta(x.ev, x.f, now).at, x.f.date, now)}</span></button>`;
+  const row = (x: { f: Fight; ev: FightEvent; in: number }): string => {
+    const live = x.f.state === 'in', eta = live ? null : Core.fightEta(x.ev, x.f, now);
+    const big = live ? 'ao vivo' : eta!.at <= now ? 'já já' : untilText(eta!.at - now).replace(/^em /, '');
+    return `<button class="favrow" data-act="event" data-id="${esc(x.ev.id)}" data-fav="1"><span class="fvs"><b>${esc(x.f.a.last)} x ${esc(x.f.b.last)}</b><small>${esc(evLabel(x.ev).main)} · ${esc(dWhen.format(x.f.date))}</small>${live ? '' : `<small class="ahead">${aheadText(eta!.ahead)}</small>`}</span><span class="eta${live ? ' live' : ''}"><small>${live ? 'agora' : eta!.at > x.f.date ? 'em ≈' : 'em'}</small>${big}</span></button>`;
+  };
   const more = all.length > FAVS_AHEAD ? `<p class="hint">e mais ${all.length - FAVS_AHEAD}</p>` : '';
   return `<div class="favs" id="favsahead"><div class="seg label">★ Suas favoritas</div>${all.slice(0, FAVS_AHEAD).map(row).join('')}${more}</div>`;
 }
